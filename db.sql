@@ -34,7 +34,7 @@ create table if not exists persons(
     person_id uuid unique not null default gen_random_uuid(),
     person_activated boolean not null default 't',
     person_expiry_date date,
-    person_group text not null,
+    person_group text,
     given_names text not null,
     surname text not null
     -- other info
@@ -101,3 +101,4 @@ create table if not exists group_moderators(
 -- TODO: add constraint to prevent cyclical graphs
 -- group_new_parent_is_child_of_new_child
 -- group_get_children
+-- group_get_parents
