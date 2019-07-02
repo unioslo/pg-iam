@@ -23,9 +23,6 @@
 -- /rpc/group_moderator_add
 -- /rpc/group_moderatr_remove
 
--- open issues:
--- expiration?
--- active/inactive states with cascading updates
 
 --create extension pgcrypto;
 
@@ -55,14 +52,14 @@ create or replace function person_group_management()
                     values (new_pgrp, 'primary', 'person', NEW.person_id, 'personal group');
             end if;
         elsif (TG_OP = 'DELETE') then
-            null;
+            delete from groups where group_name = OLD.person_group;
         end if;
     return new;
     end;
 $$ language plpgsql;
 create trigger person_group_trigger after insert or delete on persons
     for each row execute procedure person_group_management();
--- delete from groups
+
 -- make fields immutable
 -- propagate state changes to users, and person groups
 
@@ -90,7 +87,7 @@ create or replace function user_group_management()
                     values (new_ugrp, 'primary', 'user', NEW.user_name, 'user group');
             end if;
         elsif (TG_OP = 'DELETE') then
-            null;
+            delete from groups where group_name = OLD.user_group;
         end if;
     return new;
     end;
@@ -98,15 +95,8 @@ $$ language plpgsql;
 create trigger user_group_trigger after insert or delete on users
     for each row execute procedure user_group_management();
 
--- delete from groups
 -- make fields immutable
 -- propagate state changes to users, and user groups in groups
-
--- GROUPS
--- two classes: primary, secondary
--- three types: person, user, generic
--- primary groups contain either users or persons
--- secondary groups contain other groups
 
 drop table if exists groups cascade;
 create table if not exists groups(
