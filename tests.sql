@@ -17,6 +17,10 @@ select test();
 select * from persons;
 select * from users;
 select * from groups;
-delete from persons;
+update persons set person_activated = 'f';
+select * from persons;
+select * from users;
 select * from groups;
-select * from users; -- test cascasde
+delete from persons;
+select * from users;
+select * from groups;

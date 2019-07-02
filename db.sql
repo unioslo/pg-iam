@@ -53,11 +53,16 @@ create or replace function person_group_management()
             end if;
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.person_group;
+        elsif (TG_OP = 'UPDATE') then
+            if OLD.person_activated != NEW.person_activated then
+                update users set user_activated = NEW.person_activated where person_id = OLD.person_id;
+                update groups set group_activated = NEW.person_activated where group_name = OLD.person_group;
+                end if;
         end if;
     return new;
     end;
 $$ language plpgsql;
-create trigger person_group_trigger after insert or delete on persons
+create trigger person_group_trigger after insert or delete or update on persons
     for each row execute procedure person_group_management();
 
 -- make fields immutable
@@ -88,15 +93,18 @@ create or replace function user_group_management()
             end if;
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.user_group;
+        elsif (TG_OP = 'UPDATE') then
+            if OLD.user_activated != NEW.user_activated then
+                update groups set group_activated = NEW.user_activated where group_name = OLD.user_group;
+            end if;
         end if;
     return new;
     end;
 $$ language plpgsql;
-create trigger user_group_trigger after insert or delete on users
+create trigger user_group_trigger after insert or delete or update on users
     for each row execute procedure user_group_management();
 
 -- make fields immutable
--- propagate state changes to users, and user groups in groups
 
 drop table if exists groups cascade;
 create table if not exists groups(
