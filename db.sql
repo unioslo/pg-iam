@@ -42,7 +42,7 @@ create table if not exists persons(
     -- otp?
 );
 
-create or replace function create_person_group()
+create or replace function person_group_management()
     returns trigger as $$
     declare new_pid text;
     declare new_pgrp text;
@@ -56,12 +56,12 @@ create or replace function create_person_group()
             end if;
         elsif (TG_OP = 'DELETE') then
             null;
-        endif;
+        end if;
     return new;
     end;
 $$ language plpgsql;
 create trigger person_group_trigger after insert or delete on persons
-    for each row execute procedure create_person_group();
+    for each row execute procedure person_group_management();
 -- delete from groups
 -- make fields immutable
 -- propagate state changes to users, and person groups
@@ -73,11 +73,11 @@ create table if not exists users(
     user_activated boolean not null default 't',
     user_expiry_date date,
     user_name text unique not null,
-    user_group text not null
+    user_group text
     -- other info
 );
 
-create or replace function create_user_group()
+create or replace function user_group_management()
     returns trigger as $$
     declare new_unam text;
     declare new_ugrp text;
@@ -91,12 +91,12 @@ create or replace function create_user_group()
             end if;
         elsif (TG_OP = 'DELETE') then
             null;
-        endif;
+        end if;
     return new;
     end;
 $$ language plpgsql;
 create trigger user_group_trigger after insert or delete on users
-    for each row execute procedure create_user_group();
+    for each row execute procedure user_group_management();
 
 -- delete from groups
 -- make fields immutable
@@ -128,6 +128,7 @@ create table if not exists group_memberships(
     group_membership_expiry_date date,
     unique (group_name, group_member_name) -- cannot be member of itself
 );
+-- assert group_class == secondary
 -- TODO: add constraint to prevent cyclical graphs
 -- group_new_parent_is_child_of_new_child
 -- group_get_children

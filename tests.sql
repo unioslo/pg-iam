@@ -7,8 +7,8 @@ create or replace function test()
     begin
         insert into persons (given_names, surname) values ('Sarah', 'Conner');
         select person_id from persons where surname = 'Conner' into pid;
-        insert into users (person_id, user_name, user_group)
-            values (pid, 'p11-sconne', 'p11-sconne-group');
+        insert into users (person_id, user_name)
+            values (pid, 'p11-sconne');
     return true;
     end;
 $$ language plpgsql;
