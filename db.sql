@@ -47,16 +47,21 @@ create or replace function create_person_group()
     declare new_pid text;
     declare new_pgrp text;
     begin
-        if OLD.person_group is null then
-            new_pgrp := NEW.person_id || '-group';
-            update persons set person_group = new_pgrp where person_id = NEW.person_id;
-            insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption)
-                values (new_pgrp, 'primary', 'person', NEW.person_id, 'personal group');
-        end if;
+        if (TG_OP = 'INSERT') then
+            if OLD.person_group is null then
+                new_pgrp := NEW.person_id || '-group';
+                update persons set person_group = new_pgrp where person_id = NEW.person_id;
+                insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption)
+                    values (new_pgrp, 'primary', 'person', NEW.person_id, 'personal group');
+            end if;
+        elsif (TG_OP = 'DELETE') then
+            null;
+        endif;
     return new;
     end;
 $$ language plpgsql;
-create trigger person_group_trigger after insert on persons for each row execute procedure create_person_group();
+create trigger person_group_trigger after insert or delete on persons
+    for each row execute procedure create_person_group();
 -- delete from groups
 -- make fields immutable
 -- propagate state changes to users, and person groups
@@ -64,13 +69,35 @@ create trigger person_group_trigger after insert on persons for each row execute
 drop table if exists users cascade;
 create table if not exists users(
     person_id uuid not null references persons (person_id) on delete cascade,
+    user_id uuid unique not null default gen_random_uuid(),
     user_activated boolean not null default 't',
     user_expiry_date date,
     user_name text unique not null,
     user_group text not null
     -- other info
 );
--- after insert create user_group, insert user group into groups
+
+create or replace function create_user_group()
+    returns trigger as $$
+    declare new_unam text;
+    declare new_ugrp text;
+    begin
+        if (TG_OP = 'INSERT') then
+            if OLD.user_group is null then
+                new_ugrp := NEW.user_name || '-group';
+                update users set user_group = new_ugrp where user_name = NEW.user_name;
+                insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption)
+                    values (new_ugrp, 'primary', 'user', NEW.user_name, 'user group');
+            end if;
+        elsif (TG_OP = 'DELETE') then
+            null;
+        endif;
+    return new;
+    end;
+$$ language plpgsql;
+create trigger user_group_trigger after insert or delete on users
+    for each row execute procedure create_user_group();
+
 -- delete from groups
 -- make fields immutable
 -- propagate state changes to users, and user groups in groups

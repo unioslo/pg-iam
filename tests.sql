@@ -18,4 +18,5 @@ select * from persons;
 select * from users;
 select * from groups;
 delete from persons;
+delete from groups;
 select * from users; -- test cascasde
