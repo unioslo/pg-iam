@@ -41,7 +41,22 @@ create table if not exists persons(
     -- password?
     -- otp?
 );
--- after insert create person_group, insert user group into groups
+
+create or replace function create_person_group()
+    returns trigger as $$
+    declare new_pid text;
+    declare new_pgrp text;
+    begin
+        if OLD.person_group is null then
+            new_pgrp := NEW.person_id || '-group';
+            update persons set person_group = new_pgrp where person_id = NEW.person_id;
+            insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption)
+                values (new_pgrp, 'primary', 'person', NEW.person_id, 'personal group');
+        end if;
+    return new;
+    end;
+$$ language plpgsql;
+create trigger person_group_trigger after insert on persons for each row execute procedure create_person_group();
 -- delete from groups
 -- make fields immutable
 -- propagate state changes to users, and person groups
