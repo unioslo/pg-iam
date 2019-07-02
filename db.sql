@@ -39,7 +39,7 @@ create table if not exists persons(
     -- otp?
 );
 
-create or replace function person_group_management()
+create or replace function person_management()
     returns trigger as $$
     declare new_pid text;
     declare new_pgrp text;
@@ -63,7 +63,7 @@ create or replace function person_group_management()
     end;
 $$ language plpgsql;
 create trigger person_group_trigger after insert or delete or update on persons
-    for each row execute procedure person_group_management();
+    for each row execute procedure person_management();
 
 -- make fields immutable
 -- propagate state changes to users, and person groups
@@ -79,7 +79,7 @@ create table if not exists users(
     -- other info
 );
 
-create or replace function user_group_management()
+create or replace function user_management()
     returns trigger as $$
     declare new_unam text;
     declare new_ugrp text;
@@ -102,7 +102,7 @@ create or replace function user_group_management()
     end;
 $$ language plpgsql;
 create trigger user_group_trigger after insert or delete or update on users
-    for each row execute procedure user_group_management();
+    for each row execute procedure user_management();
 
 -- make fields immutable
 
@@ -118,6 +118,8 @@ create table if not exists groups(
     group_desciption text,
     group_metadata json
 );
+-- ensure only secondary groups can be deactivated here
+-- primary groups are deactivated by decativating primary members
 
 drop table if exists group_memberships cascade;
 create table if not exists group_memberships(
