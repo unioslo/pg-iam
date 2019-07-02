@@ -64,9 +64,9 @@ create or replace function person_management()
 $$ language plpgsql;
 create trigger person_group_trigger after insert or delete or update on persons
     for each row execute procedure person_management();
-
+-- ensure end_dates consistent across person, users, groups
 -- make fields immutable
--- propagate state changes to users, and person groups
+
 
 drop table if exists users cascade;
 create table if not exists users(
@@ -118,8 +118,29 @@ create table if not exists groups(
     group_desciption text,
     group_metadata json
 );
--- ensure only secondary groups can be deactivated here
--- primary groups are deactivated by decativating primary members
+
+create or replace function group_state_management()
+    returns trigger as $$
+    declare primary_member_state boolean;
+    begin
+        if OLD.group_activated != NEW.group_activated then
+            if OLD.group_type = 'person' then
+                select person_activated from persons where person_group = OLD.group_name into primary_member_state;
+                if NEW.group_activated != primary_member_state then
+                    raise exception using message = 'person groups can only be deactived by deactivating persons';
+                end if;
+            elsif OLD.group_type = 'user' then
+                select user_activated from users where user_group = OLD.group_name into primary_member_state;
+                if NEW.group_activated != primary_member_state then
+                    raise exception using message = 'user groups can only be deactived by deactivating users';
+                end if;
+            end if;
+        end if;
+        return new;
+    end;
+$$ language plpgsql;
+create trigger group_activated_trigger before update on groups
+    for each row execute procedure group_management();
 
 drop table if exists group_memberships cascade;
 create table if not exists group_memberships(

@@ -1,5 +1,14 @@
 
--- test pg-idp
+-- tests pg-idp
+-- TODOs:
+-- state changes on groups
+-- end dates on persons, usesrs, groups
+-- immutability
+-- non-cyclicality enforcement
+-- audit?
+-- additional fields on persons, users
+-- rpc API?
+-- RLS access control
 
 create or replace function test()
     returns boolean as $$
