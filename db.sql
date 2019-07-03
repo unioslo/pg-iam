@@ -194,8 +194,7 @@ create table if not exists capabilities(
     capability_required_groups text[] not null,
     capability_lifetime int not null check (capability_lifetime > 0), -- minutes
     capability_description text not null,
-    capability_expiry_date date,
-
+    capability_expiry_date date
 );
 -- ensure set-like uniqueness on required groups
 -- via unique index and function: https://stackoverflow.com/questions/8443716/postgres-unique-constraint-for-array
