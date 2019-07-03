@@ -185,20 +185,22 @@ create table if not exists group_moderators(
 
 -- for generating capabilities
 -- specify required groups to obtain a capability, set params
--- e.g. id, import, {role:import_user}, [p11-import-group,p11-member-group],60, data import, 2030-12-12
+-- e.g. id, import, {role:import_user}, [import-group, member-group], wildcard, 60, data import, 2030-12-12
+-- BUT: some groups are regex match, others must be exact
 drop table if exists capabilities;
 create table if not exists capabilities(
     capability_id uuid unique not null default gen_random_uuid(),
     capability_type text unique not null,
     capability_default_claims json,
     capability_required_groups text[] not null,
+    capability_group_match_method text not null check (capability_group_match_method in ('exact', 'wildcard')),
     capability_lifetime int not null check (capability_lifetime > 0), -- minutes
     capability_description text not null,
     capability_expiry_date date
 );
 -- ensure set-like uniqueness on required groups
 -- via unique index and function: https://stackoverflow.com/questions/8443716/postgres-unique-constraint-for-array
--- before trigger to check that group exists
+-- before trigger to check that groups exists, depending on match type
 
 -- specify capabilities authorization: sets of operations on sets of resources
 -- example entries
@@ -211,6 +213,6 @@ create table capability_grants(
     capability_id uuid references capabilities (capability_id) on delete cascade,
     capability_type text references capabilities (capability_type),
     capability_http_method text not null check (capability_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
-    capability_uri text not null -- string or regex referring to a set of resources
+    capability_uri_pattern text not null -- string or regex referring to a set of resources
 );
 
