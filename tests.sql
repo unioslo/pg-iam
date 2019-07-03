@@ -1,12 +1,12 @@
 
 -- tests pg-idp
 -- TODOs:
--- state changes on groups
--- end dates on persons, usesrs, groups
 -- immutability
+-- end dates on persons, usesrs, groups
 -- non-cyclicality enforcement
 -- audit?
 -- additional fields on persons, users
+-- capability generation and validation
 -- rpc API?
 -- RLS access control
 

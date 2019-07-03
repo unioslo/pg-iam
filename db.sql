@@ -1,5 +1,6 @@
 
 -- A generic DB backend for IDPs
+-- with support for capability based authorization management
 
 -- a possible public SQL API
 -- /rpc/person_create
@@ -26,6 +27,8 @@
 
 --create extension pgcrypto;
 
+-- TODO: record created date?
+
 drop table if exists persons cascade;
 create table if not exists persons(
     person_id uuid unique not null default gen_random_uuid(),
@@ -38,6 +41,17 @@ create table if not exists persons(
     -- password?
     -- otp?
 );
+
+create or replace function person_immutability()
+    returns trigger as $$
+    begin
+        -- make fields immutable: person_id, person_group
+        -- before update if field not null and new != old exception
+    return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_person_immutability before update on persons
+    for each row execute procedure person_immutability();
 
 create or replace function person_management()
     returns trigger as $$
@@ -65,7 +79,7 @@ $$ language plpgsql;
 create trigger person_group_trigger after insert or delete or update on persons
     for each row execute procedure person_management();
 -- ensure end_dates consistent across person, users, groups
--- make fields immutable
+
 
 
 drop table if exists users cascade;
@@ -78,6 +92,8 @@ create table if not exists users(
     user_group text
     -- other info
 );
+-- make fields immutable: user_id, user_name, user_group
+-- before update if field not null and new != old exception
 
 create or replace function user_management()
     returns trigger as $$
@@ -104,8 +120,6 @@ $$ language plpgsql;
 create trigger user_group_trigger after insert or delete or update on users
     for each row execute procedure user_management();
 
--- make fields immutable
-
 drop table if exists groups cascade;
 create table if not exists groups(
     group_id uuid unique not null default gen_random_uuid(),
@@ -118,6 +132,8 @@ create table if not exists groups(
     group_desciption text,
     group_metadata json
 );
+-- immutable: group_id, group_name, group_class, group_type, group_primary_member
+-- before update if field not null and new != old exception
 
 create or replace function group_state_management()
     returns trigger as $$
@@ -140,7 +156,7 @@ create or replace function group_state_management()
     end;
 $$ language plpgsql;
 create trigger group_activated_trigger before update on groups
-    for each row execute procedure group_management();
+    for each row execute procedure group_state_management();
 
 drop table if exists group_memberships cascade;
 create table if not exists group_memberships(
@@ -166,3 +182,36 @@ create table if not exists group_moderators(
 -- group_new_parent_is_child_of_new_child
 -- group_get_children
 -- group_get_parents
+
+-- for generating capabilities
+-- specify required groups to obtain a capability, set params
+-- e.g. id, import, {role:import_user}, [p11-import-group,p11-member-group],60, data import, 2030-12-12
+drop table if exists capabilities;
+create table if not exists capabilities(
+    capability_id uuid unique not null default gen_random_uuid(),
+    capability_type text unique not null,
+    capability_default_claims json,
+    capability_required_groups text[] not null,
+    capability_lifetime int not null check (capability_lifetime > 0), -- minutes
+    capability_description text not null,
+    capability_expiry_date date,
+
+);
+-- ensure set-like uniqueness on required groups
+-- via unique index and function: https://stackoverflow.com/questions/8443716/postgres-unique-constraint-for-array
+-- before trigger to check that group exists
+
+-- specify capabilities authorization: sets of operations on sets of resources
+-- example entries
+-- id, import, PUT, /(.*)/files/stream
+-- id, import, PUT, /(.*)/files/upload
+-- id, import, GET, /(.*)/files/resumables
+-- id, export, DELETE, /(.*)/files/export/(.*)
+drop table if exists capability_grants;
+create table capability_grants(
+    capability_id uuid references capabilities (capability_id) on delete cascade,
+    capability_type text references capabilities (capability_type),
+    capability_http_method text not null check (capability_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
+    capability_uri text not null -- string or regex referring to a set of resources
+);
+
