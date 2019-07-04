@@ -40,7 +40,8 @@ create table if not exists persons(
     national_id_number text,
     passport_number text,
     password text,
-    otp_secret text
+    otp_secret text,
+    person_metadata json
 );
 
 create or replace function person_immutability()
@@ -84,8 +85,6 @@ create trigger person_group_trigger after insert or delete or update on persons
     for each row execute procedure person_management();
 -- ensure end_dates consistent across person, users, groups
 
-
-
 drop table if exists users cascade;
 create table if not exists users(
     person_id uuid not null references persons (person_id) on delete cascade,
@@ -93,11 +92,25 @@ create table if not exists users(
     user_activated boolean not null default 't',
     user_expiry_date date,
     user_name text unique not null,
-    user_group text
-    -- other info
+    user_group text,
+    user_metadata json
 );
--- make fields immutable: user_id, user_name, user_group
--- before update if field not null and new != old exception
+
+create or replace function user_immutability()
+    returns trigger as $$
+    begin
+        if OLD.user_id != NEW.user_id then
+            raise exception using message = 'user_id is immutable';
+        elsif OLD.user_name != NEW.user_name then
+            raise exception using message = 'user_name is immutable';
+        elsif OLD.user_group != NEW.user_group then
+            raise exception using message = 'user_group is immutable';
+        end if;
+    return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_user_immutability before update on persons
+    for each row execute procedure user_immutability();
 
 create or replace function user_management()
     returns trigger as $$
