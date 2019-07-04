@@ -30,6 +30,8 @@ update persons set person_activated = 'f';
 select * from persons;
 select * from users;
 select * from groups;
+update persons set person_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
+update persons set person_group = 'e14c538a-4b8b-4393-9fb2-056e363899e1-group';
 delete from persons;
 select * from users;
 select * from groups;

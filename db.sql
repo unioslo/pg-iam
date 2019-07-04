@@ -36,17 +36,21 @@ create table if not exists persons(
     person_expiry_date date,
     person_group text,
     given_names text not null,
-    surname text not null
-    -- other info
-    -- password?
-    -- otp?
+    surname text not null,
+    national_id_number text,
+    passport_number text,
+    password text,
+    otp_secret text
 );
 
 create or replace function person_immutability()
     returns trigger as $$
     begin
-        -- make fields immutable: person_id, person_group
-        -- before update if field not null and new != old exception
+        if OLD.person_id != NEW.person_id then
+            raise exception using message = 'person_id is immutable';
+        elsif OLD.person_group != NEW.person_group then
+            raise exception using message = 'person_group is immutable';
+        end if;
     return new;
     end;
 $$ language plpgsql;
@@ -71,7 +75,7 @@ create or replace function person_management()
             if OLD.person_activated != NEW.person_activated then
                 update users set user_activated = NEW.person_activated where person_id = OLD.person_id;
                 update groups set group_activated = NEW.person_activated where group_name = OLD.person_group;
-                end if;
+            end if;
         end if;
     return new;
     end;
@@ -187,7 +191,7 @@ create table if not exists group_moderators(
 -- specify required groups to obtain a capability, set params
 -- e.g. id, import, {role:import_user}, [import-group, member-group], wildcard, 60, data import, 2030-12-12
 -- BUT: some groups are regex match, others must be exact
-drop table if exists capabilities;
+drop table if exists capabilities cascade;
 create table if not exists capabilities(
     capability_id uuid unique not null default gen_random_uuid(),
     capability_type text unique not null,
