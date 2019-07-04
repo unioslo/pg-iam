@@ -109,7 +109,7 @@ create or replace function user_immutability()
     return new;
     end;
 $$ language plpgsql;
-create trigger ensure_user_immutability before update on persons
+create trigger ensure_user_immutability before update on users
     for each row execute procedure user_immutability();
 
 create or replace function user_management()
