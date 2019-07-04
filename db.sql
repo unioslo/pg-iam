@@ -149,8 +149,26 @@ create table if not exists groups(
     group_desciption text,
     group_metadata json
 );
--- immutable: group_id, group_name, group_class, group_type, group_primary_member
--- before update if field not null and new != old exception
+
+create or replace function group_immutability()
+    returns trigger as $$
+    begin
+        if OLD.group_id != NEW.group_id then
+            raise exception using message = 'group_id is immutable';
+        elsif OLD.group_name != NEW.group_name then
+            raise exception using message = 'group_name is immutable';
+        elsif OLD.group_class != NEW.group_class then
+            raise exception using message = 'group_class is immutable';
+        elsif OLD.group_type != NEW.group_type then
+            raise exception using message = 'group_type is immutable';
+        elsif OLD.group_primary_member != NEW.group_primary_member then
+            raise exception using message = 'group_primary_member is immutable';
+        end if;
+    return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_group_immutability before update on groups
+    for each row execute procedure group_immutability();
 
 create or replace function group_state_management()
     returns trigger as $$
