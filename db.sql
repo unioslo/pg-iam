@@ -150,6 +150,30 @@ create table if not exists groups(
     group_metadata json
 );
 
+create or replace function group_deletion()
+    returns trigger as $$
+    declare amount int;
+    begin
+        if OLD.group_type = 'person' then
+            select count(*) from persons where person_group = OLD.group_name into amount;
+            if amount = 1 then
+                raise exception using
+                message = 'person groups are automatically created and deleted based on person objects';
+            end if;
+        elsif OLD.group_type = 'user' then
+            select count(*) from users where user_group = OLD.group_name into amount;
+            if amount = 1 then
+                raise exception using
+                message = 'user groups are automatically created and deleted based on user objects';
+            end if;
+        end if;
+    return old;
+    end;
+$$ language plpgsql;
+create trigger ensure_group_deletion_policy before delete on groups
+    for each row execute procedure group_deletion();
+
+
 create or replace function group_immutability()
     returns trigger as $$
     begin
@@ -198,9 +222,10 @@ create table if not exists group_memberships(
     group_name text not null references groups (group_name) on delete cascade,
     group_member_name text not null references groups (group_name) on delete cascade,
     group_membership_expiry_date date,
-    unique (group_name, group_member_name) -- cannot be member of itself
+    unique (group_name, group_member_name)
 );
--- assert group_class == secondary
+-- immutability
+-- assert group_class == secondary in group_name
 -- TODO: add constraint to prevent cyclical graphs
 -- group_new_parent_is_child_of_new_child
 -- group_get_children
@@ -211,8 +236,11 @@ create table if not exists group_moderators(
     group_moderator_name text not null references groups (group_name) on delete cascade,
     group_moderator_description text,
     group_moderator_metadata json,
-    group_moderator_expiry_date date
+    group_moderator_expiry_date date,
+    unique (group_name, group_moderator_name)
 );
+-- immutability
+-- ensure group_name group_class secondary
 -- TODO: add constraint to prevent cyclical graphs
 -- group_new_parent_is_child_of_new_child
 -- group_get_children
