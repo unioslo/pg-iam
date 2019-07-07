@@ -92,14 +92,11 @@ create or replace function person_management()
             if OLD.person_expiry_date != NEW.person_expiry_date then
                 new_pgrp := NEW.person_id || '-group';
                 update groups set group_expiry_date = NEW.person_expiry_date where group_name = new_pgrp;
-                -- need to loop over (user, exp) currently stuck on one user for some reason
-                -- same for user groups
-                for exp in select user_expiry_date from users where person_id = NEW.person_id loop
-                    raise info 'user will expire on %', exp;
+                for exp, unam in select user_expiry_date, user_name from users where person_id = NEW.person_id loop
+                    raise info 'user % will expire on %', unam, exp;
                     if NEW.person_expiry_date < exp then
                         raise info 'need to reset user and user group exp to match person';
                         update users set user_expiry_date = NEW.person_expiry_date where person_id = NEW.person_id;
-                        select user_name from users where person_id = NEW.person_id into unam;
                         raise info 'handling %', unam;
                         update groups set group_expiry_date = NEW.person_expiry_date where group_primary_member = unam;
                     end if;
@@ -111,7 +108,6 @@ create or replace function person_management()
 $$ language plpgsql;
 create trigger person_group_trigger after insert or delete or update on persons
     for each row execute procedure person_management();
--- ensure end_dates consistent across person, users, groups
 
 drop table if exists users cascade;
 create table if not exists users(
