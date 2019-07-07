@@ -17,8 +17,8 @@ create or replace function test()
         insert into persons (given_names, surname, person_expiry_date)
             values ('Sarah', 'Conner', '2020-10-01');
         select person_id from persons where surname = 'Conner' into pid;
-        insert into users (person_id, user_name)
-            values (pid, 'p11-sconne');
+        insert into users (person_id, user_name, user_expiry_date)
+            values (pid, 'p11-sconne', '2020-03-28');
     return true;
     end;
 $$ language plpgsql;

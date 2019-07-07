@@ -77,12 +77,8 @@ create or replace function person_management()
             if OLD.person_group is null then
                 new_pgrp := NEW.person_id || '-group';
                 update persons set person_group = new_pgrp where person_id = NEW.person_id;
-                insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption)
-                    values (new_pgrp, 'primary', 'person', NEW.person_id, 'personal group');
-                if NEW.person_expiry_date is not null then
-                    update groups set group_expiry_date = NEW.person_expiry_date
-                        where group_name = new_pgrp;
-                end if;
+                insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption, group_expiry_date)
+                    values (new_pgrp, 'primary', 'person', NEW.person_id, 'personal group', NEW.person_expiry_date);
             end if;
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.person_group;
@@ -132,6 +128,8 @@ create or replace function user_management()
     returns trigger as $$
     declare new_unam text;
     declare new_ugrp text;
+    declare person_exp date;
+    declare user_exp date;
     begin
         if (TG_OP = 'INSERT') then
             if OLD.user_group is null then
@@ -139,7 +137,17 @@ create or replace function user_management()
                 update users set user_group = new_ugrp where user_name = NEW.user_name;
                 insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption)
                     values (new_ugrp, 'primary', 'user', NEW.user_name, 'user group');
-                -- if exp is included, update user group with val
+                select person_expiry_date from persons where person_id = NEW.person_id into person_exp;
+                if NEW.user_expiry_date is not null then
+                    if NEW.user_expiry_date > person_exp then
+                        raise exception using message = 'a user cannot expire _after_ the person';
+                    end if;
+                    user_exp := NEW.user_expiry_date;
+                else
+                    user_exp := person_exp;
+                end if;
+                update users set user_expiry_date = user_exp where user_name = NEW.user_name;
+                update groups set group_expiry_date = user_exp where group_name = new_ugrp;
             end if;
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.user_group;
