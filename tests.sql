@@ -19,6 +19,10 @@ create or replace function test()
         select person_id from persons where surname = 'Conner' into pid;
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p11-sconne', '2020-03-28');
+        insert into users (person_id, user_name, user_expiry_date)
+            values (pid, 'p66-sconne', '2019-12-01');
+        -- create another account
+        update persons set person_expiry_date = '2021-01-01';
     return true;
     end;
 $$ language plpgsql;
@@ -28,6 +32,7 @@ select * from persons;
 select * from users;
 select * from groups;
 update persons set person_activated = 'f';
+update persons set person_expiry_date = '2019-09-09';
 select * from persons;
 select * from users;
 select * from groups;
