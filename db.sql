@@ -93,11 +93,8 @@ create or replace function person_management()
                 new_pgrp := NEW.person_id || '-group';
                 update groups set group_expiry_date = NEW.person_expiry_date where group_name = new_pgrp;
                 for exp, unam in select user_expiry_date, user_name from users where person_id = NEW.person_id loop
-                    raise info 'user % will expire on %', unam, exp;
                     if NEW.person_expiry_date < exp then
-                        raise info 'need to reset user and user group exp to match person';
                         update users set user_expiry_date = NEW.person_expiry_date where person_id = NEW.person_id;
-                        raise info 'handling %', unam;
                         update groups set group_expiry_date = NEW.person_expiry_date where group_primary_member = unam;
                     end if;
                 end loop;
