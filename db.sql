@@ -28,6 +28,16 @@
 --create extension pgcrypto;
 
 -- TODO: record created date?
+-- expiry date rules:
+-- user exp <= person exp
+-- person groups exp == person exp (managed by triggers)
+-- user group exp == user exp (managed by triggers)
+-- person exp cascades to all dependent objects if set to before the other object's current exp
+-- example legal config
+-- person exp 2020-01-01 -> cascades to person group
+-- user exp 2019-12-01 -> cascades to user group
+-- if person exp -> 2019-10-01 -> user, user group, person group exp -> 2019-10-01
+-- if person exp -> 2021-01-01 -> user, user group exp unchanged, person group -> 2021-01-01
 
 drop table if exists persons cascade;
 create table if not exists persons(
@@ -69,6 +79,10 @@ create or replace function person_management()
                 update persons set person_group = new_pgrp where person_id = NEW.person_id;
                 insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption)
                     values (new_pgrp, 'primary', 'person', NEW.person_id, 'personal group');
+                if NEW.person_expiry_date is not null then
+                    update groups set group_expiry_date = NEW.person_expiry_date
+                        where group_name = new_pgrp;
+                end if;
             end if;
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.person_group;
@@ -77,6 +91,8 @@ create or replace function person_management()
                 update users set user_activated = NEW.person_activated where person_id = OLD.person_id;
                 update groups set group_activated = NEW.person_activated where group_name = OLD.person_group;
             end if;
+            -- if change in exp date cascade to person group
+            -- cascade to users and user groups, if < current exp
         end if;
     return new;
     end;
@@ -123,6 +139,7 @@ create or replace function user_management()
                 update users set user_group = new_ugrp where user_name = NEW.user_name;
                 insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption)
                     values (new_ugrp, 'primary', 'user', NEW.user_name, 'user group');
+                -- if exp is included, update user group with val
             end if;
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.user_group;
@@ -130,6 +147,8 @@ create or replace function user_management()
             if OLD.user_activated != NEW.user_activated then
                 update groups set group_activated = NEW.user_activated where group_name = OLD.user_group;
             end if;
+            -- if change in user exp, ensure same exp on user group
+            -- check that new exp <= person exp
         end if;
     return new;
     end;
@@ -194,10 +213,11 @@ $$ language plpgsql;
 create trigger ensure_group_immutability before update on groups
     for each row execute procedure group_immutability();
 
-create or replace function group_state_management()
+create or replace function group_management()
     returns trigger as $$
     declare primary_member_state boolean;
     begin
+        -- ensure primary group expiry dates cannot be modified directly
         if OLD.group_activated != NEW.group_activated then
             if OLD.group_type = 'person' then
                 select person_activated from persons where person_group = OLD.group_name into primary_member_state;
@@ -214,8 +234,8 @@ create or replace function group_state_management()
         return new;
     end;
 $$ language plpgsql;
-create trigger group_activated_trigger before update on groups
-    for each row execute procedure group_state_management();
+create trigger group_management_trigger before update on groups
+    for each row execute procedure group_management();
 
 drop table if exists group_memberships cascade;
 create table if not exists group_memberships(
@@ -245,6 +265,7 @@ create table if not exists group_moderators(
 -- group_new_parent_is_child_of_new_child
 -- group_get_children
 -- group_get_parents
+-- should memberships expire? necessary since groups can expire?
 
 -- for generating capabilities
 -- specify required groups to obtain a capability, set params

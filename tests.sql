@@ -14,7 +14,8 @@ create or replace function test()
     returns boolean as $$
     declare pid uuid;
     begin
-        insert into persons (given_names, surname) values ('Sarah', 'Conner');
+        insert into persons (given_names, surname, person_expiry_date)
+            values ('Sarah', 'Conner', '2020-10-01');
         select person_id from persons where surname = 'Conner' into pid;
         insert into users (person_id, user_name)
             values (pid, 'p11-sconne');
