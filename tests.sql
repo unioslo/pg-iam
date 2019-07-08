@@ -1,7 +1,6 @@
 
 -- tests pg-idp
 -- TODOs:
--- end dates on persons, usesrs, groups
 -- consistent trigger names
 -- non-cyclicality enforcement
 -- audit?
@@ -47,6 +46,7 @@ update groups set group_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
 update groups set group_name = 'p22-lcd-group';
 update groups set group_class = 'secondary';
 update groups set group_type = 'person';
+update groups set group_expiry_date = '2000-01-01' where group_primary_member = 'p11-sconne';
 delete from groups where group_type = 'person';
 delete from groups where group_type = 'user';
 delete from groups where group_class = 'primary';

@@ -3,7 +3,7 @@
 
 ```txt
 P ---> U ----> G (p,u)
-    ---------> G (p,p)
+  -----------> G (p,p)
             -> G (s,g) -> G (members, moderators)
 ```
 
@@ -15,6 +15,6 @@ P ---> U ----> G (p,u)
 
 ## expiry date relations
 
-- person group exp == f(person exp)
+- person group exp == person exp
 - user group exp == user exp
 - user exp <= person exp

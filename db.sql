@@ -227,8 +227,8 @@ create trigger ensure_group_immutability before update on groups
 create or replace function group_management()
     returns trigger as $$
     declare primary_member_state boolean;
+    declare curr_user_exp date;
     begin
-        -- ensure primary group expiry dates cannot be modified directly
         if OLD.group_activated != NEW.group_activated then
             if OLD.group_type = 'person' then
                 select person_activated from persons where person_group = OLD.group_name into primary_member_state;
@@ -240,6 +240,11 @@ create or replace function group_management()
                 if NEW.group_activated != primary_member_state then
                     raise exception using message = 'user groups can only be deactived by deactivating users';
                 end if;
+            end if;
+        elsif OLD.group_expiry_date != NEW.group_expiry_date then
+            select user_expiry_date from users where user_name = NEW.group_primary_member into curr_user_exp;
+            if NEW.group_expiry_date != curr_user_exp then
+                raise exception using message = 'primary group dates are modified via modifications on persons/users';
             end if;
         end if;
         return new;
