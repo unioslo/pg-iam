@@ -1,8 +1,8 @@
 
 -- tests pg-idp
 -- TODOs:
--- immutability
 -- end dates on persons, usesrs, groups
+-- consistent trigger names
 -- non-cyclicality enforcement
 -- audit?
 -- additional fields on persons, users
@@ -36,6 +36,8 @@ update persons set person_expiry_date = '2019-09-09';
 select * from persons;
 select * from users;
 select * from groups;
+update users set user_expiry_date = '2000-08-08' where user_name like 'p11-%';
+select * from users;
 update persons set person_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
 update persons set person_group = 'e14c538a-4b8b-4393-9fb2-056e363899e1-group';
 update users set user_id = 'a3981c7f-8e41-4222-9183-1815b6ec9c3b';

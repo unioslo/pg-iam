@@ -27,18 +27,6 @@
 
 --create extension pgcrypto;
 
--- TODO: record created date?
--- expiry date rules:
--- user exp <= person exp
--- person groups exp == person exp (managed by triggers)
--- user group exp == user exp (managed by triggers)
--- person exp cascades to all dependent objects if set to before the other object's current exp
--- example legal config
--- person exp 2020-01-01 -> cascades to person group
--- user exp 2019-12-01 -> cascades to user group
--- if person exp -> 2019-10-01 -> user, user group, person group exp -> 2019-10-01
--- if person exp -> 2021-01-01 -> user, user group exp unchanged, person group -> 2021-01-01
-
 drop table if exists persons cascade;
 create table if not exists persons(
     person_id uuid unique not null default gen_random_uuid(),
@@ -164,8 +152,14 @@ create or replace function user_management()
             if OLD.user_activated != NEW.user_activated then
                 update groups set group_activated = NEW.user_activated where group_name = OLD.user_group;
             end if;
-            -- if change in user exp, ensure same exp on user group
-            -- check that new exp <= person exp
+            if OLD.user_expiry_date != NEW.user_expiry_date then
+                select person_expiry_date from persons where person_id = NEW.person_id into person_exp;
+                if NEW.user_expiry_date > person_exp then
+                    raise exception using message = 'a user cannot expire _after_ the person';
+                else
+                    update groups set group_expiry_date = NEW.user_expiry_date where group_primary_member = NEW.user_name;
+                end if;
+            end if;
         end if;
     return new;
     end;
