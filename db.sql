@@ -1,29 +1,9 @@
 
--- A generic DB backend for IDPs
--- with support for capability based authorization management
-
--- a possible public SQL API
--- /rpc/person_create
--- /rpc/person_describe
--- /rpc/person_get
--- /rpc/person_set
--- /rpc/person_groups
-
--- /rpc/user_create
--- /rpc/user_describe
--- /rpc/user_get
--- /rpc/user_set
--- /rpc/user_groups
-
--- /rpc/group_create
--- /rpc/group_describe
--- /rpc/group_member_add
--- /rpc/group_member_remove
--- /rpc/group_list
--- /rpc/group_list_all
--- /rpc/group_moderator_add
--- /rpc/group_moderatr_remove
-
+-- rpcs for getting useful info:
+-- GET /rpc/person_groups?person_id=id
+-- GET /rpc/user_groups?user_name=name
+-- GET /rpc/group_members?group_name=name
+-- GET /rpc/group_moderators?group_name=name
 
 --create extension pgcrypto;
 
