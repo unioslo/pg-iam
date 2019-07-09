@@ -265,6 +265,7 @@ create table if not exists group_memberships(
 -- TODO: add constraint to prevent cyclical graphs
 -- group_new_parent_is_child_of_new_child
 -- group_get_children
+-- group_get_parents
 
 drop table if exists group_moderators cascade;
 create table if not exists group_moderators(

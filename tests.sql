@@ -9,9 +9,10 @@
 -- rpc API?
 -- RLS access control
 
-create or replace function test()
+create or replace function test_persons_users_groups()
     returns boolean as $$
     declare pid uuid;
+    declare num int;
     begin
         insert into persons (given_names, surname, person_expiry_date)
             values ('Sarah', 'Conner', '2020-10-01');
@@ -20,16 +21,20 @@ create or replace function test()
             values (pid, 'p11-sconne', '2020-03-28');
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p66-sconne', '2019-12-01');
-        -- create another account
-        update persons set person_expiry_date = '2021-01-01';
+        -- creation
+        select count(*) from persons into num;
+        assert num = 1, 'person creation issue';
+        select count(*) from users where person_id = pid into num;
+        assert num = 2, 'user creation issue';
+        select count(*) from groups into num;
+        assert num = 3, 'group creation issue';
     return true;
     end;
 $$ language plpgsql;
 
-select test();
-select * from persons;
-select * from users;
-select * from groups;
+select test_persons_users_groups();
+
+
 update persons set person_activated = 'f';
 update persons set person_expiry_date = '2019-09-09';
 select * from persons;
