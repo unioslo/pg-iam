@@ -22,12 +22,9 @@ create or replace function test_persons_users_groups()
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p66-sconne', '2019-12-01');
         -- creation
-        select count(*) from persons into num;
-        assert num = 1, 'person creation issue';
-        select count(*) from users where person_id = pid into num;
-        assert num = 2, 'user creation issue';
-        select count(*) from groups into num;
-        assert num = 3, 'group creation issue';
+        assert (select count(*) from persons) = 1, 'person creation issue';
+        assert (select count(*) from users) = 2, 'user creation issue';
+        assert (select count(*) from groups) = 3, 'group creation issue';
         -- person attribute immutability
         begin
             update persons set person_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
@@ -86,26 +83,29 @@ create or replace function test_persons_users_groups()
             raise notice 'group_type immutable';
         end;
         -- states; cascades, constraints
+        update persons set person_activated = 'f';
+        assert (select count(*) from users where user_activated = 't') = 0,
+            'person state changes not propagating to users';
+        assert (select count(*) from groups where group_activated = 't') = 0,
+            'person state changes not propagating to groups';
+        -- try change group states, expect fail
+        -- create secondary group, change state, delete it again
         -- expiry dates: cascades, constraints
+        update persons set person_expiry_date = '2019-09-09';
+        update users set user_expiry_date = '2000-08-08' where user_name like 'p11-%';
+        update groups set group_expiry_date = '2000-01-01' where group_primary_member = 'p11-sconne';
         -- deletion; cascades, constraints
+        delete from groups where group_type = 'person';
+        delete from groups where group_type = 'user';
+        delete from groups where group_class = 'primary';
+        delete from persons;
+        assert (select count(*) from users) = 0, 'cascading delete from person to users not working';
+        assert (select count(*) from groups) = 0, 'cascading delete from person to groups not working';
     return true;
     end;
 $$ language plpgsql;
 
 select test_persons_users_groups();
-
-
-update persons set person_activated = 'f';
-update persons set person_expiry_date = '2019-09-09';
-select * from persons;
-select * from users;
-select * from groups;
-update users set user_expiry_date = '2000-08-08' where user_name like 'p11-%';
-select * from users;
-update groups set group_expiry_date = '2000-01-01' where group_primary_member = 'p11-sconne';
-delete from groups where group_type = 'person';
-delete from groups where group_type = 'user';
-delete from groups where group_class = 'primary';
-delete from persons;
-select * from users;
-select * from groups;
+-- test_group_memeberships
+-- test_group_moderators
+-- test_capabilities
