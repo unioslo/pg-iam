@@ -2,6 +2,7 @@
 -- rpcs for getting useful info:
 -- GET /rpc/person_groups?person_id=id
 -- GET /rpc/user_groups?user_name=name
+-- POST /rpc/group_member_add [{person_id,user_name}]
 -- GET /rpc/group_members?group_name=name
 -- GET /rpc/group_moderators?group_name=name
 
@@ -246,6 +247,26 @@ create table if not exists group_memberships(
 -- group_new_parent_is_child_of_new_child
 -- group_get_children
 -- group_get_parents
+
+create view first_order_members as
+    select gm.group_name, gm.group_member_name, g.group_class, g.group_type, g.group_primary_member
+    from group_memberships gm, groups g
+    where gm.group_member_name = g.group_name;
+
+create table if not exists members(group_member_name text);
+create or replace function group_get_children(parent_group text)
+    returns setof members as $$
+    begin
+        return query execute format('') using $1;
+    end;
+$$ language plpgsql;
+
+create or replace function group_get_parents(child_group text)
+    returns setof members as $$
+    begin
+        return query execute format('') using $1;
+    end;
+$$ language plpgsql;
 
 drop table if exists group_moderators cascade;
 create table if not exists group_moderators(

@@ -122,8 +122,78 @@ create or replace function test_persons_users_groups()
     end;
 $$ language plpgsql;
 
+create or replace function test_group_memeberships()
+    returns boolean as $$
+    declare pid uuid;
+    declare row record;
+    begin
+        -- create persons and users
+        insert into persons (given_names, surname, person_expiry_date)
+            values ('Sarah', 'Conner', '2020-10-01');
+        select person_id from persons where surname = 'Conner' into pid;
+        insert into users (person_id, user_name, user_expiry_date)
+            values (pid, 'p11-sconne', '2020-03-28');
+        insert into users (person_id, user_name, user_expiry_date)
+            values (pid, 'p66-sconne', '2019-12-01');
+        insert into persons (given_names, surname, person_expiry_date)
+            values ('John', 'Conner2', '2020-10-01');
+        select person_id from persons where surname = 'Conner2' into pid;
+        insert into users (person_id, user_name, user_expiry_date)
+            values (pid, 'p11-jconn', '2020-03-28');
+        insert into persons (given_names, surname, person_expiry_date)
+            values ('Frank', 'Castle', '2020-10-01');
+        select person_id from persons where surname = 'Castle' into pid;
+        insert into users (person_id, user_name, user_expiry_date)
+            values (pid, 'p11-fcl', '2020-03-28');
+        insert into persons (given_names, surname, person_expiry_date)
+            values ('Virginia', 'Woolf', '2020-10-01');
+        select person_id from persons where surname = 'Woolf' into pid;
+        insert into users (person_id, user_name, user_expiry_date)
+            values (pid, 'p11-vwf', '2020-03-28');
+        insert into persons (given_names, surname, person_expiry_date)
+            values ('David', 'Gilgamesh', '2020-10-01');
+        select person_id from persons where surname = 'Gilgamesh' into pid;
+        insert into users (person_id, user_name, user_expiry_date)
+            values (pid, 'p11-dgmsh', '2020-03-28');
+        -- create groups
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-admin-group', 'secondary', 'generic');
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-export-group', 'secondary', 'generic');
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-publication-group', 'secondary', 'generic');
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-clinical-group', 'secondary', 'generic');
+        -- add members
+        insert into group_memberships (group_name, group_member_name)
+            values ('p11-export-group', 'p11-admin-group');
+        insert into group_memberships (group_name, group_member_name)
+            values ('p11-export-group', 'p11-sconne-group');
+        insert into group_memberships (group_name, group_member_name)
+            values ('p11-export-group', 'p11-jconn-group');
+        insert into group_memberships (group_name, group_member_name)
+            values ('p11-export-group', 'p11-clinical-group');
+        insert into group_memberships (group_name, group_member_name)
+            values ('p11-admin-group', 'p11-fcl-group');
+        insert into group_memberships (group_name, group_member_name)
+            values ('p11-publication-group', 'p11-vwf-group');
+        insert into group_memberships (group_name, group_member_name)
+            values ('p11-admin-group', 'p11-publication-group');
+        insert into group_memberships (group_name, group_member_name)
+            values ('p11-clinical-group', 'p11-dgmsh-group');
+        raise notice 'group_name, group_member_name, group_class, group_type, group_primary_member';
+        for row in select * from first_order_members loop
+            raise notice '%', row;
+        end loop;
+        delete from persons;
+        delete from groups;
+        return true;
+    end;
+$$ language plpgsql;
+
+delete from persons;
 select test_persons_users_groups();
--- test_group_memeberships
+select test_group_memeberships();
 -- test_group_moderators
 -- test_capabilities
 
