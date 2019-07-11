@@ -271,9 +271,8 @@ create or replace function group_get_children(parent_group text)
         select count(*) from first_order_members where group_name = parent_group
             and group_class = 'secondary' into num;
         if num = 0 then
-            -- no recursive members
             return query execute format ('select group_name, group_member_name, group_class, group_primary_member
-                from first_order_members where group_name = $1') using parent_group;
+                from first_order_members where group_name = $1 order by group_primary_member') using parent_group;
         else
             for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
                 from first_order_members where group_name = parent_group
@@ -287,27 +286,22 @@ create or replace function group_get_children(parent_group text)
             end loop;
             select count(*) from sec into num;
             while num > 0 loop
-                select group_member_name from sec limit 1 into current_member; -- choose a specific row
-                raise notice 'handling member: %', current_member;
+                select group_member_name from sec limit 1 into current_member;
                 select group_name, group_member_name, group_class, group_primary_member
                     from sec where group_member_name = current_member
                     into gn, gmn, gc, gpm;
-                -- handle this secondary group
                 if gc = 'primary' then
-                    raise notice 'found primary group member: %', gmn;
-                    insert into mem values (gn, gmn, gpm);
+                    insert into mem values (gn, gmn, gc, gpm);
                 elsif gc = 'secondary' then
-                    raise notice 'found secondary group member: %', gmn;
+                    insert into mem values (gn, gmn, gc, gpm);
                     new_current_member := gmn;
                     -- first add primary groups to members, and remove them from sec
                     for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
                         from first_order_members where group_name = new_current_member loop
                         if gc = 'primary' then
-                            raise notice '% has primary member %', new_current_member, gmn;
                             insert into mem values (gn, gmn, gc, gpm);
                             delete from sec where group_member_name = gmn;
                         else
-                            raise notice '% has secondary member %', new_current_member, gmn;
                             recursive_current_member := gmn;
                             -- this new secondary member can have both primary and seconday
                             -- members itself, but just add all its members to sec, and we will handle them
@@ -318,11 +312,10 @@ create or replace function group_get_children(parent_group text)
                         end if;
                     end loop;
                 end if;
-                raise notice 'going to delete % from sec', current_member;
                 delete from sec where group_member_name = current_member;
                 select count(*) from sec into num;
             end loop;
-            return query select * from mem;
+            return query select * from mem order by group_primary_member;
         end if;
     end;
 $$ language plpgsql;
