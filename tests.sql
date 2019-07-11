@@ -93,11 +93,28 @@ create or replace function test_persons_users_groups()
         -- expiry dates: cascades, constraints
         update persons set person_expiry_date = '2019-09-09';
         update users set user_expiry_date = '2000-08-08' where user_name like 'p11-%';
-        update groups set group_expiry_date = '2000-01-01' where group_primary_member = 'p11-sconne';
+        begin
+            update groups set group_expiry_date = '2000-01-01' where group_primary_member = 'p11-sconne';
+            return false;
+        exception when others then
+            raise notice 'primary group updates';
+        end;
         -- deletion; cascades, constraints
-        delete from groups where group_type = 'person';
-        delete from groups where group_type = 'user';
-        delete from groups where group_class = 'primary';
+        begin
+            delete from groups where group_type = 'person';
+        exception when others then
+            raise notice 'person group deletion protected';
+        end;
+        begin
+            delete from groups where group_type = 'user';
+        exception when others then
+            raise notice 'user group deletion protected';
+        end;
+        begin
+            delete from groups where group_class = 'primary';
+        exception when others then
+            raise notice 'primary group deletion protected';
+        end;
         delete from persons;
         assert (select count(*) from users) = 0, 'cascading delete from person to users not working';
         assert (select count(*) from groups) = 0, 'cascading delete from person to groups not working';
@@ -109,3 +126,15 @@ select test_persons_users_groups();
 -- test_group_memeberships
 -- test_group_moderators
 -- test_capabilities
+
+-- helper view: nonrecursive members?
+
+
+-- if no secondary members, resolve list and return
+-- else
+-- create a temp table?
+-- for member, class in results:
+-- if class = secondary
+-- get members
+-- repeat until no secondary members, then resolve and return
+
