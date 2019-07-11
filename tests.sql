@@ -181,6 +181,24 @@ create or replace function test_group_memeberships()
             values ('p11-admin-group', 'p11-publication-group');
         insert into group_memberships (group_name, group_member_name)
             values ('p11-clinical-group', 'p11-dgmsh-group');
+        /*
+        This gives a valid group membership graph as follows:
+
+            p11-export-group
+                -> p11-sconne-group
+                -> p11-jconn-group
+                -> p11-clinical-group
+                    -> p11-dgmsh-group
+                -> p11-admin-group
+                    -> p11-fcl-group
+                    -> p11-publication-group
+                        -> p11-vwf-group
+
+        We should be able to resolve such DAGs, of arbitrary depth
+        until we can report back the list of all group_primary_member(s).
+        And optionally, the structure of the graph.
+
+        */
         raise notice 'group_name, group_member_name, group_class, group_type, group_primary_member';
         for row in select * from first_order_members loop
             raise notice '%', row;
