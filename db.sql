@@ -257,16 +257,30 @@ create table if not exists members(group_name text, group_member_name text, grou
 create or replace function group_get_children(parent_group text)
     returns setof members as $$
     declare num int;
+    declare gn text;
+    declare gmn text;
+    declare gpm text;
     begin
-        create temporary table sec(name text, class text) on commit drop;
-        create temporary table mem(name text, class text, pri text) on commit drop;
+        create temporary table sec(group_name text, group_member_name text) on commit drop;
+        create temporary table mem(group_name text, group_member_name text, group_primary_member text) on commit drop;
         select count(*) from first_order_members where group_name = parent_group
             and group_class = 'secondary' into num;
         if num = 0 then
-            -- when a group has no secondary members
+            -- no recursive members
             return query execute format ('select group_name, group_member_name, group_primary_member
                 from first_order_members where group_name = $1') using parent_group;
         else
+            for gn, gmn, gpm in select group_name, group_member_name, group_primary_member
+                from first_order_members where group_name = parent_group
+                and group_class = 'primary' loop
+                insert into mem values (gn, gmn, gpm);
+            end loop;
+            for gn, gmn in select group_name, group_member_name
+                from first_order_members where group_name = parent_group
+                and group_class = 'secondary' loop
+                -- insert all current ones, then start a while loop
+                null;
+            end loop;
             return query select * from mem;
         end if;
     end;
