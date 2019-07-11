@@ -264,6 +264,7 @@ create or replace function group_get_children(parent_group text)
     declare row record;
     declare current_member text;
     declare new_current_member text;
+    declare recursive_current_member text;
     begin
         create temporary table sec(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
         create temporary table mem(group_name text, group_member_name text, group_primary_member text) on commit drop;
@@ -294,7 +295,7 @@ create or replace function group_get_children(parent_group text)
                 -- handle this secondary group
                 if gc = 'primary' then
                     raise notice 'found primary group member: %', gmn;
-                    insert into mem values (gn, gmn, gc, gpm);
+                    insert into mem values (gn, gmn, gpm);
                 elsif gc = 'secondary' then
                     raise notice 'found secondary group member: %', gmn;
                     new_current_member := gmn;
@@ -307,8 +308,13 @@ create or replace function group_get_children(parent_group text)
                             delete from sec where group_member_name = gmn;
                         else
                             raise notice '% has secondary member %', new_current_member, gmn;
-                            -- now add any recursive secondary members to sec
-                            --insert into sec values (gn, gmn, gc, gpm);
+                            recursive_current_member := gmn;
+                            -- this new secondary member can have both primary and seconday
+                            -- members itself, but just add all its members to sec, and we will handle them
+                            for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
+                                from first_order_members where group_name = recursive_current_member loop
+                                insert into sec values (gn, gmn, gc, gpm);
+                            end loop;
                         end if;
                     end loop;
                 end if;

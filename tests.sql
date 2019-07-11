@@ -164,6 +164,8 @@ create or replace function test_group_memeberships()
             values ('p11-publication-group', 'secondary', 'generic');
         insert into groups (group_name, group_class, group_type)
             values ('p11-clinical-group', 'secondary', 'generic');
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-import-group', 'secondary', 'generic');
         -- add members
         insert into group_memberships (group_name, group_member_name)
             values ('p11-export-group', 'p11-admin-group');
