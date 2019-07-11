@@ -260,8 +260,12 @@ create or replace function group_get_children(parent_group text)
     declare gn text;
     declare gmn text;
     declare gpm text;
+    declare gc text;
+    declare row record;
+    declare current_member text;
+    declare new_current_member text;
     begin
-        create temporary table sec(group_name text, group_member_name text) on commit drop;
+        create temporary table sec(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
         create temporary table mem(group_name text, group_member_name text, group_primary_member text) on commit drop;
         select count(*) from first_order_members where group_name = parent_group
             and group_class = 'secondary' into num;
@@ -275,11 +279,42 @@ create or replace function group_get_children(parent_group text)
                 and group_class = 'primary' loop
                 insert into mem values (gn, gmn, gpm);
             end loop;
-            for gn, gmn in select group_name, group_member_name
+            for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
                 from first_order_members where group_name = parent_group
                 and group_class = 'secondary' loop
-                -- insert all current ones, then start a while loop
-                null;
+                insert into sec values (gn, gmn, gc, gpm);
+            end loop;
+            select count(*) from sec into num;
+            while num > 0 loop
+                select group_member_name from sec limit 1 into current_member; -- choose a specific row
+                raise notice 'handling member: %', current_member;
+                select group_name, group_member_name, group_class, group_primary_member
+                    from sec where group_member_name = current_member
+                    into gn, gmn, gc, gpm;
+                -- handle this secondary group
+                if gc = 'primary' then
+                    raise notice 'found primary group member: %', gmn;
+                    insert into mem values (gn, gmn, gc, gpm);
+                elsif gc = 'secondary' then
+                    raise notice 'found secondary group member: %', gmn;
+                    new_current_member := gmn;
+                    -- first add primary groups to members, and remove them from sec
+                    for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
+                        from first_order_members where group_name = new_current_member loop
+                        if gc = 'primary' then
+                            raise notice '% has primary member %', new_current_member, gmn;
+                            insert into mem values (gn, gmn, gpm);
+                            delete from sec where group_member_name = gmn;
+                        else
+                            raise notice '% has secondary member %', new_current_member, gmn;
+                            -- now add any recursive secondary members to sec
+                            --insert into sec values (gn, gmn, gc, gpm);
+                        end if;
+                    end loop;
+                end if;
+                raise notice 'going to delete % from sec', current_member;
+                delete from sec where group_member_name = current_member;
+                select count(*) from sec into num;
             end loop;
             return query select * from mem;
         end if;
