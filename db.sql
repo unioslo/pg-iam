@@ -253,11 +253,22 @@ create view first_order_members as
     from group_memberships gm, groups g
     where gm.group_member_name = g.group_name;
 
-create table if not exists members(group_member_name text);
+create table if not exists members(group_name text, group_member_name text, group_primary_member text);
 create or replace function group_get_children(parent_group text)
     returns setof members as $$
+    declare num int;
     begin
-        return query execute format('') using $1;
+        create temporary table sec(name text, class text) on commit drop;
+        create temporary table mem(name text, class text, pri text) on commit drop;
+        select count(*) from first_order_members where group_name = parent_group
+            and group_class = 'secondary' into num;
+        if num = 0 then
+            -- when a group has no secondary members
+            return query execute format ('select group_name, group_member_name, group_primary_member
+                from first_order_members where group_name = $1') using parent_group;
+        else
+            return query select * from mem;
+        end if;
     end;
 $$ language plpgsql;
 

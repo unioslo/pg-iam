@@ -196,15 +196,21 @@ create or replace function test_group_memeberships()
 
         We should be able to resolve such DAGs, of arbitrary depth
         until we can report back the list of all group_primary_member(s).
-        And optionally, the structure of the graph.
+        And optionally, the structure of the graph. In this case the list is:
+
+            p11-sconne
+            p11-jconn
+            p11-dgmsh
+            p11-fcl
+            p11-vwf
 
         */
         raise notice 'group_name, group_member_name, group_class, group_type, group_primary_member';
         for row in select * from first_order_members loop
             raise notice '%', row;
         end loop;
-        delete from persons;
-        delete from groups;
+        --delete from persons;
+        --delete from groups;
         return true;
     end;
 $$ language plpgsql;
