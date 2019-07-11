@@ -253,7 +253,7 @@ create view first_order_members as
     from group_memberships gm, groups g
     where gm.group_member_name = g.group_name;
 
-create table if not exists members(group_name text, group_member_name text, group_primary_member text);
+create table if not exists members(group_name text, group_member_name text, group_class text, group_primary_member text);
 create or replace function group_get_children(parent_group text)
     returns setof members as $$
     declare num int;
@@ -267,18 +267,18 @@ create or replace function group_get_children(parent_group text)
     declare recursive_current_member text;
     begin
         create temporary table sec(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
-        create temporary table mem(group_name text, group_member_name text, group_primary_member text) on commit drop;
+        create temporary table mem(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
         select count(*) from first_order_members where group_name = parent_group
             and group_class = 'secondary' into num;
         if num = 0 then
             -- no recursive members
-            return query execute format ('select group_name, group_member_name, group_primary_member
+            return query execute format ('select group_name, group_member_name, group_class, group_primary_member
                 from first_order_members where group_name = $1') using parent_group;
         else
-            for gn, gmn, gpm in select group_name, group_member_name, group_primary_member
+            for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
                 from first_order_members where group_name = parent_group
                 and group_class = 'primary' loop
-                insert into mem values (gn, gmn, gpm);
+                insert into mem values (gn, gmn, gc, gpm);
             end loop;
             for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
                 from first_order_members where group_name = parent_group
@@ -304,7 +304,7 @@ create or replace function group_get_children(parent_group text)
                         from first_order_members where group_name = new_current_member loop
                         if gc = 'primary' then
                             raise notice '% has primary member %', new_current_member, gmn;
-                            insert into mem values (gn, gmn, gpm);
+                            insert into mem values (gn, gmn, gc, gpm);
                             delete from sec where group_member_name = gmn;
                         else
                             raise notice '% has secondary member %', new_current_member, gmn;
