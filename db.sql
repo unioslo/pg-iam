@@ -245,14 +245,15 @@ create table if not exists group_memberships(
 -- assert group_class == secondary in group_name
 -- TODO: add constraint to prevent cyclical graphs
 -- group_new_parent_is_child_of_new_child
--- group_get_children
--- group_get_parents
+-- group_get_children -> /rpc/group_members
+-- group_get_parents -> /rpc/user_groups
 
 create view first_order_members as
     select gm.group_name, gm.group_member_name, g.group_class, g.group_type, g.group_primary_member
     from group_memberships gm, groups g
     where gm.group_member_name = g.group_name;
 
+drop table if exists members;
 create table if not exists members(group_name text, group_member_name text, group_class text, group_primary_member text);
 create or replace function group_get_children(parent_group text)
     returns setof members as $$
@@ -320,10 +321,33 @@ create or replace function group_get_children(parent_group text)
     end;
 $$ language plpgsql;
 
+drop table if exists memberships;
+create table if not exists memberships(member_name text, member_group_name text);
 create or replace function group_get_parents(child_group text)
-    returns setof members as $$
+    returns setof memberships as $$
+    declare num int;
+    declare mgn text;
+    declare mn text;
+    declare gn text;
     begin
-        return query execute format('') using $1;
+        create temporary table candidates(member_name text, member_group_name text) on commit drop;
+        create temporary table mem(member_name text, member_group_name text) on commit drop;
+        for gn in select group_name from group_memberships where group_member_name = child_group loop
+            insert into candidates values (child_group, gn);
+        end loop;
+        select count(*) from candidates into num;
+        while num > 0 loop
+            select member_name, member_group_name from candidates limit 1 into mn, mgn;
+            insert into mem values (mn, mgn);
+            delete from candidates where member_name = mn and member_group_name = mgn;
+            -- now check if the current candidate has parents
+            -- so we find all recursive memberships
+            for gn in select group_name from group_memberships where group_member_name = mgn loop
+                insert into candidates values (mgn, gn);
+            end loop;
+            select count(*) from candidates into num;
+        end loop;
+        return query select * from mem;
     end;
 $$ language plpgsql;
 
