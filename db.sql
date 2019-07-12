@@ -351,12 +351,25 @@ create or replace function group_get_parents(child_group text)
     end;
 $$ language plpgsql;
 
+create or replace function group_check_dag_requirements()
+    return boolean as $$
+    begin
+        -- redundancy
+        -- existing_children := group_get_children(new_parent)
+        -- if new_child in existing_children return false
+        -- cyclicality
+        -- existing_parents := group_get_parents(new_parent)
+        -- if new_child in existsting_parents return false
+        return true;
+    end;
+$$ language plpgsql;
+-- trigger before insert
+
+-- moderators are just members, except in a different table
 drop table if exists group_moderators cascade;
 create table if not exists group_moderators(
     group_name text not null references groups (group_name) on delete cascade,
     group_moderator_name text not null references groups (group_name) on delete cascade,
-    group_moderator_description text,
-    group_moderator_metadata json,
     group_moderator_expiry_date date,
     unique (group_name, group_moderator_name)
 );
