@@ -376,9 +376,21 @@ create or replace function group_check_dag_requirements()
     declare response text;
     begin
         -- Ensure we have only Directed Acylic Graphs, where primary groups are only allowed in leaves
+        -- if a any of the groups are currently inactive or expired, the membership cannot be created
         response := NEW.group_name || ' is a primary group - which cannot have members other than its primary member';
         assert (select NEW.group_name in
             (select group_name from groups where group_class = 'primary')) = 'f', response;
+        assert (select group_activated from groups where group_name = NEW.group_name) = 't',
+            NEW.group_name || ' is deactived - to use it in new group memberships it must be active';
+        assert (select group_activated from groups where group_name = NEW.group_member_name) = 't',
+            NEW.group_member_name || ' is deactived - to use it in new group memberships it must be active';
+        -- check expiry
+        assert (select case when group_expiry_date is not null then group_expiry_date else current_date end
+                from groups where group_name = NEW.group_name) >= current_date,
+            NEW.group_name || ' has expired - to use it in new group memberships its expiry date must be later than the current date';
+        assert (select case when group_expiry_date is not null then group_expiry_date else current_date end
+                from groups where group_name = NEW.group_member_name) >= current_date,
+            NEW.group_member_name || ' has expired - to use it in new group memberships its expiry date must be later than the current date';
         response := 'Making ' || NEW.group_member_name || ' a member of ' || NEW.group_name
                     || ' would create a cyclical graph which is not allowed';
         assert (select NEW.group_member_name in

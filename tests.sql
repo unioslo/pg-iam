@@ -234,7 +234,22 @@ create or replace function test_group_memeberships()
         -- group membership and group expiry dates: what to do about it?
         -- what should be the correct sematics here?
         -- exlude inactive and expired groups from the group memberships view?
-        -- cannot create new membership relations if either group is inactive/expired
+        -- new relations and group activation state
+        begin
+            update groups set group_activated = 'f' where group_name = 'p11-import-group';
+            insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-import-group');
+            assert false;
+        exception when assert_failure then
+            raise notice 'deactivated groups cannot be used in new memberships';
+        end;
+        -- new relations and group expiry
+        begin
+            update groups set group_expiry_date = '2017-01-01' where group_name = 'p11-import-group';
+            insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-import-group');
+            assert false;
+        exception when assert_failure then
+            raise notice 'expired groups cannot be used in new memberships';
+        end;
         --delete from persons;
         --delete from groups;
         return true;
