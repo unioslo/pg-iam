@@ -1,9 +1,9 @@
 
 -- rpcs for getting useful info:
 -- GET /rpc/person_groups?person_id=id
--- GET /rpc/user_groups?user_name=name
+-- GET /rpc/user_groups?user_name=name -> group_get_parents
 -- POST /rpc/group_member_add [{person_id,user_name}]
--- GET /rpc/group_members?group_name=name
+-- GET /rpc/group_members?group_name=name -> group_get_children
 -- GET /rpc/group_moderators?group_name=name
 
 --create extension pgcrypto;
@@ -241,10 +241,21 @@ create table if not exists group_memberships(
     group_membership_expiry_date date,
     unique (group_name, group_member_name)
 );
--- immutability
--- assert group_class == secondary in group_name
--- group_get_children -> /rpc/group_members
--- group_get_parents -> /rpc/user_groups
+
+create or replace function group_memberships_immutability()
+    returns trigger as $$
+    begin
+        if OLD.group_name != NEW.group_name then
+            raise exception using message = 'group_name is immutable';
+        elsif OLD.group_member_name != NEW.group_member_name then
+            raise exception using message = 'group_member_name is immutable';
+        end if;
+    return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_group_memberships_immutability before update on group_memberships
+    for each row execute procedure group_memberships_immutability();
+
 
 create view first_order_members as
     select gm.group_name, gm.group_member_name, g.group_class, g.group_type, g.group_primary_member
@@ -354,8 +365,11 @@ $$ language plpgsql;
 create or replace function group_check_dag_requirements()
     returns trigger as $$
     declare response text;
-    declare inf text;
     begin
+        -- Ensure we have only Directed Acylic Graphs, where primary groups are only allowed in leaves
+        response := NEW.group_name || ' is a primary group - which cannot have members other than its primary member';
+        assert (select NEW.group_name in
+            (select group_name from groups where group_class = 'primary')) = 'f', response;
         response := 'Making ' || NEW.group_member_name || ' a member of ' || NEW.group_name
                     || ' would create a cyclical graph which is not allowed';
         assert (select NEW.group_member_name in
@@ -363,7 +377,6 @@ create or replace function group_check_dag_requirements()
         response := NEW.group_member_name || ' is already a member of ' || NEW.group_name;
         assert (select NEW.group_member_name in
             (select group_member_name from group_get_children(NEW.group_name))) = 'f', response;
-        response := NEW.group_member_name || ' is already a member of ' || NEW.group_name;
         assert (select NEW.group_member_name in
             (select group_name from group_get_children(NEW.group_name) where group_name != NEW.group_name)) = 'f', response;
         return new;
