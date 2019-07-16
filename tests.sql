@@ -234,6 +234,7 @@ create or replace function test_group_memeberships()
         -- group membership and group expiry dates: what to do about it?
         -- what should be the correct sematics here?
         -- exlude inactive and expired groups from the group memberships view?
+        -- cannot create new membership relations if either group is inactive/expired
         --delete from persons;
         --delete from groups;
         return true;

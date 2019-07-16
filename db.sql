@@ -1,5 +1,6 @@
 
--- rpcs for getting useful info:
+-- rpcs for getting group related information:
+
 -- GET /rpc/person_groups?person_id=id
 -- GET /rpc/user_groups?user_name=name -> group_get_parents
 -- POST /rpc/group_member_add [{person_id,user_name}]
@@ -240,6 +241,7 @@ create table if not exists group_memberships(
     group_member_name text not null references groups (group_name) on delete cascade,
     unique (group_name, group_member_name)
 );
+-- disallow insert if either group is inactive or expired
 
 create or replace function group_memberships_immutability()
     returns trigger as $$
@@ -256,7 +258,11 @@ create trigger ensure_group_memberships_immutability before update on group_memb
     for each row execute procedure group_memberships_immutability();
 
 
--- TODO: consider selecting only active groups and/or those which have not expired yet
+-- TODO: include expiry and state information
+-- when requesting group membership info
+-- default to only reporting active/non-expired groups for memberships
+-- allow callers to specify whiether they want to include all
+-- try to report which relation is inactive or expired
 create view first_order_members as
     select gm.group_name, gm.group_member_name, g.group_class, g.group_type, g.group_primary_member
     from group_memberships gm, groups g
@@ -333,6 +339,7 @@ create or replace function group_get_children(parent_group text)
 $$ language plpgsql;
 
 
+-- use first_order_members here, so we take activation/expiry into account
 create table if not exists memberships(member_name text, member_group_name text);
 create or replace function group_get_parents(child_group text)
     returns setof memberships as $$
@@ -393,9 +400,10 @@ create table if not exists group_moderators(
     group_moderator_name text not null references groups (group_name) on delete cascade,
     unique (group_name, group_moderator_name)
 );
--- immutability
+-- immutability, use view selecting
 -- ensure group_name group_class secondary
 -- only allow direct relations, so cyclical and redundant check is simple
+-- disallow insert if either group is inactive or expired
 
 -- for generating capabilities
 -- specify required groups to obtain a capability, set params
