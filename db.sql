@@ -238,7 +238,6 @@ drop table if exists group_memberships cascade;
 create table if not exists group_memberships(
     group_name text not null references groups (group_name) on delete cascade,
     group_member_name text not null references groups (group_name) on delete cascade,
-    group_membership_expiry_date date,
     unique (group_name, group_member_name)
 );
 
@@ -257,6 +256,7 @@ create trigger ensure_group_memberships_immutability before update on group_memb
     for each row execute procedure group_memberships_immutability();
 
 
+-- TODO: consider selecting only active groups and/or those which have not expired yet
 create view first_order_members as
     select gm.group_name, gm.group_member_name, g.group_class, g.group_type, g.group_primary_member
     from group_memberships gm, groups g
@@ -391,7 +391,6 @@ drop table if exists group_moderators cascade;
 create table if not exists group_moderators(
     group_name text not null references groups (group_name) on delete cascade,
     group_moderator_name text not null references groups (group_name) on delete cascade,
-    group_moderator_expiry_date date,
     unique (group_name, group_moderator_name)
 );
 -- immutability

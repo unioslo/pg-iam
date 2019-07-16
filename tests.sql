@@ -2,11 +2,11 @@
 -- tests pg-idp
 -- TODOs:
 -- consistent trigger names
--- non-cyclicality enforcement
 -- audit?
 -- additional fields on persons, users
 -- capability generation and validation
 -- rpc API?
+-- add column comments
 -- RLS access control
 
 create or replace function test_persons_users_groups()
@@ -231,6 +231,9 @@ create or replace function test_group_memeberships()
         end;
         -- immutability
         -- group classes
+        -- group membership and group expiry dates: what to do about it?
+        -- what should be the correct sematics here?
+        -- exlude inactive and expired groups from the group memberships view?
         --delete from persons;
         --delete from groups;
         return true;
