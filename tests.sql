@@ -28,57 +28,57 @@ create or replace function test_persons_users_groups()
         -- person attribute immutability
         begin
             update persons set person_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
-            return false;
+            assert false;
         exception when others then
             raise notice 'person_id immutable';
         end;
         begin
             update persons set person_group = 'e14c538a-4b8b-4393-9fb2-056e363899e1-group';
-            return false;
+            assert false;
         exception when others then
             raise notice 'person_group immutable';
         end;
         -- user attribute immutability
         begin
             update users set user_id = 'a3981c7f-8e41-4222-9183-1815b6ec9c3b';
-            return false;
+            assert false;
         exception when others then
             raise notice 'user_id immutable';
         end;
         begin
             update users set user_name = 'p11-scnr';
-            return false;
+            assert false;
         exception when others then
             raise notice 'user_name immutable';
         end;
         begin
             update users set user_group = 'p11-s-group';
-            return false;
+            assert false;
         exception when others then
             raise notice 'user_group immutable';
         end;
         -- group attribute immutability
         begin
             update groups set group_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
-            return false;
+            assert false;
         exception when others then
             raise notice 'group_id immutable';
         end;
         begin
             update groups set group_name = 'p22-lcd-group';
-            return false;
+            assert false;
         exception when others then
             raise notice 'group_name immutable';
         end;
         begin
             update groups set group_class = 'secondary';
-            return false;
+            assert false;
         exception when others then
             raise notice 'group_class immutable';
         end;
         begin
             update groups set group_type = 'person';
-            return false;
+            assert false;
         exception when others then
             raise notice 'group_type immutable';
         end;
@@ -95,7 +95,7 @@ create or replace function test_persons_users_groups()
         update users set user_expiry_date = '2000-08-08' where user_name like 'p11-%';
         begin
             update groups set group_expiry_date = '2000-01-01' where group_primary_member = 'p11-sconne';
-            return false;
+            assert false;
         exception when others then
             raise notice 'primary group updates';
         end;
@@ -216,9 +216,19 @@ create or replace function test_group_memeberships()
             raise notice '%', row;
         end loop;
         -- redundancy
-        insert into group_memberships (group_name, group_member_name) values ('p11-export-group','p11-publication-group');
+        begin
+            insert into group_memberships (group_name, group_member_name) values ('p11-export-group','p11-publication-group');
+            assert false;
+        exception when assert_failure then
+            raise notice 'group memberships cannot be redundant';
+        end;
         -- cyclicality
-        insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-export-group');
+        begin
+            insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-export-group');
+            assert false;
+        exception when assert_failure then
+            raise notice 'group memberships cannot be cyclical';
+        end;
         -- immutability
         -- group classes
         --delete from persons;
@@ -228,6 +238,7 @@ create or replace function test_group_memeberships()
 $$ language plpgsql;
 
 delete from persons;
+delete from groups;
 select test_persons_users_groups();
 select test_group_memeberships();
 -- test_group_moderators

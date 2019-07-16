@@ -262,7 +262,7 @@ create view first_order_members as
     from group_memberships gm, groups g
     where gm.group_member_name = g.group_name;
 
-drop table if exists members;
+
 create table if not exists members(group_name text, group_member_name text, group_class text, group_primary_member text);
 create or replace function group_get_children(parent_group text)
     returns setof members as $$
@@ -332,7 +332,7 @@ create or replace function group_get_children(parent_group text)
     end;
 $$ language plpgsql;
 
-drop table if exists memberships;
+
 create table if not exists memberships(member_name text, member_group_name text);
 create or replace function group_get_parents(child_group text)
     returns setof memberships as $$
@@ -341,8 +341,10 @@ create or replace function group_get_parents(child_group text)
     declare mn text;
     declare gn text;
     begin
-        create temporary table candidates(member_name text, member_group_name text) on commit drop;
-        create temporary table parents(member_name text, member_group_name text) on commit drop;
+        create temporary table if not exists candidates(member_name text, member_group_name text) on commit drop;
+        create temporary table if not exists parents(member_name text, member_group_name text) on commit drop;
+        delete from candidates;
+        delete from parents;
         for gn in select group_name from group_memberships where group_member_name = child_group loop
             insert into candidates values (child_group, gn);
         end loop;
