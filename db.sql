@@ -352,7 +352,7 @@ create or replace function group_get_parents(child_group text)
         create temporary table if not exists parents(member_name text, member_group_name text) on commit drop;
         delete from candidates;
         delete from parents;
-        for gn in select group_name from group_memberships where group_member_name = child_group loop
+        for gn in select group_name from first_order_members where group_member_name = child_group loop
             insert into candidates values (child_group, gn);
         end loop;
         select count(*) from candidates into num;
@@ -362,7 +362,7 @@ create or replace function group_get_parents(child_group text)
             delete from candidates where member_name = mn and member_group_name = mgn;
             -- now check if the current candidate has parents
             -- so we find all recursive memberships
-            for gn in select group_name from group_memberships where group_member_name = mgn loop
+            for gn in select group_name from first_order_members where group_member_name = mgn loop
                 insert into candidates values (mgn, gn);
             end loop;
             select count(*) from candidates into num;
