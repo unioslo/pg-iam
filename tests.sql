@@ -215,6 +215,12 @@ create or replace function test_group_memeberships()
         for row in select * from first_order_members loop
             raise notice '%', row;
         end loop;
+        -- redundancy
+        insert into group_memberships (group_name, group_member_name) values ('p11-export-group','p11-publication-group');
+        -- cyclicality
+        insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-export-group');
+        -- immutability
+        -- group classes
         --delete from persons;
         --delete from groups;
         return true;
@@ -226,15 +232,3 @@ select test_persons_users_groups();
 select test_group_memeberships();
 -- test_group_moderators
 -- test_capabilities
-
--- helper view: nonrecursive members?
-
-
--- if no secondary members, resolve list and return
--- else
--- create a temp table?
--- for member, class in results:
--- if class = secondary
--- get members
--- repeat until no secondary members, then resolve and return
-

@@ -243,8 +243,6 @@ create table if not exists group_memberships(
 );
 -- immutability
 -- assert group_class == secondary in group_name
--- TODO: add constraint to prevent cyclical graphs
--- group_new_parent_is_child_of_new_child
 -- group_get_children -> /rpc/group_members
 -- group_get_parents -> /rpc/user_groups
 
@@ -267,8 +265,10 @@ create or replace function group_get_children(parent_group text)
     declare new_current_member text;
     declare recursive_current_member text;
     begin
-        create temporary table sec(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
-        create temporary table mem(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
+        create temporary table if not exists sec(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
+        create temporary table if not exists mem(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
+        delete from sec;
+        delete from mem;
         select count(*) from first_order_members where group_name = parent_group
             and group_class = 'secondary' into num;
         if num = 0 then
@@ -331,14 +331,14 @@ create or replace function group_get_parents(child_group text)
     declare gn text;
     begin
         create temporary table candidates(member_name text, member_group_name text) on commit drop;
-        create temporary table mem(member_name text, member_group_name text) on commit drop;
+        create temporary table parents(member_name text, member_group_name text) on commit drop;
         for gn in select group_name from group_memberships where group_member_name = child_group loop
             insert into candidates values (child_group, gn);
         end loop;
         select count(*) from candidates into num;
         while num > 0 loop
             select member_name, member_group_name from candidates limit 1 into mn, mgn;
-            insert into mem values (mn, mgn);
+            insert into parents values (mn, mgn);
             delete from candidates where member_name = mn and member_group_name = mgn;
             -- now check if the current candidate has parents
             -- so we find all recursive memberships
@@ -347,25 +347,31 @@ create or replace function group_get_parents(child_group text)
             end loop;
             select count(*) from candidates into num;
         end loop;
-        return query select * from mem;
+        return query select * from parents;
     end;
 $$ language plpgsql;
 
 create or replace function group_check_dag_requirements()
-    return boolean as $$
+    returns trigger as $$
+    declare response text;
+    declare inf text;
     begin
-        -- redundancy
-        -- existing_children := group_get_children(new_parent)
-        -- if new_child in existing_children return false
-        -- cyclicality
-        -- existing_parents := group_get_parents(new_parent)
-        -- if new_child in existsting_parents return false
-        return true;
+        response := 'Making ' || NEW.group_member_name || ' a member of ' || NEW.group_name
+                    || ' would create a cyclical graph which is not allowed';
+        assert (select NEW.group_member_name in
+            (select member_group_name from group_get_parents(NEW.group_name))) = 'f', response;
+        response := NEW.group_member_name || ' is already a member of ' || NEW.group_name;
+        assert (select NEW.group_member_name in
+            (select group_member_name from group_get_children(NEW.group_name))) = 'f', response;
+        response := NEW.group_member_name || ' is already a member of ' || NEW.group_name;
+        assert (select NEW.group_member_name in
+            (select group_name from group_get_children(NEW.group_name) where group_name != NEW.group_name)) = 'f', response;
+        return new;
     end;
 $$ language plpgsql;
--- trigger before insert
+create trigger group_directed_acyclic_graph_requirements_trigger before insert on group_memberships
+    for each row execute procedure group_check_dag_requirements();
 
--- moderators are just members, except in a different table
 drop table if exists group_moderators cascade;
 create table if not exists group_moderators(
     group_name text not null references groups (group_name) on delete cascade,
@@ -375,11 +381,7 @@ create table if not exists group_moderators(
 );
 -- immutability
 -- ensure group_name group_class secondary
--- TODO: add constraint to prevent cyclical graphs
--- group_new_parent_is_child_of_new_child
--- group_get_children
--- group_get_parents
--- should memberships expire? necessary since groups can expire?
+-- only allow direct relations, so cyclical and redundant check is simple
 
 -- for generating capabilities
 -- specify required groups to obtain a capability, set params
@@ -413,4 +415,3 @@ create table capability_grants(
     capability_http_method text not null check (capability_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
     capability_uri_pattern text not null -- string or regex referring to a set of resources
 );
-
