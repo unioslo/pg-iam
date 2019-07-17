@@ -34,8 +34,9 @@ Objects and relations:
 1. create persons
 2. create user accounts for them
 3. add persons and users to groups, via their person or user groups
-4. allow persons and/or users to get capabilities based on group membership criteria
-5. specify the scope of capabilities
+4. allow groups to moderate memberships of other groups
+5. allow persons and/or users to get capabilities based on group membership criteria
+6. specify the scope of capabilities
 
 # Important features
 

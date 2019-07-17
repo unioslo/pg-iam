@@ -1,19 +1,18 @@
 
 # pg-idp
 
-A DB for IdPs.
+A generic database backend for use in IdPs.
 
 # Features
 
-- store information about persons, users, groups
-- manage group membership, and group moderation rights
-- cyclical group memberships prevention
-- specify capabilities to enforce access control
-- small code base, depends on postgres, and pgcrypto library
-- clear data model
-- immutable attributes when possible
-- persons, users, and groups can be active/inactive, and have expiry dates
-- extensive data consistency checks
-- wide test coverage
-- generic
-- maybe: audit, rpc api, rls policies
+- create persons, with optional expiry dates
+- give them user accounts, with optional expiry dates
+- create groups, with optional expiry dates
+- add the users to groups, and/or groups to groups
+- add persons without users to groups (for external account access control management)
+- allow groups to moderate memberships of other groups
+- create capabilities, specifying necessary group memberships to obtain them, with optional expiry dates
+- specify the scope of the capabilities
+- use helpful SQL RPCs to get group related information for application development
+- rest assured data integrity and consistency is maintained, with immutable columns wherever possible
+- access full audit log on all updates
