@@ -42,3 +42,5 @@ Objects and relations:
 1. person and user groups created and deleted automatically
 2. group memberships are ensured to be DAGs
 3. extensive data consistency checks
+4. SQL rpc API for getting important group related information
+5. extensive testing
