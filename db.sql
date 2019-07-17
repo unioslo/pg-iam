@@ -1,5 +1,10 @@
 
 -- rpcs for getting group related information:
+-- always report group expiry dates, and activation status
+-- callers can decide what to do based on this information themselves
+-- e.g. they can decide to ignore deactivaed and/or expired groups
+-- in downstream applications by filtering them out
+-- or they can delete relations or groups as a result of this
 
 -- GET /rpc/person_groups?person_id=id
 -- GET /rpc/user_groups?user_name=name -> group_get_parents
@@ -258,11 +263,6 @@ create trigger ensure_group_memberships_immutability before update on group_memb
     for each row execute procedure group_memberships_immutability();
 
 
--- TODO: include expiry and state information
--- when requesting group membership info
--- default to only reporting active/non-expired groups for memberships
--- allow callers to specify whiether they want to include all
--- try to report which relation is inactive or expired
 create view first_order_members as
     select gm.group_name, gm.group_member_name, g.group_class, g.group_type, g.group_primary_member
     from group_memberships gm, groups g
@@ -339,7 +339,6 @@ create or replace function group_get_children(parent_group text)
 $$ language plpgsql;
 
 
--- use first_order_members here, so we take activation/expiry into account
 create table if not exists memberships(member_name text, member_group_name text);
 create or replace function group_get_parents(child_group text)
     returns setof memberships as $$

@@ -122,7 +122,7 @@ create or replace function test_persons_users_groups()
     end;
 $$ language plpgsql;
 
-create or replace function test_group_memeberships()
+create or replace function test_group_memeberships_moderators()
     returns boolean as $$
     declare pid uuid;
     declare row record;
@@ -230,10 +230,25 @@ create or replace function test_group_memeberships()
             raise notice 'group memberships cannot be cyclical';
         end;
         -- immutability
+        begin
+            update group_memberships set group_name = 'p11-clinical-group' where group_name = 'p11-special-group';
+            assert false;
+        exception when others then
+            raise notice 'group_name is immutable in group_memberships';
+        end;
+        begin
+            update group_memberships set group_member_name = 'p11-clinical-group' where group_name = 'p11-special-group';
+            assert false;
+        exception when others then
+            raise notice 'group_member_name is immutable in group_memberships';
+        end;
         -- group classes
-        -- group membership and group expiry dates: what to do about it?
-        -- what should be the correct sematics here?
-        -- exlude inactive and expired groups from the group memberships view?
+        begin
+            insert into group_memberships values ('p11-sconne-group', 'p11-special-group');
+            assert false;
+        exception when assert_failure then
+            raise notice 'primary groups cannot have new members';
+        end;
         -- new relations and group activation state
         begin
             update groups set group_activated = 'f' where group_name = 'p11-import-group';
@@ -259,6 +274,6 @@ $$ language plpgsql;
 delete from persons;
 delete from groups;
 select test_persons_users_groups();
-select test_group_memeberships();
+select test_group_memeberships_moderators();
 -- test_group_moderators
 -- test_capabilities
