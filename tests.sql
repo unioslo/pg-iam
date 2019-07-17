@@ -1,13 +1,11 @@
 
--- tests pg-idp
 -- TODOs:
 -- consistent trigger names
--- audit?
--- additional fields on persons, users
+-- audit
 -- capability generation and validation
--- rpc API?
+-- rpc API + tests
 -- add column comments
--- RLS access control
+-- docs
 
 create or replace function test_persons_users_groups()
     returns boolean as $$
@@ -215,6 +213,10 @@ create or replace function test_group_memeberships_moderators()
         for row in select * from first_order_members loop
             raise notice '%', row;
         end loop;
+        /*
+        GROUP MEMBERS
+        */
+        -- referential constraints
         -- redundancy
         begin
             insert into group_memberships (group_name, group_member_name) values ('p11-export-group','p11-publication-group');
@@ -265,6 +267,32 @@ create or replace function test_group_memeberships_moderators()
         exception when assert_failure then
             raise notice 'expired groups cannot be used in new memberships';
         end;
+        /*
+        GROUP MODERATORS
+        */
+        -- test data
+        insert into group_moderators (group_name, group_moderator_name)
+            values ('p11-import-group', 'p11-admin-group');
+        insert into group_moderators (group_name, group_moderator_name)
+            values ('p11-clinical-group', 'p11-special-group');
+        -- referential constraints
+        -- immutability
+        begin
+            update group_moderators set group_name = 'p11-admin-group' where group_name = 'p11-import-group';
+            assert false;
+        exception when others then
+            raise notice 'group_name is immutable in group_moderators';
+        end;
+        begin
+            update group_moderators set group_member_name = 'p11-export-group' where group_name = 'p11-import-group';
+            assert false;
+        exception when others then
+            raise notice 'group_member_name is immutable in group_moderators';
+        end;
+        -- redundancy (handled by unique index)
+        -- cyclicality
+        -- new relations and group activation state
+        -- new relations and group expiry
         --delete from persons;
         --delete from groups;
         return true;
@@ -274,6 +302,6 @@ $$ language plpgsql;
 delete from persons;
 delete from groups;
 select test_persons_users_groups();
-select test_group_memeberships_moderators();
--- test_group_moderators
+select test_group_memeberships_moderators()
 -- test_capabilities
+-- test rpcs

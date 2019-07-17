@@ -380,7 +380,7 @@ create or replace function group_get_parents(child_group text)
 $$ language plpgsql;
 
 
-create or replace function group_check_dag_requirements()
+create or replace function group_memberships_check_dag_requirements()
     returns trigger as $$
     declare response text;
     begin
@@ -412,8 +412,8 @@ create or replace function group_check_dag_requirements()
         return new;
     end;
 $$ language plpgsql;
-create trigger group_directed_acyclic_graph_requirements_trigger before insert on group_memberships
-    for each row execute procedure group_check_dag_requirements();
+create trigger group_memberships_dag_requirements_trigger before insert on group_memberships
+    for each row execute procedure group_memberships_check_dag_requirements();
 
 
 drop table if exists group_moderators cascade;
@@ -422,7 +422,23 @@ create table if not exists group_moderators(
     group_moderator_name text not null references groups (group_name) on delete cascade,
     unique (group_name, group_moderator_name)
 );
--- immutability, use view selecting
+
+
+create or replace function group_moderators_immutability()
+    returns trigger as $$
+    begin
+        if OLD.group_name != NEW.group_name then
+            raise exception using message = 'group_name is immutable';
+        elsif OLD.group_member_name != NEW.group_member_name then
+            raise exception using message = 'group_member_name is immutable';
+        end if;
+    return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_group_moderators_immutability before update on group_moderators
+    for each row execute procedure group_moderators_immutability();
+
+-- moderator_dag_
 -- ensure group_name group_class secondary
 -- only allow direct relations, so cyclical and redundant check is simple
 -- disallow insert if either group is inactive or expired
