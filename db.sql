@@ -393,7 +393,6 @@ create or replace function group_memberships_check_dag_requirements()
             NEW.group_name || ' is deactived - to use it in new group memberships it must be active';
         assert (select group_activated from groups where group_name = NEW.group_member_name) = 't',
             NEW.group_member_name || ' is deactived - to use it in new group memberships it must be active';
-        -- check expiry
         assert (select case when group_expiry_date is not null then group_expiry_date else current_date end
                 from groups where group_name = NEW.group_name) >= current_date,
             NEW.group_name || ' has expired - to use it in new group memberships its expiry date must be later than the current date';
@@ -438,10 +437,37 @@ $$ language plpgsql;
 create trigger ensure_group_moderators_immutability before update on group_moderators
     for each row execute procedure group_moderators_immutability();
 
--- moderator_dag_
--- ensure group_name group_class secondary
--- only allow direct relations, so cyclical and redundant check is simple
--- disallow insert if either group is inactive or expired
+
+create or replace function group_moderators_check_dag_requirements()
+    returns trigger as $$
+    declare response text;
+    declare new_grp text;
+    declare new_mod text;
+    begin
+        response := NEW.group_name || ' is deactived - to use it in new group moderators it must be active';
+        assert (select group_activated from groups where group_name = NEW.group_name) = 't', response;
+        response := NEW.group_moderator_name || ' is deactived - to use it in new group moderators it must be active';
+        assert (select group_activated from groups where group_name = NEW.group_moderator_name) = 't', response;
+        response := NEW.group_name || ' has expired - to use it in new group moderators its expiry date must be later than the current date';
+        assert (select case when group_expiry_date is not null then group_expiry_date else current_date end
+                from groups where group_name = NEW.group_name) >= current_date, response;
+        response := NEW.group_moderator_name || ' has expired - to use it in new group moderators its expiry date must be later than the current date';
+        assert (select case when group_expiry_date is not null then group_expiry_date else current_date end
+                from groups where group_name = NEW.group_moderator_name) >= current_date, response;
+        response := NEW.group_name || ' is a primary group, and cannot be moderated';
+        assert (select group_class from groups where group_name = NEW.group_name) = 'secondary', response;
+        response := 'Making ' || NEW.group_name || ' a moderator of '
+                   || NEW.group_moderator_name || ' will create a cyclical graph - which is not allowed.';
+        assert (select count(*) from group_moderators
+                where group_name = NEW.group_moderator_name
+                and group_moderator_name = NEW.group_name) = 0, response;
+        return new;
+    end;
+$$ language plpgsql;
+create trigger group_memberships_dag_requirements_trigger before insert on group_moderators
+    for each row execute procedure group_moderators_check_dag_requirements();
+
+
 
 -- for generating capabilities
 -- specify required groups to obtain a capability, set params
