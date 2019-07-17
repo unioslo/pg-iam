@@ -1,10 +1,12 @@
 
 -- TODOs:
--- consistent trigger names
--- audit
+-- refactor immutability funcs to use asserts
 -- capability generation and validation
+-- add immutable row_id column on mutable tables
+-- ensure all ID cols immutable
+-- consistent trigger names, code cleanup
+-- audit (after update, use row_id)
 -- rpc API + tests
--- add column comments
 -- docs
 
 create or replace function test_persons_users_groups()

@@ -2,19 +2,27 @@
 ## data object hierarchy
 
 ```txt
-P ---> U ----> G (p,u)
-  -----------> G (p,p)
-            -> G (s,g) -> G (members, moderators)
+Persons -----> Users ----> Groups (class:primary,   type:user)
+  -----------------------> Groups (class:primary,   type:person)
+                        -> Groups (class:secondary, type:generic)
+                            -> Groups (class:secondary: relations: members, moderators)
 ```
 
-## active/inactive state relations
+Objects and relations:
+- `Persons`: root objects
+- `Users`: owned by `Persons`
+- `Groups`: three types, `user`, `person` (belonging to the `primary` class), and `generic` (belonging to the `secondary` class)
+- all three types of groups can have relations to other secondary groups
+- these relations can be either member or moderator relations
 
-- person group state -> f(person state)
-- user group state -> f(user state) -> f(person state)
-- group state -> f(.)
+## data object states
 
-## expiry date relations
+- active/inactive
+    - person group state -> f(person state)
+    - user group state -> f(user state) -> f(person state)
+    - generic group state -> f(.)
 
-- person group exp == person exp
-- user group exp == user exp
-- user exp <= person exp
+- expiry dates
+    - person group exp == person exp
+    - user group exp == user exp
+    - user exp <= person exp
