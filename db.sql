@@ -1,18 +1,5 @@
 
--- rpcs for getting group related information:
--- always report group expiry dates, and activation status
--- callers can decide what to do based on this information themselves
--- e.g. they can decide to ignore deactivaed and/or expired groups
--- in downstream applications by filtering them out
--- or they can delete relations or groups as a result of this
-
--- GET /rpc/person_groups?person_id=id
--- GET /rpc/user_groups?user_name=name -> group_get_parents
--- POST /rpc/group_member_add [{person_id,user_name}]
--- GET /rpc/group_members?group_name=name -> group_get_children
--- GET /rpc/group_moderators?group_name=name
-
---create extension pgcrypto;
+create extension pgcrypto;
 
 drop table if exists persons cascade;
 create table if not exists persons(
@@ -386,6 +373,8 @@ create or replace function group_memberships_check_dag_requirements()
     begin
         -- Ensure we have only Directed Acylic Graphs, where primary groups are only allowed in leaves
         -- if a any of the groups are currently inactive or expired, the membership cannot be created
+        -- also disallow any self-referential entries
+        assert NEW.group_name != NEW.group_member_name, 'groups cannot be members of themselves';
         response := NEW.group_name || ' is a primary group - which cannot have members other than its primary member';
         assert (select NEW.group_name in
             (select group_name from groups where group_class = 'primary')) = 'f', response;
@@ -444,6 +433,7 @@ create or replace function group_moderators_check_dag_requirements()
     declare new_grp text;
     declare new_mod text;
     begin
+        assert NEW.group_name != NEW.group_moderator_name, 'groups cannot be moderators of themselves';
         response := NEW.group_name || ' is deactived - to use it in new group moderators it must be active';
         assert (select group_activated from groups where group_name = NEW.group_name) = 't', response;
         response := NEW.group_moderator_name || ' is deactived - to use it in new group moderators it must be active';
@@ -464,15 +454,10 @@ create or replace function group_moderators_check_dag_requirements()
         return new;
     end;
 $$ language plpgsql;
-create trigger group_memberships_dag_requirements_trigger before insert on group_moderators
+create trigger group_memberships_dag_requirements_trigger after insert on group_moderators
     for each row execute procedure group_moderators_check_dag_requirements();
 
 
-
--- for generating capabilities
--- specify required groups to obtain a capability, set params
--- e.g. id, import, {role:import_user}, [import-group, member-group], wildcard, 60, data import, 2030-12-12
--- BUT: some groups are regex match, others must be exact
 drop table if exists capabilities cascade;
 create table if not exists capabilities(
     capability_id uuid unique not null default gen_random_uuid(),
@@ -484,9 +469,14 @@ create table if not exists capabilities(
     capability_description text not null,
     capability_expiry_date date
 );
+-- for generating capabilities
+-- specify required groups to obtain a capability, set params
+-- e.g. id, import, {role:import_user}, [import-group, member-group], wildcard, 60, data import, 2030-12-12
+-- BUT: some groups are regex match, others must be exact
 -- ensure set-like uniqueness on required groups
 -- via unique index and function: https://stackoverflow.com/questions/8443716/postgres-unique-constraint-for-array
 -- before trigger to check that groups exists, depending on match type
+-- remove groups from required groups if groups are deleted?
 
 -- specify capabilities authorization: sets of operations on sets of resources
 -- example entries
@@ -501,3 +491,20 @@ create table capability_grants(
     capability_http_method text not null check (capability_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
     capability_uri_pattern text not null -- string or regex referring to a set of resources
 );
+
+
+-- rpcs for getting group related information:
+-- always report group expiry dates, and activation status
+-- callers can decide what to do based on this information themselves
+-- e.g. they can decide to ignore deactivaed and/or expired groups
+-- in downstream applications by filtering them out
+-- or they can delete relations or groups as a result of this
+
+-- GET /rpc/person_groups?person_id=id
+-- GET /rpc/user_groups?user_name=name -> group_get_parents
+-- POST /rpc/group_member_add [{person_id,user_name}]
+-- GET /rpc/group_members?group_name=name -> group_get_children
+-- GET /rpc/group_moderators?group_name=name
+-- GET /rpc/person_capabilities
+-- GET /rpc/user_capabilities
+-- GET /rpc/group_capabilities

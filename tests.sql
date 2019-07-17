@@ -213,43 +213,51 @@ create or replace function test_group_memeberships_moderators()
         for row in select * from first_order_members loop
             raise notice '%', row;
         end loop;
-        /*
-        GROUP MEMBERS
-        */
+
+
+        /* GROUP MEMBERS */
+
         -- referential constraints
+        begin
+            insert into group_moderators (group_name, group_member_name)
+                values ('p77-clinical-group', 'p11-special-group');
+            assert false;
+        exception when others then
+            raise notice 'group_memberships: referential constraints work';
+        end;
         -- redundancy
         begin
             insert into group_memberships (group_name, group_member_name) values ('p11-export-group','p11-publication-group');
             assert false;
         exception when assert_failure then
-            raise notice 'group memberships cannot be redundant';
+            raise notice 'group_memberships: redundancy check works';
         end;
         -- cyclicality
         begin
             insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-export-group');
             assert false;
         exception when assert_failure then
-            raise notice 'group memberships cannot be cyclical';
+            raise notice 'group_memberships: cyclicality check works';
         end;
         -- immutability
         begin
             update group_memberships set group_name = 'p11-clinical-group' where group_name = 'p11-special-group';
             assert false;
         exception when others then
-            raise notice 'group_name is immutable in group_memberships';
+            raise notice 'group_memberships: group_name immutable';
         end;
         begin
             update group_memberships set group_member_name = 'p11-clinical-group' where group_name = 'p11-special-group';
             assert false;
         exception when others then
-            raise notice 'group_member_name is immutable in group_memberships';
+            raise notice 'group_memberships: group_member_name immutable';
         end;
         -- group classes
         begin
             insert into group_memberships values ('p11-sconne-group', 'p11-special-group');
             assert false;
         exception when assert_failure then
-            raise notice 'primary groups cannot have new members';
+            raise notice 'group_memberships: primary groups cannot have new members';
         end;
         -- new relations and group activation state
         begin
@@ -257,7 +265,7 @@ create or replace function test_group_memeberships_moderators()
             insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-import-group');
             assert false;
         exception when assert_failure then
-            raise notice 'deactivated groups cannot be used in new memberships';
+            raise notice 'group_memberships: deactivated groups cannot be used in new relations';
         end;
         -- new relations and group expiry
         begin
@@ -265,34 +273,85 @@ create or replace function test_group_memeberships_moderators()
             insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-import-group');
             assert false;
         exception when assert_failure then
-            raise notice 'expired groups cannot be used in new memberships';
+            raise notice 'group_memberships: expired groups cannot be used in new relations';
         end;
-        /*
-        GROUP MODERATORS
-        */
-        -- test data
+        -- shouldnt be able to be a member of itself
+        begin
+            insert into group_moderators (group_name, group_member_name)
+                values ('p11-special-group', 'p11-special-group');
+            assert false;
+        exception when others then
+            raise notice 'group_memberships: redundancy check - groups cannot be members of themselves';
+        end;
+
+        /* GROUP MODERATORS */
+
         insert into group_moderators (group_name, group_moderator_name)
             values ('p11-import-group', 'p11-admin-group');
         insert into group_moderators (group_name, group_moderator_name)
             values ('p11-clinical-group', 'p11-special-group');
         -- referential constraints
+        begin
+            insert into group_moderators (group_name, group_moderator_name)
+                values ('p77-clinical-group', 'p11-special-group');
+            assert false;
+        exception when others then
+            raise notice 'group_moderators: referential constraints work';
+        end;
         -- immutability
         begin
             update group_moderators set group_name = 'p11-admin-group' where group_name = 'p11-import-group';
             assert false;
         exception when others then
-            raise notice 'group_name is immutable in group_moderators';
+            raise notice 'group_moderators: group_name immutable';
         end;
         begin
             update group_moderators set group_member_name = 'p11-export-group' where group_name = 'p11-import-group';
             assert false;
         exception when others then
-            raise notice 'group_member_name is immutable in group_moderators';
+            raise notice 'group_moderators: group_member_name immutable';
         end;
-        -- redundancy (handled by unique index)
+        -- redundancy
+        begin
+            insert into group_moderators (group_name, group_moderator_name)
+                values ('p11-clinical-group', 'p11-special-group');
+            assert false;
+        exception when others then
+            raise notice 'group_moderators: redundancy check works - cannot recreate existing relations';
+        end;
+        begin
+            insert into group_moderators (group_name, group_moderator_name)
+                values ('p11-clinical-group', 'p11-clinical-group');
+            assert false;
+        exception when assert_failure then
+            raise notice 'group_moderators: redundancy check works - groups cannot moderate themselves';
+        end;
         -- cyclicality
+        begin
+            insert into group_moderators (group_name, group_moderator_name)
+                values ('p11-special-group', 'p11-clinical-group');
+            assert false;
+        exception when assert_failure then
+            raise notice 'group_moderators: cyclicality check works';
+        end;
         -- new relations and group activation state
+        begin
+            update groups set group_activated = 'f' where group_name = 'p11-export-group';
+            insert into group_moderators (group_name, group_moderator_name)
+                values ('p11-export-group', 'p11-admin-group');
+            assert false;
+        exception when assert_failure then
+            raise notice 'group_moderators: deactivated groups cannot be used';
+        end;
         -- new relations and group expiry
+        begin
+            update groups set group_expiry_date = '2011-01-01' where group_name = 'p11-export-group';
+            insert into group_moderators (group_name, group_moderator_name)
+                values ('p11-export-group', 'p11-admin-group');
+            assert false;
+        exception when assert_failure then
+            raise notice 'group_moderators: expired groups cannot be used';
+        end;
         --delete from persons;
         --delete from groups;
         return true;
