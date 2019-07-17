@@ -29,6 +29,7 @@ create table if not exists persons(
     person_metadata json
 );
 
+
 create or replace function person_immutability()
     returns trigger as $$
     begin
@@ -42,6 +43,7 @@ create or replace function person_immutability()
 $$ language plpgsql;
 create trigger ensure_person_immutability before update on persons
     for each row execute procedure person_immutability();
+
 
 create or replace function person_management()
     returns trigger as $$
@@ -81,6 +83,7 @@ $$ language plpgsql;
 create trigger person_group_trigger after insert or delete or update on persons
     for each row execute procedure person_management();
 
+
 drop table if exists users cascade;
 create table if not exists users(
     person_id uuid not null references persons (person_id) on delete cascade,
@@ -91,6 +94,7 @@ create table if not exists users(
     user_group text,
     user_metadata json
 );
+
 
 create or replace function user_immutability()
     returns trigger as $$
@@ -107,6 +111,7 @@ create or replace function user_immutability()
 $$ language plpgsql;
 create trigger ensure_user_immutability before update on users
     for each row execute procedure user_immutability();
+
 
 create or replace function user_management()
     returns trigger as $$
@@ -154,6 +159,7 @@ $$ language plpgsql;
 create trigger user_group_trigger after insert or delete or update on users
     for each row execute procedure user_management();
 
+
 drop table if exists groups cascade;
 create table if not exists groups(
     group_id uuid unique not null default gen_random_uuid(),
@@ -166,6 +172,7 @@ create table if not exists groups(
     group_desciption text,
     group_metadata json
 );
+
 
 create or replace function group_deletion()
     returns trigger as $$
@@ -211,6 +218,7 @@ $$ language plpgsql;
 create trigger ensure_group_immutability before update on groups
     for each row execute procedure group_immutability();
 
+
 create or replace function group_management()
     returns trigger as $$
     declare primary_member_state boolean;
@@ -240,13 +248,14 @@ $$ language plpgsql;
 create trigger group_management_trigger before update on groups
     for each row execute procedure group_management();
 
+
 drop table if exists group_memberships cascade;
 create table if not exists group_memberships(
     group_name text not null references groups (group_name) on delete cascade,
     group_member_name text not null references groups (group_name) on delete cascade,
     unique (group_name, group_member_name)
 );
--- disallow insert if either group is inactive or expired
+
 
 create or replace function group_memberships_immutability()
     returns trigger as $$
@@ -370,6 +379,7 @@ create or replace function group_get_parents(child_group text)
     end;
 $$ language plpgsql;
 
+
 create or replace function group_check_dag_requirements()
     returns trigger as $$
     declare response text;
@@ -404,6 +414,7 @@ create or replace function group_check_dag_requirements()
 $$ language plpgsql;
 create trigger group_directed_acyclic_graph_requirements_trigger before insert on group_memberships
     for each row execute procedure group_check_dag_requirements();
+
 
 drop table if exists group_moderators cascade;
 create table if not exists group_moderators(
