@@ -365,9 +365,9 @@ $$ language plpgsql;
 create or replace function test_capabilities()
     returns boolean as $$
     begin
-        -- for generating capabilities
-        -- specify required groups to obtain a capability, set params
-        -- e.g. id, import, {role:import_user}, [import-group, member-group], wildcard, 60, data import, 2030-12-12
+        -- immutability
+        -- uniqueness
+        -- referential constraints
 
         -- specify capabilities authorization: sets of operations on sets of resources
         -- example entries

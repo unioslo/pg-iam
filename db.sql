@@ -484,27 +484,23 @@ create trigger ensure_capabilities_immutability before update on capabilities
     for each row execute procedure capabilities_immutability();
 
 
-create or replace function capabilities_required_groups_uniqueness()
+create or replace function capabilities_group_check()
     returns trigger as $$
+    declare new_grps text[];
+    declare new_grp text;
+    declare num int;
     begin
-        -- before update trigger to check group is not already in required groups array
+        select array(select distinct unnest(NEW.capability_required_groups)) into new_grps;
+        assert NEW.capability_required_groups = new_grps, 'duplicate group detected in capability_required_groups column';
+        for new_grp in select unnest(NEW.capability_required_groups) loop
+            select count(*) from groups where group_name like '%' || new_grp || '%' into num;
+            assert num > 0, new_grp || ' does not exist';
+        end loop;
         return new;
     end;
 $$ language plpgsql;
-create trigger ensure_capabilities_required_groups_uniqueness before update on capabilities
-    for each row execute procedure capabilities_required_groups_uniqueness();
-
-
-create or replace function capabilities_group_existence_check()
-    returns trigger as $$
-    begin
-        -- before insert for each group in required groups trigger to check that groups exists,
-        -- depending on match type
-        return new;
-    end;
-$$ language plpgsql;
-create trigger ensure_capabilities_group_existence_check before update on capabilities
-    for each row execute procedure capabilities_group_existence_check();
+create trigger ensure_capabilities_group_check before insert or update on capabilities
+    for each row execute procedure capabilities_group_check();
 
 
 drop table if exists capability_grants;
