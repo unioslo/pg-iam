@@ -16,3 +16,11 @@ A generic database backend for use in IdPs.
 - use helpful SQL RPCs to get group related information for application development
 - rest assured data integrity and consistency is maintained, with immutable columns wherever possible
 - access full audit log on all updates
+
+# Learn more
+
+See `./docs`.
+
+# LICENSE
+
+BSD.
