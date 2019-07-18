@@ -1,12 +1,9 @@
 
 -- TODOs:
--- refactor immutability funcs to use asserts
--- capability generation and validation
--- add immutable row_id column on mutable tables
--- ensure all ID cols immutable
--- consistent trigger names, code cleanup
+-- test capability generation and validation
 -- audit (after update, use row_id)
 -- rpc API + tests
+-- consistent trigger names, code cleanup
 -- docs
 
 create or replace function test_persons_users_groups()
@@ -27,6 +24,12 @@ create or replace function test_persons_users_groups()
         assert (select count(*) from groups) = 3, 'group creation issue';
         -- person attribute immutability
         begin
+            update persons set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
+            assert false;
+        exception when others then
+            raise notice 'row_id immutable';
+        end;
+        begin
             update persons set person_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
             assert false;
         exception when others then
@@ -39,6 +42,12 @@ create or replace function test_persons_users_groups()
             raise notice 'person_group immutable';
         end;
         -- user attribute immutability
+        begin
+            update users set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
+            assert false;
+        exception when others then
+            raise notice 'row_id immutable';
+        end;
         begin
             update users set user_id = 'a3981c7f-8e41-4222-9183-1815b6ec9c3b';
             assert false;
@@ -58,6 +67,12 @@ create or replace function test_persons_users_groups()
             raise notice 'user_group immutable';
         end;
         -- group attribute immutability
+        begin
+            update groups set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
+            assert false;
+        exception when others then
+            raise notice 'row_id immutable';
+        end;
         begin
             update groups set group_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
             assert false;
@@ -244,6 +259,12 @@ create or replace function test_group_memeberships_moderators()
         end;
         -- immutability
         begin
+            update group_memberships set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
+            assert false;
+        exception when others then
+            raise notice 'group_memberships: row_id immutable';
+        end;
+        begin
             update group_memberships set group_name = 'p11-clinical-group' where group_name = 'p11-special-group';
             assert false;
         exception when others then
@@ -302,6 +323,12 @@ create or replace function test_group_memeberships_moderators()
             raise notice 'group_moderators: referential constraints work';
         end;
         -- immutability
+        begin
+            update group_moderators set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
+            assert false;
+        exception when others then
+            raise notice 'group_moderators: row_id immutable';
+        end;
         begin
             update group_moderators set group_name = 'p11-admin-group' where group_name = 'p11-import-group';
             assert false;

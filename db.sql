@@ -3,6 +3,7 @@ create extension pgcrypto;
 
 drop table if exists persons cascade;
 create table if not exists persons(
+    row_id uuid unique not null default gen_random_uuid(),
     person_id uuid unique not null default gen_random_uuid(),
     person_activated boolean not null default 't',
     person_expiry_date date,
@@ -20,7 +21,9 @@ create table if not exists persons(
 create or replace function person_immutability()
     returns trigger as $$
     begin
-        if OLD.person_id != NEW.person_id then
+        if OLD.row_id != NEW.row_id then
+            raise exception using message = 'row_id is immutable';
+        elsif OLD.person_id != NEW.person_id then
             raise exception using message = 'person_id is immutable';
         elsif OLD.person_group != NEW.person_group then
             raise exception using message = 'person_group is immutable';
@@ -73,6 +76,7 @@ create trigger person_group_trigger after insert or delete or update on persons
 
 drop table if exists users cascade;
 create table if not exists users(
+    row_id uuid unique not null default gen_random_uuid(),
     person_id uuid not null references persons (person_id) on delete cascade,
     user_id uuid unique not null default gen_random_uuid(),
     user_activated boolean not null default 't',
@@ -86,7 +90,9 @@ create table if not exists users(
 create or replace function user_immutability()
     returns trigger as $$
     begin
-        if OLD.user_id != NEW.user_id then
+        if OLD.row_id != NEW.row_id then
+            raise exception using message = 'row_id is immutable';
+        elsif OLD.user_id != NEW.user_id then
             raise exception using message = 'user_id is immutable';
         elsif OLD.user_name != NEW.user_name then
             raise exception using message = 'user_name is immutable';
@@ -149,6 +155,7 @@ create trigger user_group_trigger after insert or delete or update on users
 
 drop table if exists groups cascade;
 create table if not exists groups(
+    row_id uuid unique not null default gen_random_uuid(),
     group_id uuid unique not null default gen_random_uuid(),
     group_activated boolean not null default 't',
     group_expiry_date date,
@@ -188,7 +195,9 @@ create trigger ensure_group_deletion_policy before delete on groups
 create or replace function group_immutability()
     returns trigger as $$
     begin
-        if OLD.group_id != NEW.group_id then
+        if OLD.row_id != NEW.row_id then
+            raise exception using message = 'row_id is immutable';
+        elsif OLD.group_id != NEW.group_id then
             raise exception using message = 'group_id is immutable';
         elsif OLD.group_name != NEW.group_name then
             raise exception using message = 'group_name is immutable';
