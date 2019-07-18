@@ -490,8 +490,6 @@ create or replace function capabilities_group_check()
     declare new_grp text;
     declare num int;
     begin
-        select array(select distinct unnest(NEW.capability_required_groups)) into new_grps;
-        assert NEW.capability_required_groups = new_grps, 'duplicate group detected in capability_required_groups column';
         for new_grp in select unnest(NEW.capability_required_groups) loop
             select count(*) from groups where group_name like '%' || new_grp || '%' into num;
             assert num > 0, new_grp || ' does not exist';
