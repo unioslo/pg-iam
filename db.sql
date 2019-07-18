@@ -471,6 +471,7 @@ create table if not exists capabilities(
     capability_expiry_date date
 );
 
+
 create or replace function capabilities_immutability()
     returns trigger as $$
     begin
@@ -483,10 +484,9 @@ create trigger ensure_capabilities_immutability before update on capabilities
     for each row execute procedure capabilities_immutability();
 
 
--- BUT: some groups are regex match, others must be exact
--- ensure set-like uniqueness on required groups
--- via unique index and function: https://stackoverflow.com/questions/8443716/postgres-unique-constraint-for-array
--- before trigger to check that groups exists, depending on match type
+-- before update trigger to check group is not already in required groups array
+-- before insert for each group in required groups trigger to check that groups exists,
+-- depending on match type
 
 
 drop table if exists capability_grants;
@@ -499,12 +499,20 @@ create table capability_grants(
 );
 
 
+create or replace function capability_grants_immutability()
+    returns trigger as $$
+    begin
+        assert OLD.row_id = NEW.row_id, 'row_id is immutable';
+        assert OLD.capability_id = NEW.capability_id, 'capability_id is immutable';
+    return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_capability_grants_immutability before update on capability_grants
+    for each row execute procedure capability_grants_immutability();
+
+
 -- rpcs for getting group related information:
 -- always report group expiry dates, and activation status
--- callers can decide what to do based on this information themselves
--- e.g. they can decide to ignore deactivaed and/or expired groups
--- in downstream applications by filtering them out
--- or they can delete relations or groups as a result of this
 
 -- GET /rpc/person_groups?person_id=id
 -- GET /rpc/user_groups?user_name=name -> group_get_parents
