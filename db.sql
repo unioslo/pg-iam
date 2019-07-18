@@ -477,16 +477,34 @@ create or replace function capabilities_immutability()
     begin
         assert OLD.row_id = NEW.row_id, 'row_id is immutable';
         assert OLD.capability_id = NEW.capability_id, 'capability_id is immutable';
-    return new;
+        return new;
     end;
 $$ language plpgsql;
 create trigger ensure_capabilities_immutability before update on capabilities
     for each row execute procedure capabilities_immutability();
 
 
--- before update trigger to check group is not already in required groups array
--- before insert for each group in required groups trigger to check that groups exists,
--- depending on match type
+create or replace function capabilities_required_groups_uniqueness()
+    returns trigger as $$
+    begin
+        -- before update trigger to check group is not already in required groups array
+        return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_capabilities_required_groups_uniqueness before update on capabilities
+    for each row execute procedure capabilities_required_groups_uniqueness();
+
+
+create or replace function capabilities_group_existence_check()
+    returns trigger as $$
+    begin
+        -- before insert for each group in required groups trigger to check that groups exists,
+        -- depending on match type
+        return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_capabilities_group_existence_check before update on capabilities
+    for each row execute procedure capabilities_group_existence_check();
 
 
 drop table if exists capability_grants;
