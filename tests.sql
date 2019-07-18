@@ -360,9 +360,26 @@ create or replace function test_group_memeberships_moderators()
     end;
 $$ language plpgsql;
 
+
+create or replace function test_capabilities()
+    returns boolean as $$
+    -- for generating capabilities
+    -- specify required groups to obtain a capability, set params
+    -- e.g. id, import, {role:import_user}, [import-group, member-group], wildcard, 60, data import, 2030-12-12
+
+    -- specify capabilities authorization: sets of operations on sets of resources
+    -- example entries
+    -- id, import, PUT, /(.*)/files/stream
+    -- id, import, PUT, /(.*)/files/upload
+    -- id, import, GET, /(.*)/files/resumables
+    -- id, export, DELETE, /(.*)/files/export/(.*)
+        return true;
+    end;
+$$ language plpgsql;
+
 delete from persons;
 delete from groups;
 select test_persons_users_groups();
 select test_group_memeberships_moderators()
--- test_capabilities
+select test_capabilities();
 -- test rpcs

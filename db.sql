@@ -460,6 +460,7 @@ create trigger group_memberships_dag_requirements_trigger after insert on group_
 
 drop table if exists capabilities cascade;
 create table if not exists capabilities(
+    row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid unique not null default gen_random_uuid(),
     capability_type text unique not null,
     capability_default_claims json,
@@ -469,23 +470,28 @@ create table if not exists capabilities(
     capability_description text not null,
     capability_expiry_date date
 );
--- for generating capabilities
--- specify required groups to obtain a capability, set params
--- e.g. id, import, {role:import_user}, [import-group, member-group], wildcard, 60, data import, 2030-12-12
+
+create or replace function capabilities_immutability()
+    returns trigger as $$
+    begin
+        assert OLD.row_id = NEW.row_id, 'row_id is immutable';
+        assert OLD.capability_id = NEW.capability_id, 'capability_id is immutable';
+    return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_capabilities_immutability before update on capabilities
+    for each row execute procedure capabilities_immutability();
+
+
 -- BUT: some groups are regex match, others must be exact
 -- ensure set-like uniqueness on required groups
 -- via unique index and function: https://stackoverflow.com/questions/8443716/postgres-unique-constraint-for-array
 -- before trigger to check that groups exists, depending on match type
--- remove groups from required groups if groups are deleted?
 
--- specify capabilities authorization: sets of operations on sets of resources
--- example entries
--- id, import, PUT, /(.*)/files/stream
--- id, import, PUT, /(.*)/files/upload
--- id, import, GET, /(.*)/files/resumables
--- id, export, DELETE, /(.*)/files/export/(.*)
+
 drop table if exists capability_grants;
 create table capability_grants(
+    row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid references capabilities (capability_id) on delete cascade,
     capability_type text references capabilities (capability_type),
     capability_http_method text not null check (capability_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
