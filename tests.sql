@@ -1,7 +1,7 @@
 
 -- TODOs:
 -- test capability generation and validation
--- audit (after update, use row_id)
+-- audit tests
 -- rpc API + tests
 -- consistent trigger names, code cleanup
 -- docs
@@ -382,6 +382,7 @@ create or replace function test_group_memeberships_moderators()
         exception when assert_failure then
             raise notice 'group_moderators: expired groups cannot be used';
         end;
+        update groups set group_expiry_date = '2011-01-01' where group_name = 'p11-export-group';
         --delete from persons;
         --delete from groups;
         return true;
@@ -407,9 +408,20 @@ create or replace function test_capabilities()
 $$ language plpgsql;
 
 
+create or replace function test_audit()
+    returns boolean as $$
+    begin
+        -- for each table check it works
+        return true;
+    end;
+$$ language plpgsql;
+
+
 delete from persons;
 delete from groups;
+delete from audit_log;
 select test_persons_users_groups();
 select test_group_memeberships_moderators();
 select test_capabilities();
+select test_audit();
 -- test rpcs

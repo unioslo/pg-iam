@@ -1,6 +1,48 @@
 
 create extension pgcrypto;
 
+
+drop table if exists audit_log;
+create table if not exists audit_log(
+    event_time timestamptz default now(),
+    table_name text not null,
+    row_id uuid not null,
+    column_name text not null,
+    old_data text,
+    new_data text
+);
+
+
+create or replace function update_audit_log()
+    returns trigger as $$
+    declare old_data text;
+    declare new_data text;
+    declare colname text;
+    declare table_name text;
+    begin
+        table_name := TG_TABLE_NAME::text;
+        for colname in execute
+            format('select c.column_name::text
+                    from pg_catalog.pg_statio_all_tables as st
+                    inner join information_schema.columns c
+                    on c.table_schema = st.schemaname and c.table_name = st.relname
+                    left join pg_catalog.pg_description pgd
+                    on pgd.objoid = st.relid
+                    and pgd.objsubid = c.ordinal_position
+                    where st.relname = $1') using table_name
+        loop
+            execute format('select ($1).%s::text', colname) using OLD into old_data;
+            execute format('select ($1).%s::text', colname) using NEW into new_data;
+            if old_data != new_data then
+                insert into audit_log (table_name, row_id, column_name, old_data, new_data)
+                    values (table_name, OLD.row_id, colname, old_data, new_data);
+            end if;
+        end loop;
+        return new;
+    end;
+$$ language plpgsql;
+
+
 drop table if exists persons cascade;
 create table if not exists persons(
     row_id uuid unique not null default gen_random_uuid(),
@@ -16,6 +58,10 @@ create table if not exists persons(
     otp_secret text,
     person_metadata json
 );
+
+
+create trigger persons_audit after update on persons
+    for each row execute procedure update_audit_log();
 
 
 create or replace function person_immutability()
@@ -85,6 +131,10 @@ create table if not exists users(
     user_group text,
     user_metadata json
 );
+
+
+create trigger users_audit after update on users
+    for each row execute procedure update_audit_log();
 
 
 create or replace function user_immutability()
@@ -166,6 +216,10 @@ create table if not exists groups(
     group_desciption text,
     group_metadata json
 );
+
+
+create trigger groups_audit after update on groups
+    for each row execute procedure update_audit_log();
 
 
 create or replace function group_deletion()
@@ -481,6 +535,10 @@ create table if not exists capabilities(
 );
 
 
+create trigger capabilities_audit after update on capabilities
+    for each row execute procedure update_audit_log();
+
+
 create or replace function capabilities_immutability()
     returns trigger as $$
     begin
@@ -520,6 +578,10 @@ create table capability_grants(
 );
 
 
+create trigger capability_grants_audit after update on capability_grants
+    for each row execute procedure update_audit_log();
+
+
 create or replace function capability_grants_immutability()
     returns trigger as $$
     begin
@@ -531,6 +593,8 @@ $$ language plpgsql;
 create trigger ensure_capability_grants_immutability before update on capability_grants
     for each row execute procedure capability_grants_immutability();
 
+
+-- audit table and func
 
 -- rpcs for getting group related information:
 -- always report group expiry dates, and activation status
