@@ -594,16 +594,94 @@ create trigger ensure_capability_grants_immutability before update on capability
     for each row execute procedure capability_grants_immutability();
 
 
--- audit table and func
+-- RPCs
+-- helper func: group_get_capabilities
 
--- rpcs for getting group related information:
--- always report group expiry dates, and activation status
+create or replace function person_groups(person_id text)
+    returns json as $$
+    begin
+        -- get person group
+        -- get memberships for that group
+        -- return {person_id:'', person_group:'', groups:[{...}]}
+        -- for groups {group_name, group_activated, group_expiry_date}
+        return '{}'::json;
+    end;
+$$ language plpgsql;
 
--- GET /rpc/person_groups?person_id=id
--- GET /rpc/user_groups?user_name=name -> group_get_parents
--- POST /rpc/group_member_add [{person_id,user_name}]
--- GET /rpc/group_members?group_name=name -> group_get_children
--- GET /rpc/group_moderators?group_name=name
--- GET /rpc/person_capabilities
--- GET /rpc/user_capabilities
--- GET /rpc/group_capabilities
+
+create or replace function person_capabilities(person_id text)
+    returns json as $$
+    begin
+        -- get person groups
+        -- for each group get capabilities
+        return '{}'::json;
+    end;
+$$ language plpgsql;
+
+
+create or replace function user_groups(user_name text)
+    returns json as $$
+    begin
+        -- get user group
+        -- group_get_parents
+        return '{}'::json;
+    end;
+$$ language plpgsql;
+
+
+create or replace function user_capabilities(user_name text)
+    returns json as $$
+    begin
+        -- get user group
+        -- group_get_parents
+        -- for each group get capabilities
+        return '{}'::json;
+    end;
+$$ language plpgsql;
+
+-- variadic func
+create or replace function group_member_add(person_id text default null, user_name text default null)
+    returns json as $$
+    begin
+        -- get either person or user group
+        -- add as member
+        return '{}'::json;
+    end;
+$$ language plpgsql;
+
+-- variadic func
+create or replace function group_member_remove(person_id text default null, user_name text default null)
+    returns json as $$
+    begin
+        -- get either person or user group
+        -- remove as member
+        return '{}'::json;
+    end;
+$$ language plpgsql;
+
+
+create or replace function group_members(group_name text)
+    returns json as $$
+    begin
+        -- group_get_children
+        return '{}'::json;
+    end;
+$$ language plpgsql;
+
+
+create or replace function group_moderators(group_name text)
+    returns json as $$
+    begin
+        -- simple query to list mods
+        return '{}'::json;
+    end;
+$$ language plpgsql;
+
+
+create or replace function group_capabilities(group_name text)
+    returns json as $$
+    begin
+        -- use utility func
+        return '{}'::json;
+    end;
+$$ language plpgsql;

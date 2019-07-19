@@ -417,6 +417,14 @@ create or replace function test_audit()
 $$ language plpgsql;
 
 
+create or replace function test_rpcs()
+    returns boolean as $$
+    begin
+        return true;
+    end;
+$$ language plpgsql;
+
+
 delete from persons;
 delete from groups;
 delete from audit_log;
@@ -424,4 +432,4 @@ select test_persons_users_groups();
 select test_group_memeberships_moderators();
 select test_capabilities();
 select test_audit();
--- test rpcs
+select test_rpcs();
