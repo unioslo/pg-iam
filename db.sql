@@ -568,8 +568,8 @@ create trigger ensure_capabilities_group_check before insert or update on capabi
     for each row execute procedure capabilities_group_check();
 
 
-drop table if exists capability_grants;
-create table capability_grants(
+drop table if exists capabilities_grants;
+create table capabilities_grants(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid references capabilities (capability_id) on delete cascade,
     capability_type text references capabilities (capability_type),
@@ -578,11 +578,11 @@ create table capability_grants(
 );
 
 
-create trigger capability_grants_audit after update on capability_grants
+create trigger capabilities_grants_audit after update on capabilities_grants
     for each row execute procedure update_audit_log();
 
 
-create or replace function capability_grants_immutability()
+create or replace function capabilities_grants_immutability()
     returns trigger as $$
     begin
         assert OLD.row_id = NEW.row_id, 'row_id is immutable';
@@ -590,7 +590,7 @@ create or replace function capability_grants_immutability()
     return new;
     end;
 $$ language plpgsql;
-create trigger ensure_capability_grants_immutability before update on capability_grants
+create trigger ensure_capabilities_grants_immutability before update on capabilities_grants
     for each row execute procedure capability_grants_immutability();
 
 
@@ -604,7 +604,15 @@ create trigger ensure_capability_grants_immutability before update on capability
 -- membership_info
 -- grp_mems
 
-create or replace function grp_cpbts(grp text)
+
+create or replace function capability_grants(capability_type text)
+    returns json as $$
+    begin
+        return '{}'::json;
+    end;
+$$ language plpgsql;
+
+create or replace function grp_cpbts(grp text, grants boolean default 'f')
     returns json as $$
     declare ctype text;
     declare cgrps text[];
@@ -636,9 +644,13 @@ create or replace function grp_cpbts(grp text)
             end loop;
         end loop;
         select json_agg(ct) from cpb into data;
-        -- TODO: add optional param grants = t/f, join capabilities on grants
-        -- then simply add {..., grants: [{capability: c1, grants: [{op: GET, resource: '/bla'}]}]}
-        return json_build_object('group', grp, 'capabilities', data);
+        if grants = 'f' then
+            return json_build_object('group', grp, 'capabilities', data);
+        else
+            -- TODO: add optional param grants = t/f, join capabilities on grants
+            -- then simply add {..., grants: [{capability: c1, grants: [{op: GET, resource: '/bla'}]}]}
+            return json_build_object('group', grp, 'capabilities', data, 'grants', null);
+        end if;
     end;
 $$ language plpgsql;
 
