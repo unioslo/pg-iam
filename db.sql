@@ -633,6 +633,7 @@ create or replace function person_groups(person_id text)
     declare pgroups json;
     begin
         pid := $1::uuid;
+        assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_group from persons where persons.person_id = pid into pgrp;
         select get_memberships(pgrp) into pgroups;
         return json_build_object('person_id', pid, 'person_group', pgrp, 'groups', pgroups);
@@ -643,6 +644,7 @@ $$ language plpgsql;
 create or replace function person_capabilities(person_id text)
     returns json as $$
     begin
+        -- check person exists
         -- get person groups
         -- for each group get capabilities
         return json_build_object();
@@ -654,7 +656,10 @@ create or replace function user_groups(user_name text)
     returns json as $$
     declare ugrp text;
     declare ugroups json;
+    declare exst boolean;
     begin
+        execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
+        assert exst = 't', 'user does not exist';
         select user_group from users where users.user_name = $1 into ugrp;
         select get_memberships(ugrp) into ugroups;
         return json_build_object('user_name', user_name, 'user_group', ugrp, 'groups', ugroups);
