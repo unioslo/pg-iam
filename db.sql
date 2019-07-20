@@ -594,7 +594,13 @@ create trigger ensure_capability_grants_immutability before update on capability
     for each row execute procedure capability_grants_immutability();
 
 
--- RPC helpers
+-- RPCs
+-- returns full graph info, including transitive group memberships
+-- callers who are only interested in leaf info (the list of memberships
+-- regardless of structure) can look at the 'member_group' key in the group list
+-- e.g. groups: [{..., member_group: g1}, {..., member_group: g2}, ...]
+
+-- helpers
 -- membership_info
 -- group_capabilities
 -- grp_mems
@@ -626,10 +632,6 @@ create or replace function person_groups(person_id text)
     declare res json;
     declare pgroups json;
     begin
-        -- groups returns full graph info, including transitive group memberships
-        -- callers who are only interested in leaf info (the list of memberships
-        -- regardless of structure) can look at the 'member_group' key in the group list
-        -- e.g. groups: [{..., member_group: g1}, {..., member_group: g2}, ...]
         pid := $1::uuid;
         select person_group from persons where persons.person_id = pid into pgrp;
         select get_memberships(pgrp) into pgroups;
@@ -650,10 +652,12 @@ $$ language plpgsql;
 
 create or replace function user_groups(user_name text)
     returns json as $$
+    declare ugrp text;
+    declare ugroups json;
     begin
-        -- get user group
-        -- group_get_parents
-        return json_build_object();
+        select user_group from users where users.user_name = $1 into ugrp;
+        select get_memberships(ugrp) into ugroups;
+        return json_build_object('user_name', user_name, 'user_group', ugrp, 'groups', ugroups);
     end;
 $$ language plpgsql;
 
