@@ -393,6 +393,24 @@ $$ language plpgsql;
 create or replace function test_capabilities()
     returns boolean as $$
     begin
+        insert into capabilities (capability_type, capability_default_claims,
+                                  capability_required_groups, capability_group_match_method,
+                                  capability_lifetime, capability_description, capability_expiry_date)
+            values ('p11import', '{"role": "p11_import_user"}',
+                    '{"p11-export-group", "p11-special-group"}', 'exact',
+                    '123', 'bla', current_date);
+        insert into capabilities (capability_type, capability_default_claims,
+                                  capability_required_groups, capability_group_match_method,
+                                  capability_lifetime, capability_description, capability_expiry_date)
+            values ('export', '{"role": "export_user"}',
+                    '{"admin-group", "export-group"}', 'wildcard',
+                    '123', 'bla', current_date);
+        insert into capabilities (capability_type, capability_default_claims,
+                                  capability_required_groups, capability_group_match_method,
+                                  capability_lifetime, capability_description, capability_expiry_date)
+            values ('admin', '{"role": "admin_user"}',
+                    '{"admin-group", "special-group"}', 'wildcard',
+                    '123', 'bla', current_date);
         -- immutability
         -- uniqueness
         -- referential constraints
@@ -430,6 +448,7 @@ $$ language plpgsql;
 delete from persons;
 delete from groups;
 delete from audit_log;
+delete from capabilities;
 select test_persons_users_groups();
 select test_group_memeberships_moderators();
 select test_capabilities();

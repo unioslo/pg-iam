@@ -602,8 +602,32 @@ create trigger ensure_capability_grants_immutability before update on capability
 
 -- helpers
 -- membership_info
--- group_capabilities
+-- grp_capabilities
 -- grp_mems
+
+create or replace function grp_cpbts(grp text)
+    returns json as $$
+    declare ctype text;
+    declare cgrps text[];
+    declare data json;
+    begin
+        create temporary table if not exists cpb(ct text unique not null) on commit drop;
+        -- exact group matches
+        for ctype in select capability_type from capabilities
+            where capability_group_match_method = 'exact'
+            and array[grp] && capability_required_groups loop
+            insert into cpb values (ctype);
+        end loop;
+        -- wildcard group matches
+        for ctype in select capability_type from capabilities
+            where capability_group_match_method = 'wildcard' loop
+            null;
+        end loop;
+        select json_agg(ct) from cpb into data;
+        return json_build_object('group', grp, 'capabilities', data);
+    end;
+$$ language plpgsql;
+
 
 create or replace function get_memberships(grp text)
     returns json as $$
