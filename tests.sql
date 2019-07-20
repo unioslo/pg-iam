@@ -440,6 +440,7 @@ create or replace function test_rpcs()
     begin
         -- person_groups
         -- person_capabilities
+        -- person_access
         return true;
     end;
 $$ language plpgsql;

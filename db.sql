@@ -602,15 +602,18 @@ create trigger ensure_capability_grants_immutability before update on capability
 
 -- helpers
 -- membership_info
--- grp_capabilities
 -- grp_mems
 
 create or replace function grp_cpbts(grp text)
     returns json as $$
     declare ctype text;
     declare cgrps text[];
+    declare rgrp text;
+    declare reg text;
+    declare matches boolean;
     declare data json;
     begin
+        assert (select exists(select 1 from groups where group_name = grp)) = 't', 'group does not exist';
         create temporary table if not exists cpb(ct text unique not null) on commit drop;
         -- exact group matches
         for ctype in select capability_type from capabilities
@@ -619,11 +622,22 @@ create or replace function grp_cpbts(grp text)
             insert into cpb values (ctype);
         end loop;
         -- wildcard group matches
-        for ctype in select capability_type from capabilities
+        for ctype, cgrps in select capability_type, capability_required_groups from capabilities
             where capability_group_match_method = 'wildcard' loop
-            null;
+            for rgrp in select unnest(cgrps) loop
+                reg := '.*' || rgrp || '.*';
+                if grp ~ reg then
+                    begin
+                        insert into cpb values (ctype);
+                    exception when unique_violation then
+                        null;
+                    end;
+                end if;
+            end loop;
         end loop;
         select json_agg(ct) from cpb into data;
+        -- TODO: add optional param grants = t/f, join capabilities on grants
+        -- then simply add {..., grants: [{capability: c1, grants: [{op: GET, resource: '/bla'}]}]}
         return json_build_object('group', grp, 'capabilities', data);
     end;
 $$ language plpgsql;
