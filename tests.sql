@@ -392,6 +392,7 @@ $$ language plpgsql;
 
 create or replace function test_capabilities()
     returns boolean as $$
+    declare cid uuid;
     begin
         insert into capabilities (capability_type, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
@@ -421,6 +422,17 @@ create or replace function test_capabilities()
         -- id, import, PUT, /(.*)/files/upload
         -- id, import, GET, /(.*)/files/resumables
         -- id, export, DELETE, /(.*)/files/export/(.*)
+        select capability_id from capabilities where capability_type = 'p11import' into cid;
+        insert into capabilities_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
+            values (cid, 'p11import', 'PUT', '/p11/files');
+        select capability_id from capabilities where capability_type = 'export' into cid;
+        insert into capabilities_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
+            values (cid, 'export', 'GET', '/(.*)/export');
+        select capability_id from capabilities where capability_type = 'admin' into cid;
+        insert into capabilities_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
+            values (cid, 'admin', 'DELETE', '/(.*)/files');
+        insert into capabilities_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
+            values (cid, 'admin', 'GET', '/(.*)/admin');
         return true;
     end;
 $$ language plpgsql;

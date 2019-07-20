@@ -607,10 +607,18 @@ create trigger ensure_capabilities_grants_immutability before update on capabili
 
 create or replace function capability_grants(capability_type text)
     returns json as $$
+    declare data json;
     begin
-        return '{}'::json;
+        assert (select exists(select 1 from capabilities where capabilities.capability_type = $1)) = 't',
+            'capability_type does not exist';
+        select json_agg(json_build_object(
+                    'http_method', capability_http_method,
+                    'uri_pattern', capability_uri_pattern))
+            from capabilities_grants where capabilities_grants.capability_type = $1 into data;
+        return data;
     end;
 $$ language plpgsql;
+
 
 create or replace function grp_cpbts(grp text, grants boolean default 'f')
     returns json as $$
@@ -619,6 +627,7 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
     declare rgrp text;
     declare reg text;
     declare matches boolean;
+    declare grant_data json;
     declare data json;
     begin
         assert (select exists(select 1 from groups where group_name = grp)) = 't', 'group does not exist';
@@ -647,9 +656,9 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
         if grants = 'f' then
             return json_build_object('group', grp, 'capabilities', data);
         else
-            -- TODO: add optional param grants = t/f, join capabilities on grants
-            -- then simply add {..., grants: [{capability: c1, grants: [{op: GET, resource: '/bla'}]}]}
-            return json_build_object('group', grp, 'capabilities', data, 'grants', null);
+            select json_agg(json_build_object(capability_type, capability_grants(capability_type)))
+                from capabilities where capability_type in (select * from cpb) into grant_data;
+            return json_build_object('group', grp, 'capabilities', data, 'grants', grant_data);
         end if;
     end;
 $$ language plpgsql;
@@ -700,6 +709,9 @@ create or replace function person_capabilities(person_id text)
         return json_build_object();
     end;
 $$ language plpgsql;
+
+
+-- person_access -> for person group, and all users, list all groups, capabilities, grants
 
 
 create or replace function user_groups(user_name text)
