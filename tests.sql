@@ -420,6 +420,8 @@ $$ language plpgsql;
 create or replace function test_rpcs()
     returns boolean as $$
     begin
+        -- person_groups
+        -- person_capabilities
         return true;
     end;
 $$ language plpgsql;

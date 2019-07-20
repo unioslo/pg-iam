@@ -594,17 +594,46 @@ create trigger ensure_capability_grants_immutability before update on capability
     for each row execute procedure capability_grants_immutability();
 
 
--- RPCs
--- helper func: group_get_capabilities
+-- RPC helpers
+-- membership_info
+-- group_capabilities
+-- grp_mems
+
+create or replace function get_memberships(grp text)
+    returns json as $$
+    declare data json;
+    begin
+        execute format(
+            'select json_agg(json_build_object(
+                $1, member_name,
+                $2, member_group_name,
+                $3, group_activated,
+                $4, group_expiry_date))
+            from (select member_name, member_group_name from group_get_parents($5))a
+            join (select group_name, group_activated, group_expiry_date from groups)b
+            on a.member_group_name = b.group_name')
+            using 'member_name', 'member_group', 'group_activated', 'group_expiry_date', grp
+            into data;
+        return data;
+    end;
+$$ language plpgsql;
+
 
 create or replace function person_groups(person_id text)
     returns json as $$
+    declare pid uuid;
+    declare pgrp text;
+    declare res json;
+    declare pgroups json;
     begin
-        -- get person group
-        -- get memberships for that group
-        -- return {person_id:'', person_group:'', groups:[{...}]}
-        -- for groups {group_name, group_activated, group_expiry_date}
-        return '{}'::json;
+        -- groups returns full graph info, including transitive group memberships
+        -- callers who are only interested in leaf info (the list of memberships
+        -- regardless of structure) can look at the 'member_group' key in the group list
+        -- e.g. groups: [{..., member_group: g1}, {..., member_group: g2}, ...]
+        pid := $1::uuid;
+        select person_group from persons where persons.person_id = pid into pgrp;
+        select get_memberships(pgrp) into pgroups;
+        return json_build_object('person_id', pid, 'person_group', pgrp, 'groups', pgroups);
     end;
 $$ language plpgsql;
 
@@ -614,7 +643,7 @@ create or replace function person_capabilities(person_id text)
     begin
         -- get person groups
         -- for each group get capabilities
-        return '{}'::json;
+        return json_build_object();
     end;
 $$ language plpgsql;
 
@@ -624,7 +653,7 @@ create or replace function user_groups(user_name text)
     begin
         -- get user group
         -- group_get_parents
-        return '{}'::json;
+        return json_build_object();
     end;
 $$ language plpgsql;
 
@@ -635,7 +664,7 @@ create or replace function user_capabilities(user_name text)
         -- get user group
         -- group_get_parents
         -- for each group get capabilities
-        return '{}'::json;
+        return json_build_object();
     end;
 $$ language plpgsql;
 
@@ -645,7 +674,7 @@ create or replace function group_member_add(person_id text default null, user_na
     begin
         -- get either person or user group
         -- add as member
-        return '{}'::json;
+        return json_build_object();
     end;
 $$ language plpgsql;
 
@@ -655,7 +684,7 @@ create or replace function group_member_remove(person_id text default null, user
     begin
         -- get either person or user group
         -- remove as member
-        return '{}'::json;
+        return json_build_object();
     end;
 $$ language plpgsql;
 
@@ -664,7 +693,7 @@ create or replace function group_members(group_name text)
     returns json as $$
     begin
         -- group_get_children
-        return '{}'::json;
+        return json_build_object();
     end;
 $$ language plpgsql;
 
@@ -673,7 +702,7 @@ create or replace function group_moderators(group_name text)
     returns json as $$
     begin
         -- simple query to list mods
-        return '{}'::json;
+        return json_build_object();
     end;
 $$ language plpgsql;
 
@@ -682,6 +711,6 @@ create or replace function group_capabilities(group_name text)
     returns json as $$
     begin
         -- use utility func
-        return '{}'::json;
+        return json_build_object();
     end;
 $$ language plpgsql;
