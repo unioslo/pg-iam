@@ -394,19 +394,19 @@ create or replace function test_capabilities()
     returns boolean as $$
     declare cid uuid;
     begin
-        insert into capabilities (capability_type, capability_default_claims,
+        insert into capabilities_http (capability_type, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
                                   capability_lifetime, capability_description, capability_expiry_date)
             values ('p11import', '{"role": "p11_import_user"}',
                     '{"p11-export-group", "p11-special-group"}', 'exact',
                     '123', 'bla', current_date);
-        insert into capabilities (capability_type, capability_default_claims,
+        insert into capabilities_http (capability_type, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
                                   capability_lifetime, capability_description, capability_expiry_date)
             values ('export', '{"role": "export_user"}',
                     '{"admin-group", "export-group"}', 'wildcard',
                     '123', 'bla', current_date);
-        insert into capabilities (capability_type, capability_default_claims,
+        insert into capabilities_http (capability_type, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
                                   capability_lifetime, capability_description, capability_expiry_date)
             values ('admin', '{"role": "admin_user"}',
@@ -416,22 +416,22 @@ create or replace function test_capabilities()
         -- uniqueness
         -- referential constraints
 
-        -- specify capabilities authorization: sets of operations on sets of resources
+        -- specify capabilities_http authorization: sets of operations on sets of resources
         -- example entries
         -- id, import, PUT, /(.*)/files/stream
         -- id, import, PUT, /(.*)/files/upload
         -- id, import, GET, /(.*)/files/resumables
         -- id, export, DELETE, /(.*)/files/export/(.*)
-        select capability_id from capabilities where capability_type = 'p11import' into cid;
-        insert into capabilities_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
+        select capability_id from capabilities_http where capability_type = 'p11import' into cid;
+        insert into capabilities_http_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
             values (cid, 'p11import', 'PUT', '/p11/files');
-        select capability_id from capabilities where capability_type = 'export' into cid;
-        insert into capabilities_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
+        select capability_id from capabilities_http where capability_type = 'export' into cid;
+        insert into capabilities_http_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
             values (cid, 'export', 'GET', '/(.*)/export');
-        select capability_id from capabilities where capability_type = 'admin' into cid;
-        insert into capabilities_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
+        select capability_id from capabilities_http where capability_type = 'admin' into cid;
+        insert into capabilities_http_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
             values (cid, 'admin', 'DELETE', '/(.*)/files');
-        insert into capabilities_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
+        insert into capabilities_http_grants (capability_id, capability_type, capability_http_method, capability_uri_pattern)
             values (cid, 'admin', 'GET', '/(.*)/admin');
         return true;
     end;
@@ -468,7 +468,7 @@ $$ language plpgsql;
 delete from persons;
 delete from groups;
 delete from audit_log;
-delete from capabilities;
+delete from capabilities_http;
 select test_persons_users_groups();
 select test_group_memeberships_moderators();
 select test_capabilities();

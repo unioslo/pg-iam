@@ -521,8 +521,8 @@ create trigger group_memberships_dag_requirements_trigger after insert on group_
     for each row execute procedure group_moderators_check_dag_requirements();
 
 
-drop table if exists capabilities cascade;
-create table if not exists capabilities(
+drop table if exists capabilities_http cascade;
+create table if not exists capabilities_http(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid unique not null default gen_random_uuid(),
     capability_type text unique not null,
@@ -535,11 +535,11 @@ create table if not exists capabilities(
 );
 
 
-create trigger capabilities_audit after update on capabilities
+create trigger capabilities_http_audit after update on capabilities_http
     for each row execute procedure update_audit_log();
 
 
-create or replace function capabilities_immutability()
+create or replace function capabilities_http_immutability()
     returns trigger as $$
     begin
         assert OLD.row_id = NEW.row_id, 'row_id is immutable';
@@ -547,11 +547,11 @@ create or replace function capabilities_immutability()
         return new;
     end;
 $$ language plpgsql;
-create trigger ensure_capabilities_immutability before update on capabilities
-    for each row execute procedure capabilities_immutability();
+create trigger ensure_capabilities_http_immutability before update on capabilities_http
+    for each row execute procedure capabilities_http_immutability();
 
 
-create or replace function capabilities_group_check()
+create or replace function capabilities_http_group_check()
     returns trigger as $$
     declare new_grps text[];
     declare new_grp text;
@@ -564,25 +564,25 @@ create or replace function capabilities_group_check()
         return new;
     end;
 $$ language plpgsql;
-create trigger ensure_capabilities_group_check before insert or update on capabilities
-    for each row execute procedure capabilities_group_check();
+create trigger ensure_capabilities_http_group_check before insert or update on capabilities_http
+    for each row execute procedure capabilities_http_group_check();
 
 
-drop table if exists capabilities_grants;
-create table capabilities_grants(
+drop table if exists capabilities_http_grants;
+create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
-    capability_id uuid references capabilities (capability_id) on delete cascade,
-    capability_type text references capabilities (capability_type),
+    capability_id uuid references capabilities_http (capability_id) on delete cascade,
+    capability_type text references capabilities_http (capability_type),
     capability_http_method text not null check (capability_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
     capability_uri_pattern text not null -- string or regex referring to a set of resources
 );
 
 
-create trigger capabilities_grants_audit after update on capabilities_grants
+create trigger capabilities_http_grants_audit after update on capabilities_http_grants
     for each row execute procedure update_audit_log();
 
 
-create or replace function capabilities_grants_immutability()
+create or replace function capabilities_http_grants_immutability()
     returns trigger as $$
     begin
         assert OLD.row_id = NEW.row_id, 'row_id is immutable';
@@ -590,7 +590,7 @@ create or replace function capabilities_grants_immutability()
     return new;
     end;
 $$ language plpgsql;
-create trigger ensure_capabilities_grants_immutability before update on capabilities_grants
+create trigger ensure_capabilities_http_grants_immutability before update on capabilities_http_grants
     for each row execute procedure capability_grants_immutability();
 
 
@@ -605,12 +605,12 @@ create or replace function capability_grants(capability_type text)
     returns json as $$
     declare data json;
     begin
-        assert (select exists(select 1 from capabilities where capabilities.capability_type = $1)) = 't',
+        assert (select exists(select 1 from capabilities_http where capabilities_http.capability_type = $1)) = 't',
             'capability_type does not exist';
         select json_agg(json_build_object(
                     'http_method', capability_http_method,
                     'uri_pattern', capability_uri_pattern))
-            from capabilities_grants where capabilities_grants.capability_type = $1 into data;
+            from capabilities_http_grants where capabilities_http_grants.capability_type = $1 into data;
         return data;
     end;
 $$ language plpgsql;
@@ -630,13 +630,13 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
         create temporary table if not exists cpb(ct text unique not null) on commit drop;
         delete from cpb;
         -- exact group matches
-        for ctype in select capability_type from capabilities
+        for ctype in select capability_type from capabilities_http
             where capability_group_match_method = 'exact'
             and array[grp] && capability_required_groups loop
             insert into cpb values (ctype);
         end loop;
         -- wildcard group matches
-        for ctype, cgrps in select capability_type, capability_required_groups from capabilities
+        for ctype, cgrps in select capability_type, capability_required_groups from capabilities_http
             where capability_group_match_method = 'wildcard' loop
             for rgrp in select unnest(cgrps) loop
                 reg := '.*' || rgrp || '.*';
@@ -651,11 +651,11 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
         end loop;
         select json_agg(ct) from cpb into data;
         if grants = 'f' then
-            return json_build_object('group', grp, 'capabilities', data);
+            return json_build_object('group', grp, 'capabilities_http', data);
         else
             select json_agg(json_build_object(capability_type, capability_grants(capability_type)))
-                from capabilities where capability_type in (select * from cpb) into grant_data;
-            return json_build_object('group', grp, 'capabilities', data, 'grants', grant_data);
+                from capabilities_http where capability_type in (select * from cpb) into grant_data;
+            return json_build_object('group', grp, 'capabilities_http', data, 'grants', grant_data);
         end if;
     end;
 $$ language plpgsql;
