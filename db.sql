@@ -526,7 +526,7 @@ drop table if exists capabilities_http cascade;
 create table if not exists capabilities_http(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid unique not null default gen_random_uuid(),
-    capability_type text unique not null,
+    capability_name text unique not null,
     capability_default_claims json,
     capability_required_groups text[] not null,
     capability_group_match_method text not null check (capability_group_match_method in ('exact', 'wildcard')),
@@ -573,7 +573,7 @@ drop table if exists capabilities_http_grants;
 create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid references capabilities_http (capability_id) on delete cascade,
-    capability_type text references capabilities_http (capability_type),
+    capability_name text references capabilities_http (capability_name),
     capability_http_method text not null check (capability_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
     capability_uri_pattern text not null -- string or regex referring to a set of resources
 );
@@ -602,16 +602,16 @@ create trigger ensure_capabilities_http_grants_immutability before update on cap
 -- e.g. groups: [{..., member_group: g1}, {..., member_group: g2}, ...]
 
 
-create or replace function capability_grants(capability_type text)
+create or replace function capability_grants(capability_name text)
     returns json as $$
     declare data json;
     begin
-        assert (select exists(select 1 from capabilities_http where capabilities_http.capability_type = $1)) = 't',
-            'capability_type does not exist';
+        assert (select exists(select 1 from capabilities_http where capabilities_http.capability_name = $1)) = 't',
+            'capability_name does not exist';
         select json_agg(json_build_object(
                     'http_method', capability_http_method,
                     'uri_pattern', capability_uri_pattern))
-            from capabilities_http_grants where capabilities_http_grants.capability_type = $1 into data;
+            from capabilities_http_grants where capabilities_http_grants.capability_name = $1 into data;
         return data;
     end;
 $$ language plpgsql;
@@ -631,13 +631,13 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
         create temporary table if not exists cpb(ct text unique not null) on commit drop;
         delete from cpb;
         -- exact group matches
-        for ctype in select capability_type from capabilities_http
+        for ctype in select capability_name from capabilities_http
             where capability_group_match_method = 'exact'
             and array[grp] && capability_required_groups loop
             insert into cpb values (ctype);
         end loop;
         -- wildcard group matches
-        for ctype, cgrps in select capability_type, capability_required_groups from capabilities_http
+        for ctype, cgrps in select capability_name, capability_required_groups from capabilities_http
             where capability_group_match_method = 'wildcard' loop
             for rgrp in select unnest(cgrps) loop
                 reg := '.*' || rgrp || '.*';
@@ -654,8 +654,8 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
         if grants = 'f' then
             return json_build_object('group', grp, 'capabilities_http', data);
         else
-            select json_agg(json_build_object(capability_type, capability_grants(capability_type)))
-                from capabilities_http where capability_type in (select * from cpb) into grant_data;
+            select json_agg(json_build_object(capability_name, capability_grants(capability_name)))
+                from capabilities_http where capability_name in (select * from cpb) into grant_data;
             return json_build_object('group', grp, 'capabilities_http', data, 'grants', grant_data);
         end if;
     end;
