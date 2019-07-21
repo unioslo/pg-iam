@@ -13,6 +13,7 @@ group_memberships
 group_moderators
 capabilities
 capabilities_grants
+audit_log
 ```
 
 ## Function overview
