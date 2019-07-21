@@ -1,9 +1,7 @@
 
 -- TODOs:
--- test capability generation and validation
--- audit tests
--- rpc API + tests
--- consistent trigger names, code cleanup
+-- tests
+-- code cleanup: consistent trigger names, DRYer
 -- docs
 
 create or replace function test_persons_users_groups()

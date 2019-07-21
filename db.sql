@@ -715,7 +715,22 @@ create or replace function person_capabilities(person_id text, grants boolean de
 $$ language plpgsql;
 
 
--- person_access -> for person group, and all users, list all groups, capabilities, grants
+create or replace function person_access(person_id text)
+    returns json as $$
+    declare pid uuid;
+    declare p_data json;
+    declare u_data json;
+    declare data json;
+    begin
+        pid := $1::uuid;
+        assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
+        select person_capabilities($1, 't') into p_data;
+        select json_agg(user_capabilities(user_name, 't')) from users, persons
+            where users.person_id = persons.person_id and users.person_id = pid into u_data;
+        select json_build_object('person_group_access', p_data, 'users_groups_access', u_data) into data;
+        return data;
+    end;
+$$ language plpgsql;
 
 
 create or replace function user_groups(user_name text)
