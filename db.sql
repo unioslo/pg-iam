@@ -693,7 +693,7 @@ create or replace function person_groups(person_id text)
         assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_group from persons where persons.person_id = pid into pgrp;
         select get_memberships(pgrp) into pgroups;
-        select json_build_object('person_id', pid, 'person_group', pgrp, 'groups', pgroups) into data;
+        select json_build_object('person_group', pgrp, 'groups', pgroups) into data;
         return data;
     end;
 $$ language plpgsql;
@@ -728,7 +728,7 @@ create or replace function user_groups(user_name text)
         assert exst = 't', 'user does not exist';
         select user_group from users where users.user_name = $1 into ugrp;
         select get_memberships(ugrp) into ugroups;
-        select json_build_object('user_name', user_name, 'user_group', ugrp, 'groups', ugroups) into data;
+        select json_build_object('user_group', ugrp, 'groups', ugroups) into data;
         return data;
     end;
 $$ language plpgsql;
