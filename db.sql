@@ -600,10 +600,6 @@ create trigger ensure_capabilities_grants_immutability before update on capabili
 -- regardless of structure) can look at the 'member_group' key in the group list
 -- e.g. groups: [{..., member_group: g1}, {..., member_group: g2}, ...]
 
--- helpers
--- membership_info
--- grp_mems
-
 
 create or replace function capability_grants(capability_type text)
     returns json as $$
@@ -712,7 +708,7 @@ create or replace function person_capabilities(person_id text, grants boolean de
         pid := $1::uuid;
         assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_group from persons where persons.person_id = pid into pgrp;
-        select grp_cpbts(pgrp, grants) into data;
+        select json_agg(grp_cpbts(member_group_name, grants)) from group_get_parents(pgrp) into data;
         return data;
     end;
 $$ language plpgsql;
@@ -726,27 +722,33 @@ create or replace function user_groups(user_name text)
     declare ugrp text;
     declare ugroups json;
     declare exst boolean;
+    declare data json;
     begin
         execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
         assert exst = 't', 'user does not exist';
         select user_group from users where users.user_name = $1 into ugrp;
         select get_memberships(ugrp) into ugroups;
-        return json_build_object('user_name', user_name, 'user_group', ugrp, 'groups', ugroups);
+        select json_build_object('user_name', user_name, 'user_group', ugrp, 'groups', ugroups) into data;
+        return data;
     end;
 $$ language plpgsql;
 
 
-create or replace function user_capabilities(user_name text)
+create or replace function user_capabilities(user_name text, grants boolean default 'f')
     returns json as $$
+    declare ugrp text;
+    declare exst boolean;
+    declare data json;
     begin
-        -- get user group
-        -- group_get_parents
-        -- for each group get capabilities
-        return json_build_object();
+        execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
+        assert exst = 't', 'user does not exist';
+        select user_group from users where users.user_name = $1 into ugrp;
+        select json_agg(grp_cpbts(member_group_name, grants)) from group_get_parents(ugrp) into data;
+        return data;
     end;
 $$ language plpgsql;
 
--- variadic func
+
 create or replace function group_member_add(person_id text default null, user_name text default null)
     returns json as $$
     begin
@@ -785,10 +787,11 @@ create or replace function group_moderators(group_name text)
 $$ language plpgsql;
 
 
-create or replace function group_capabilities(group_name text)
+create or replace function group_capabilities(group_name text, grants boolean default 'f')
     returns json as $$
+    declare data json;
     begin
-        -- use utility func
-        return json_build_object();
+        select grp_cpbts(group_name, grants) into data;
+        return data;
     end;
 $$ language plpgsql;
