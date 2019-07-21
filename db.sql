@@ -765,12 +765,14 @@ create or replace function group_member_add(group_name text, person_id text defa
             assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
             select person_group from persons where persons.person_id = pid into pgrp;
             execute format('insert into group_memberships values ($1, $2)') using gnam, pgrp;
+            return json_build_object('message', 'member added');
         elsif user_name is not null then
             assert (select exists(select 1 from users where users.user_name = unam)) = 't', 'user does not exist';
             select user_group from users where users.user_name = unam into ugrp;
             execute format('insert into group_memberships values ($1, $2)') using gnam, ugrp;
+            return json_build_object('message', 'member added');
         end if;
-        return json_build_object('message', 'member added');
+        return json_build_object('message', 'nothing to do');
     end;
 $$ language plpgsql;
 
@@ -791,23 +793,28 @@ create or replace function group_member_remove(group_name text, person_id text d
             assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
             select person_group from persons where persons.person_id = pid into pgrp;
             execute format('delete from group_memberships where group_name = $1 and group_member_name = $2') using gnam, pgrp;
+            return json_build_object('message', 'member removed');
         elsif user_name is not null then
             assert (select exists(select 1 from users where users.user_name = unam)) = 't', 'user does not exist';
             select user_group from users where users.user_name = unam into ugrp;
             execute format('delete from group_memberships where group_name = $1 and group_member_name = $2') using gnam, ugrp;
+            return json_build_object('message', 'member removed');
         end if;
-        return json_build_object('message', 'member removed');
+        return json_build_object('message', 'nothing to do');
     end;
 $$ language plpgsql;
 
 
 create or replace function group_members(group_name text)
     returns json as $$
-    declare data json;
+    declare extended_data json;
+    declare primary_data json;
     begin
         assert (select exists(select 1 from groups where groups.group_name = $1)) = 't', 'group does not exist';
-        -- group_get_children
-        return json_build_object();
+        select json_agg(group_primary_member) from group_get_children($1)
+            where group_primary_member is not null into primary_data;
+        -- maybe {members: [{full info}], primary_members: [user_names]}
+        return json_build_object('members', '[]'::json, 'primary_members', primary_data);
     end;
 $$ language plpgsql;
 
