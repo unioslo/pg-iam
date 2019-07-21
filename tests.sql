@@ -453,6 +453,13 @@ create or replace function test_rpcs()
         -- person_groups
         -- person_capabilities
         -- person_access
+        -- user_groups
+        -- user_capabilities
+        -- group_members
+        -- group_member_add
+        -- group_member_remove
+        -- group_capabilities
+        -- capability_grants
         return true;
     end;
 $$ language plpgsql;

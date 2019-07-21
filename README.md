@@ -11,9 +11,9 @@ A generic database backend for use in IdPs.
 - allow groups to moderate memberships of other groups
 - create capabilities, specify criteria for obtaining them
 - specify the scope of the capabilities
-- use SQL RPCs to get group related information for application development
 - data integrity and consistency, immutable columns wherever possible
 - audit log on all updates
+- use SQL functions to get authorization related information for application development
 
 # Learn more
 

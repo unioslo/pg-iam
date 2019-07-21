@@ -632,6 +632,7 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
     begin
         assert (select exists(select 1 from groups where group_name = grp)) = 't', 'group does not exist';
         create temporary table if not exists cpb(ct text unique not null) on commit drop;
+        delete from cpb;
         -- exact group matches
         for ctype in select capability_type from capabilities
             where capability_group_match_method = 'exact'
@@ -690,23 +691,29 @@ create or replace function person_groups(person_id text)
     declare pgrp text;
     declare res json;
     declare pgroups json;
+    declare data json;
     begin
         pid := $1::uuid;
         assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_group from persons where persons.person_id = pid into pgrp;
         select get_memberships(pgrp) into pgroups;
-        return json_build_object('person_id', pid, 'person_group', pgrp, 'groups', pgroups);
+        select json_build_object('person_id', pid, 'person_group', pgrp, 'groups', pgroups) into data;
+        return data;
     end;
 $$ language plpgsql;
 
 
-create or replace function person_capabilities(person_id text)
+create or replace function person_capabilities(person_id text, grants boolean default 'f')
     returns json as $$
+    declare pid uuid;
+    declare pgrp text;
+    declare data json;
     begin
-        -- check person exists
-        -- get person groups
-        -- for each group get capabilities
-        return json_build_object();
+        pid := $1::uuid;
+        assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
+        select person_group from persons where persons.person_id = pid into pgrp;
+        select grp_cpbts(pgrp, grants) into data;
+        return data;
     end;
 $$ language plpgsql;
 
