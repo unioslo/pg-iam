@@ -380,6 +380,7 @@ create or replace function group_get_children(parent_group text)
                             delete from sec where group_member_name = gmn;
                         else
                             recursive_current_member := gmn;
+                            insert into mem values (gn, gmn, gc, gpm);
                             -- this new secondary member can have both primary and seconday
                             -- members itself, but just add all its members to sec, and we will handle them
                             for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
@@ -805,16 +806,51 @@ create or replace function group_member_remove(group_name text, person_id text d
 $$ language plpgsql;
 
 
+create or replace function grp_mems(gn text)
+    returns table(group_name text,
+                  group_member_name text,
+                  group_primary_member text,
+                  group_activated boolean,
+                  group_expiry_date date) as $$
+    select a.group_name,
+           a.group_member_name,
+           a.group_primary_member,
+           b.group_activated,
+           b.group_expiry_date
+    from (select group_name, group_member_name, group_primary_member from group_get_children(gn))a
+    join (select group_name, group_activated, group_expiry_date from groups)b
+    on a.group_name = b.group_name
+$$ language sql;
+
+
 create or replace function group_members(group_name text)
     returns json as $$
-    declare extended_data json;
+    declare direct_data json;
+    declare transitive_data json;
     declare primary_data json;
+    declare data json;
     begin
         assert (select exists(select 1 from groups where groups.group_name = $1)) = 't', 'group does not exist';
         select json_agg(group_primary_member) from group_get_children($1)
             where group_primary_member is not null into primary_data;
-        -- maybe {members: [{full info}], primary_members: [user_names]}
-        return json_build_object('members', '[]'::json, 'primary_members', primary_data);
+        select json_agg(json_build_object(
+            'group', gm.group_name,
+            'group_member', gm.group_member_name,
+            'primary_member', gm.group_primary_member,
+            'activated', gm.group_activated,
+            'expiry_date', gm.group_expiry_date))
+            from grp_mems($1) gm where gm.group_name = $1 into direct_data;
+        select json_agg(json_build_object(
+            'group', gm.group_name,
+            'group_member', gm.group_member_name,
+            'primary_member', gm.group_primary_member,
+            'activated', gm.group_activated,
+            'expiry_date', gm.group_expiry_date))
+            from grp_mems($1) gm where gm.group_name != $1 into transitive_data;
+        select json_build_object('direct_members', direct_data,
+                                 'transitive_members', transitive_data,
+                                 'ultimate_members', primary_data) into data;
+        return data;
     end;
 $$ language plpgsql;
 
