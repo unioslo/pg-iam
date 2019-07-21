@@ -11,8 +11,8 @@ users
 groups
 group_memberships
 group_moderators
-capabilities
-capabilities_grants
+capabilities_http
+capabilities_http_grants
 audit_log
 ```
 
