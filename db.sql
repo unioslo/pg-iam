@@ -749,7 +749,7 @@ create or replace function user_capabilities(user_name text, grants boolean defa
 $$ language plpgsql;
 
 
-create or replace function group_member_add(person_id text default null, user_name text default null)
+create or replace function group_member_add(group_name text, person_id text default null, user_name text default null)
     returns json as $$
     begin
         -- get either person or user group
@@ -759,7 +759,7 @@ create or replace function group_member_add(person_id text default null, user_na
 $$ language plpgsql;
 
 -- variadic func
-create or replace function group_member_remove(person_id text default null, user_name text default null)
+create or replace function group_member_remove(group_name text, person_id text default null, user_name text default null)
     returns json as $$
     begin
         -- get either person or user group
