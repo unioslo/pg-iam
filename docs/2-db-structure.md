@@ -3,6 +3,8 @@
 
 ## Table overview
 
+Applications can interact with the following tables to build their core IdP, Authentication and Authorization functionality.
+
 ```sql
 persons
 users
@@ -14,6 +16,8 @@ capabilities_grants
 ```
 
 ## Function overview
+
+To ease routine tasks for getting information, `pg-idp` provides a set of helper functions which combine information from various tables.
 
 ```sql
 person_groups(person_id text)

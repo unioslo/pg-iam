@@ -1,9 +1,7 @@
 
-# pg-idp
+# pg-idp in action
 
-A generic database backend for use in IdPs.
-
-# Features
+This example will demonstrate all the features mentioned in the `README`:
 
 - create persons, users, and groups with optional expiry dates
 - add users and/or groups to groups
@@ -14,11 +12,3 @@ A generic database backend for use in IdPs.
 - data integrity and consistency, immutable columns wherever possible
 - audit log on all updates
 - use SQL functions to get authorization related information for application development
-
-# Learn more
-
-Read the [docs](https://github.com/leondutoit/pg-idp/tree/master/docs).
-
-# LICENSE
-
-BSD.
