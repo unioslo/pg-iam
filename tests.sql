@@ -462,6 +462,34 @@ create or replace function test_capabilities_http()
             values (cid, 'admin', 'DELETE', '/(.*)/files');
         insert into capabilities_http_grants (capability_id, capability_name, capability_http_method, capability_uri_pattern)
             values (cid, 'admin', 'GET', '/(.*)/admin');
+        -- immutability
+        begin
+            update capabilities_http_grants set row_id = '35b77cf9-0a6f-49d7-83df-e388d75c4b0b';
+            assert false;
+        exception when assert_failure then
+            raise notice 'capabilities_http_grants: row_id immutable';
+        end;
+        begin
+            update capabilities_http_grants set capability_id = '35b77cf9-0a6f-49d7-83df-e388d75c4b0b';
+            assert false;
+        exception when assert_failure then
+            raise notice 'capabilities_http_grants: capability_id immutable';
+        end;
+        -- referential constraints
+        begin
+            insert into capabilities_http_grants (capability_id, capability_name, capability_http_method, capability_uri_pattern)
+                values ('35b77cf9-0a6f-49d7-83df-e388d75c4b0b', 'admin', 'GET', '/(.*)/admin');
+            assert false;
+        exception when others then
+            raise notice 'capabilities_http_grants: capability_id should reference entry in capabilities_http';
+        end;
+        begin
+            insert into capabilities_http_grants (capability_id, capability_name, capability_http_method, capability_uri_pattern)
+                values (cid, 'admin2', 'GET', '/(.*)/admin');
+            assert false;
+        exception when others then
+            raise notice 'capabilities_http_grants: capability_name should refernce entry in capabilities_http';
+        end;
         return true;
     end;
 $$ language plpgsql;
@@ -513,3 +541,4 @@ select test_group_memeberships_moderators();
 select test_capabilities_http();
 select test_audit();
 select test_rpcs();
+-- test cascading deletes
