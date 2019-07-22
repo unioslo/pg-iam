@@ -1,7 +1,7 @@
 
 -- TODOs:
 -- tests
--- code cleanup: consistent trigger names, DRYer
+-- code cleanup: consistent trigger names, DRYer, add drop function if exists
 -- docs
 -- sql capabilities for: ntk, bell-lapadula, biba
 -- create pg-mac
@@ -519,21 +519,45 @@ create or replace function test_funcs()
     declare data json;
     declare pgrp text;
     declare pid uuid;
+    declare cid uuid;
+    declare err text;
     begin
         -- person_groups
         insert into persons (given_names, surname, person_expiry_date)
             values ('Salvador', 'Dali', '2030-10-01');
         select person_group from persons where surname = 'Dali' into pgrp;
-        insert into group_memberships values ('p11-special-group', pgrp);
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-surrealist-group', 'secondary', 'generic');
+        insert into group_memberships values ('p11-surrealist-group', pgrp);
         select person_id from persons where surname = 'Dali' into pid;
         select json_array_elements(person_groups->'groups')
             from person_groups(pid::text) into data;
-        assert data->>'member_group' = 'p11-special-group', 'member_group issue';
-        assert data->>'member_name' = pgrp, 'member_name issue';
-        assert data->>'group_activated' = 'true', 'group_activated issue';
-        assert data->>'group_expiry_date' is null, 'group_expiry_date issue';
+        err := 'person_groups issue';
+        assert data->>'member_group' = 'p11-surrealist-group', err;
+        assert data->>'member_name' = pgrp, err;
+        assert data->>'group_activated' = 'true', err;
+        assert data->>'group_expiry_date' is null, err;
         -- person_capabilities
+        insert into capabilities_http (capability_name, capability_default_claims,
+                                  capability_required_groups, capability_group_match_method,
+                                  capability_lifetime, capability_description, capability_expiry_date)
+            values ('p11-art', '{"role": "p11_art_user"}',
+                    '{"p11-surrealist-group", "p11-admin-group"}', 'exact',
+                    '123', 'bla', current_date);
+        select capability_id from capabilities_http where capability_name = 'p11-art' into cid;
+        insert into capabilities_http_grants (capability_id, capability_name, capability_http_method, capability_uri_pattern)
+            values (cid, 'p11-art', 'GET', '/(.*)/art');
+        select json_array_elements(person_capabilities) from
+            person_capabilities(pid::text, 't') into data;
+        err := 'person_capabilities issue';
+        assert data->>'group' = 'p11-surrealist-group', err;
+        assert json_array_elements_text(data->'capabilities_http') = 'p11-art', err;
+        assert json_array_elements_text(data->'grants') is not null, err;
         -- person_access
+        err := 'person_access issue';
+        select person_access(pid::text) into data;
+        assert data->'person_group_access' is not null, err;
+        assert data->'user_group_access' is null, err;
         -- user_groups
         -- user_capabilities
         -- group_members
