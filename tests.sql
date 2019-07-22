@@ -392,7 +392,7 @@ create or replace function test_group_memeberships_moderators()
 $$ language plpgsql;
 
 
-create or replace function test_capabilities()
+create or replace function test_capabilities_http()
     returns boolean as $$
     declare cid uuid;
     begin
@@ -415,8 +415,42 @@ create or replace function test_capabilities()
                     '{"admin-group", "special-group"}', 'wildcard',
                     '123', 'bla', current_date);
         -- immutability
+        begin
+            update capabilities_http set row_id = '35b77cf9-0a6f-49d7-83df-e388d75c4b0b';
+            assert false;
+        exception when assert_failure then
+            raise notice 'capabilities_http: row_id immutable';
+        end;
+        begin
+            update capabilities_http set capability_id = '35b77cf9-0a6f-49d7-83df-e388d75c4b0b';
+            assert false;
+        exception when assert_failure then
+            raise notice 'capabilities_http: capability_id immutable';
+        end;
         -- uniqueness
+        begin
+            insert into capabilities_http (capability_name, capability_default_claims,
+                                  capability_required_groups, capability_group_match_method,
+                                  capability_lifetime, capability_description, capability_expiry_date)
+                values ('admin', '{"role": "admin_user"}',
+                        '{"admin-group", "special-group"}', 'wildcard',
+                        '123', 'bla', current_date);
+            assert false;
+        exception when others then
+            raise notice 'capabilities_http: name uniqueness guaranteed';
+        end;
         -- referential constraints
+        begin
+            insert into capabilities_http (capability_name, capability_default_claims,
+                                  capability_required_groups, capability_group_match_method,
+                                  capability_lifetime, capability_description, capability_expiry_date)
+            values ('admin2', '{"role": "admin_user"}',
+                    '{"admin2-group", "very-special-group"}', 'wildcard',
+                    '123', 'bla', current_date);
+            assert false;
+        exception when assert_failure then
+            raise notice 'capabilities_http: group must exist to be referenced in new capability';
+        end;
         select capability_id from capabilities_http where capability_name = 'p11import' into cid;
         insert into capabilities_http_grants (capability_id, capability_name, capability_http_method, capability_uri_pattern)
             values (cid, 'p11import', 'PUT', '/p11/files');
@@ -476,6 +510,6 @@ delete from audit_log;
 delete from capabilities_http;
 select test_persons_users_groups();
 select test_group_memeberships_moderators();
-select test_capabilities();
+select test_capabilities_http();
 select test_audit();
 select test_rpcs();

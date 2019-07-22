@@ -595,13 +595,6 @@ create trigger ensure_capabilities_http_grants_immutability before update on cap
     for each row execute procedure capability_grants_immutability();
 
 
--- RPCs
--- returns full graph info, including transitive group memberships
--- callers who are only interested in leaf info (the list of memberships
--- regardless of structure) can look at the 'member_group' key in the group list
--- e.g. groups: [{..., member_group: g1}, {..., member_group: g2}, ...]
-
-
 create or replace function capability_grants(capability_name text)
     returns json as $$
     declare data json;
