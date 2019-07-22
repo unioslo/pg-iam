@@ -514,10 +514,24 @@ create or replace function test_audit()
 $$ language plpgsql;
 
 
-create or replace function test_rpcs()
+create or replace function test_funcs()
     returns boolean as $$
+    declare data json;
+    declare pgrp text;
+    declare pid uuid;
     begin
         -- person_groups
+        insert into persons (given_names, surname, person_expiry_date)
+            values ('Salvador', 'Dali', '2030-10-01');
+        select person_group from persons where surname = 'Dali' into pgrp;
+        insert into group_memberships values ('p11-special-group', pgrp);
+        select person_id from persons where surname = 'Dali' into pid;
+        select json_array_elements(person_groups->'groups')
+            from person_groups(pid::text) into data;
+        assert data->>'member_group' = 'p11-special-group', 'member_group issue';
+        assert data->>'member_name' = pgrp, 'member_name issue';
+        assert data->>'group_activated' = 'true', 'group_activated issue';
+        assert data->>'group_expiry_date' is null, 'group_expiry_date issue';
         -- person_capabilities
         -- person_access
         -- user_groups
@@ -540,5 +554,5 @@ select test_persons_users_groups();
 select test_group_memeberships_moderators();
 select test_capabilities_http();
 select test_audit();
-select test_rpcs();
+select test_funcs();
 -- test cascading deletes
