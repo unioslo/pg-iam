@@ -417,13 +417,6 @@ create or replace function test_capabilities()
         -- immutability
         -- uniqueness
         -- referential constraints
-
-        -- specify capabilities_http authorization: sets of operations on sets of resources
-        -- example entries
-        -- id, import, PUT, /(.*)/files/stream
-        -- id, import, PUT, /(.*)/files/upload
-        -- id, import, GET, /(.*)/files/resumables
-        -- id, export, DELETE, /(.*)/files/export/(.*)
         select capability_id from capabilities_http where capability_name = 'p11import' into cid;
         insert into capabilities_http_grants (capability_id, capability_name, capability_http_method, capability_uri_pattern)
             values (cid, 'p11import', 'PUT', '/p11/files');
@@ -442,8 +435,18 @@ $$ language plpgsql;
 
 create or replace function test_audit()
     returns boolean as $$
+    declare pid uuid;
+    declare rid uuid;
+    declare msg text;
     begin
-        -- for each table check it works
+        select person_id from persons limit 1 into pid;
+        select row_id from persons where person_id = pid into rid;
+        update persons set person_activated = 'f' where person_id = pid;
+        msg := 'audit_log does not work';
+        assert (select old_data from audit_log where row_id = rid) = 'true', msg;
+        assert (select new_data from audit_log where row_id = rid) = 'false', msg;
+        assert (select table_name from audit_log where row_id = rid) = 'persons', msg;
+        assert (select column_name from audit_log where row_id = rid) = 'person_activated', msg;
         return true;
     end;
 $$ language plpgsql;
