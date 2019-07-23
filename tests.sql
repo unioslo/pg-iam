@@ -584,13 +584,13 @@ create or replace function test_funcs()
         insert into groups (group_name, group_class, group_type)
             values ('p11-painter-group', 'secondary', 'generic');
         select person_id from persons where surname = 'Breton' into pid;
-        select group_member_add('p11-painter-group', pid::text) into ans;
-        -- first add another group to p11-surrealist-group
-        -- and create another person, user which is added to it
-        -- want to test transitive members too
-        -- add dali to it so we can test that ultimate_members are distinct
+        insert into users (person_id, user_name, user_expiry_date)
+            values (pid, 'p11-abtn', '2050-01-01');
+        select group_member_add('p11-painter-group', 'p11-abtn') into ans;
+        select group_member_add('p11-surrealist-group', 'p11-painter-group') into ans;
         select group_members('p11-surrealist-group') into data;
         raise info '%', data;
+        -- TODO: check data
         -- direct_members
         -- transitive_members
         -- ultimate_members
