@@ -12,3 +12,33 @@ This example will demonstrate all the features mentioned in the `README`:
 - data integrity and consistency, immutable columns wherever possible
 - audit log on all updates
 - use SQL functions to get authorization related information for application development
+
+# Create persons, users, groups
+
+```sql
+
+```
+
+# Set up group membershpips, and moderators
+
+```sql
+
+```
+
+# Specify HTTP capabilities
+
+```sql
+
+```
+
+# Inspect the audit log
+
+```sql
+
+```
+
+# Use functions for authorization decisions
+
+```sql
+
+```

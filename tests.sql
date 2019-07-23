@@ -530,7 +530,7 @@ create or replace function test_funcs()
         insert into groups (group_name, group_class, group_type)
             values ('p11-surrealist-group', 'secondary', 'generic');
         select person_id from persons where surname = 'Dali' into pid;
-        select group_member_add('p11-surrealist-group', pid::text, null) into ans;
+        select group_member_add('p11-surrealist-group', pid::text) into ans;
         select json_array_elements(person_groups->'groups')
             from person_groups(pid::text) into data;
         err := 'person_groups issue';
@@ -562,7 +562,7 @@ create or replace function test_funcs()
         -- group_member_add (with a user)
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p11-dali', '2040-12-01');
-        select group_member_add('p11-surrealist-group', null, 'p11-dali') into ans;
+        select group_member_add('p11-surrealist-group', 'p11-dali') into ans;
         assert (select count(*) from group_memberships where group_member_name = 'p11-dali-group') = 1, 'group_member_add issue';
         -- user_groups
         select json_array_elements(user_groups->'groups') from user_groups('p11-dali') into data;
@@ -578,14 +578,36 @@ create or replace function test_funcs()
         assert json_array_elements_text(data->'capabilities_http') = 'p11-art', err;
         assert json_array_elements_text(data->'grants') is not null, err;
         -- group_members
+        insert into persons (given_names, surname, person_expiry_date)
+            values ('Andre', 'Breton', '2050-10-01');
+        select person_group from persons where surname = 'Breton' into pgrp;
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-painter-group', 'secondary', 'generic');
+        select person_id from persons where surname = 'Breton' into pid;
+        select group_member_add('p11-painter-group', pid::text) into ans;
+        -- first add another group to p11-surrealist-group
+        -- and create another person, user which is added to it
+        -- want to test transitive members too
+        -- add dali to it so we can test that ultimate_members are distinct
+        select group_members('p11-surrealist-group') into data;
+        raise info '%', data;
+        -- direct_members
+        -- transitive_members
+        -- ultimate_members
         -- group_member_remove
+        select group_member_remove('p11-surrealist-group', 'p11-dali') into ans;
+        assert (select count(*) from group_memberships
+                where group_member_name = 'p11-dali-group'
+                and group_name = 'p11-surrealist-group') = 0,
+            'group_member_remove issue';
         -- group_capabilities
         -- capability_grants
         return true;
     end;
 $$ language plpgsql;
 
-
+-- todo ensure tests can only be run when _all_ tables are empty
+-- to prevent a tragic production accident
 delete from persons;
 delete from groups;
 delete from audit_log;
