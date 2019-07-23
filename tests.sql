@@ -572,6 +572,11 @@ create or replace function test_funcs()
         assert data->>'group_activated' = 'true', err;
         assert data->>'group_expiry_date' is null, err;
         -- user_capabilities
+        select json_array_elements(user_capabilities) from
+            user_capabilities('p11-dali', 't') into data;
+        assert data->>'group' = 'p11-surrealist-group', err;
+        assert json_array_elements_text(data->'capabilities_http') = 'p11-art', err;
+        assert json_array_elements_text(data->'grants') is not null, err;
         -- group_members
         -- group_member_remove
         -- group_capabilities
