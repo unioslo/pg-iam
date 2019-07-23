@@ -521,15 +521,16 @@ create or replace function test_funcs()
     declare pid uuid;
     declare cid uuid;
     declare err text;
+    declare ans text;
     begin
         -- person_groups
         insert into persons (given_names, surname, person_expiry_date)
-            values ('Salvador', 'Dali', '2030-10-01');
+            values ('Salvador', 'Dali', '2050-10-01');
         select person_group from persons where surname = 'Dali' into pgrp;
         insert into groups (group_name, group_class, group_type)
             values ('p11-surrealist-group', 'secondary', 'generic');
-        insert into group_memberships values ('p11-surrealist-group', pgrp);
         select person_id from persons where surname = 'Dali' into pid;
+        select group_member_add('p11-surrealist-group', pid::text, null) into ans;
         select json_array_elements(person_groups->'groups')
             from person_groups(pid::text) into data;
         err := 'person_groups issue';
@@ -558,10 +559,14 @@ create or replace function test_funcs()
         select person_access(pid::text) into data;
         assert data->'person_group_access' is not null, err;
         assert data->'user_group_access' is null, err;
+        -- group_member_add (with a user)
+        insert into users (person_id, user_name, user_expiry_date)
+            values (pid, 'p11-dali', '2040-12-01');
+        select group_member_add('p11-surrealist-group', null, 'p11-dali') into ans;
+        assert (select count(*) from group_memberships where group_member_name = 'p11-dali-group') = 1, 'group_member_add issue';
         -- user_groups
         -- user_capabilities
         -- group_members
-        -- group_member_add
         -- group_member_remove
         -- group_capabilities
         -- capability_grants
