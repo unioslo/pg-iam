@@ -565,6 +565,12 @@ create or replace function test_funcs()
         select group_member_add('p11-surrealist-group', null, 'p11-dali') into ans;
         assert (select count(*) from group_memberships where group_member_name = 'p11-dali-group') = 1, 'group_member_add issue';
         -- user_groups
+        select json_array_elements(user_groups->'groups') from user_groups('p11-dali') into data;
+        err := 'user_groups issue';
+        assert data->>'member_name' = 'p11-dali-group', err;
+        assert data->>'member_group' = 'p11-surrealist-group', err;
+        assert data->>'group_activated' = 'true', err;
+        assert data->>'group_expiry_date' is null, err;
         -- user_capabilities
         -- group_members
         -- group_member_remove

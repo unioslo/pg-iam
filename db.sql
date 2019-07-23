@@ -763,7 +763,7 @@ create or replace function group_member_add(group_name text, person_id text defa
     declare pgrp text;
     declare ugrp text;
     declare gnam text;
-    declare pid text;
+    declare pid uuid;
     declare unam text;
     begin
         gnam := $1;
