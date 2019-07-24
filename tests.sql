@@ -589,11 +589,19 @@ create or replace function test_funcs()
         select group_member_add('p11-painter-group', 'p11-abtn') into ans;
         select group_member_add('p11-surrealist-group', 'p11-painter-group') into ans;
         select group_members('p11-surrealist-group') into data;
-        raise info '%', data;
-        -- TODO: check data
-        -- direct_members
-        -- transitive_members
-        -- ultimate_members
+        select person_group from persons where surname = 'Dali' into pgrp;
+        assert data->'direct_members'->0->>'group_member' = pgrp;
+        assert data->'direct_members'->1->>'group_member' = 'p11-dali-group';
+        assert data->'direct_members'->2->>'group_member' = 'p11-painter-group';
+        assert_failure data->'transitive_members'->0->>'group' = 'p11-painter-group';
+        assert_failure data->'transitive_members'->0->>'group_member' = 'p11-abtn-group';
+        assert_failure data->'transitive_members'->0->>'primary_member' = 'p11-abtn';
+        assert_failure data->'transitive_members'->0->>'group_activated' = 'true';
+        assert_failure data->'transitive_members'->0->>'group_expiry_date' is null;
+        select person_id from persons where surname = 'Dali' into pid;
+        assert data->'ultimate_members'->>0 = pid::text;
+        assert data->'ultimate_members'->>1 = 'p11-abtn';
+        assert data->'ultimate_members'->>2 = 'p11-dali';
         -- group_member_remove
         select group_member_remove('p11-surrealist-group', 'p11-dali') into ans;
         assert (select count(*) from group_memberships
