@@ -3,10 +3,8 @@
 -- tests
 -- code cleanup: consistent trigger names, DRYer, add drop function if exists
 -- docs
--- sql capabilities for: ntk, bell-lapadula, biba
--- create pg-mac
--- redo ntk tables
--- implement booleanl-lapadula and biba tables
+
+\set keep_test `echo "$KEEP_TEST_DATA"`
 
 create or replace function test_persons_users_groups()
     returns boolean as $$
@@ -620,9 +618,17 @@ create or replace function test_funcs()
 $$ language plpgsql;
 
 
-create or replace function test_cascading_deletes()
+create or replace function test_cascading_deletes(keep_data boolean)
     returns boolean as $$
     begin
+        if keep_data = 'true' then
+            -- if KEEP_TEST_DATA is set to true this will not run
+            -- this can be handlt for keeping test data in the DB
+            -- for interactive test and dev purposes
+            raise info 'Keeping test data';
+            assert false;
+        end if;
+        -- otherwise we delete all of it
         return true;
     end;
 $$ language plpgsql;
@@ -631,7 +637,7 @@ $$ language plpgsql;
 create or replace function check_no_data()
     returns boolean as $$
     begin
-        -- todo ensure tests can only be run when _all_ tables are empty
+        -- tests can only be run when _all_ tables are empty
         -- to prevent a tragic production accident
         return true;
     end;
@@ -643,13 +649,14 @@ delete from groups;
 delete from audit_log;
 delete from capabilities_http;
 
+
 select check_no_data();
 select test_persons_users_groups();
 select test_group_memeberships_moderators();
 select test_capabilities_http();
 select test_audit();
 select test_funcs();
-select test_cascading_deletes();
+select test_cascading_deletes(:keep_test);
 
 drop function if exists test_persons_users_groups();
 drop function if exists test_group_memeberships_moderators();

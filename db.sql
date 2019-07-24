@@ -1,6 +1,4 @@
 
-create extension pgcrypto;
-
 
 drop table if exists audit_log;
 create table if not exists audit_log(
