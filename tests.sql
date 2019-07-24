@@ -1,10 +1,7 @@
 
--- TODOs:
--- tests
--- code cleanup: consistent trigger names, DRYer, add drop function if exists
--- docs
-
 \set keep_test `echo "$KEEP_TEST_DATA"`
+\set del_data `echo "$DELETE_EXISTING_DATA"`
+
 
 create or replace function test_persons_users_groups()
     returns boolean as $$
@@ -626,31 +623,38 @@ create or replace function test_cascading_deletes(keep_data boolean)
             -- this can be handlt for keeping test data in the DB
             -- for interactive test and dev purposes
             raise info 'Keeping test data';
-            assert false;
+            return true;
         end if;
-        -- otherwise we delete all of it
+        -- otherwise we delete all of it, and check test_cascading_deletes
+        raise info 'deleting existing data';
+        delete from persons;
+        delete from groups;
+        delete from audit_log;
+        delete from capabilities_http;
         return true;
     end;
 $$ language plpgsql;
 
 
-create or replace function check_no_data()
+create or replace function check_no_data(del_existing boolean)
     returns boolean as $$
+    declare ans boolean;
     begin
         -- tests can only be run when _all_ tables are empty
         -- to prevent a tragic production accident
+        if del_existing = 'true' then
+            select test_cascading_deletes(false) into ans;
+        end if;
+        assert (select count(*) from persons) = 0, 'persons not empty';
+        assert (select count(*) from users) = 0, 'persons not empty';
+        assert (select count(*) from groups) = 0, 'persons not empty';
+        assert (select count(*) from capabilities_http) = 0, 'persons not empty';
         return true;
     end;
 $$ language plpgsql;
 
 
-delete from persons;
-delete from groups;
-delete from audit_log;
-delete from capabilities_http;
-
-
-select check_no_data();
+select check_no_data(:del_data);
 select test_persons_users_groups();
 select test_group_memeberships_moderators();
 select test_capabilities_http();
@@ -658,8 +662,10 @@ select test_audit();
 select test_funcs();
 select test_cascading_deletes(:keep_test);
 
+drop function if exists check_no_data(boolean);
 drop function if exists test_persons_users_groups();
 drop function if exists test_group_memeberships_moderators();
 drop function if exists test_capabilities_http();
 drop function if exists test_audit();
 drop function if exists test_funcs();
+drop function if exists test_cascading_deletes(boolean);
