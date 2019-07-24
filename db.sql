@@ -63,6 +63,7 @@ create trigger persons_audit after update on persons
     for each row execute procedure update_audit_log();
 
 
+drop function if exists person_immutability() cascade;
 create or replace function person_immutability()
     returns trigger as $$
     begin
@@ -80,6 +81,7 @@ create trigger ensure_person_immutability before update on persons
     for each row execute procedure person_immutability();
 
 
+drop function if exists person_management() cascade;
 create or replace function person_management()
     returns trigger as $$
     declare new_pid text;
@@ -136,6 +138,7 @@ create trigger users_audit after update on users
     for each row execute procedure update_audit_log();
 
 
+drop function if exists user_immutability() cascade;
 create or replace function user_immutability()
     returns trigger as $$
     begin
@@ -155,6 +158,7 @@ create trigger ensure_user_immutability before update on users
     for each row execute procedure user_immutability();
 
 
+drop function if exists user_management() cascade;
 create or replace function user_management()
     returns trigger as $$
     declare new_unam text;
@@ -221,6 +225,7 @@ create trigger groups_audit after update on groups
     for each row execute procedure update_audit_log();
 
 
+drop function if exists group_deletion() cascade;
 create or replace function group_deletion()
     returns trigger as $$
     declare amount int;
@@ -245,6 +250,7 @@ create trigger ensure_group_deletion_policy before delete on groups
     for each row execute procedure group_deletion();
 
 
+drop function if exists group_immutability() cascade;
 create or replace function group_immutability()
     returns trigger as $$
     begin
@@ -268,6 +274,7 @@ create trigger ensure_group_immutability before update on groups
     for each row execute procedure group_immutability();
 
 
+drop function if exists group_management() cascade;
 create or replace function group_management()
     returns trigger as $$
     declare primary_member_state boolean;
@@ -306,6 +313,7 @@ create table if not exists group_memberships(
 );
 
 
+drop function if exists group_memberships_immutability() cascade;
 create or replace function group_memberships_immutability()
     returns trigger as $$
     begin
@@ -327,7 +335,9 @@ create view first_order_members as
     where gm.group_member_name = g.group_name;
 
 
+drop table if exists members cascade;
 create table if not exists members(group_name text, group_member_name text, group_class text, group_primary_member text);
+drop function if exists group_get_children(text) cascade;
 create or replace function group_get_children(parent_group text)
     returns setof members as $$
     declare num int;
@@ -398,7 +408,9 @@ create or replace function group_get_children(parent_group text)
 $$ language plpgsql;
 
 
+drop table if exists memberships cascade;
 create table if not exists memberships(member_name text, member_group_name text);
+drop function if exists group_get_parents(text) cascade;
 create or replace function group_get_parents(child_group text)
     returns setof memberships as $$
     declare num int;
@@ -430,6 +442,7 @@ create or replace function group_get_parents(child_group text)
 $$ language plpgsql;
 
 
+drop function if exists group_memberships_check_dag_requirements() cascade;
 create or replace function group_memberships_check_dag_requirements()
     returns trigger as $$
     declare response text;
@@ -475,6 +488,7 @@ create table if not exists group_moderators(
 );
 
 
+drop function if exists group_moderators_immutability() cascade;
 create or replace function group_moderators_immutability()
     returns trigger as $$
     begin
@@ -490,6 +504,7 @@ create trigger ensure_group_moderators_immutability before update on group_moder
     for each row execute procedure group_moderators_immutability();
 
 
+drop function if exists group_moderators_check_dag_requirements() cascade;
 create or replace function group_moderators_check_dag_requirements()
     returns trigger as $$
     declare response text;
@@ -539,6 +554,7 @@ create trigger capabilities_http_audit after update on capabilities_http
     for each row execute procedure update_audit_log();
 
 
+drop function if exists capabilities_http_immutability() cascade;
 create or replace function capabilities_http_immutability()
     returns trigger as $$
     begin
@@ -551,6 +567,7 @@ create trigger ensure_capabilities_http_immutability before update on capabiliti
     for each row execute procedure capabilities_http_immutability();
 
 
+drop function if exists capabilities_http_group_check() cascade;
 create or replace function capabilities_http_group_check()
     returns trigger as $$
     declare new_grps text[];
@@ -582,6 +599,7 @@ create trigger capabilities_http_grants_audit after update on capabilities_http_
     for each row execute procedure update_audit_log();
 
 
+drop function if exists capabilities_http_grants_immutability() cascade;
 create or replace function capabilities_http_grants_immutability()
     returns trigger as $$
     begin
@@ -594,6 +612,7 @@ create trigger ensure_capabilities_http_grants_immutability before update on cap
     for each row execute procedure capability_grants_immutability();
 
 
+drop function if exists capability_grants(text) cascade;
 create or replace function capability_grants(capability_name text)
     returns json as $$
     declare data json;
@@ -609,6 +628,7 @@ create or replace function capability_grants(capability_name text)
 $$ language plpgsql;
 
 
+drop function if exists grp_cpbts(text, boolean) cascade;
 create or replace function grp_cpbts(grp text, grants boolean default 'f')
     returns json as $$
     declare ctype text;
@@ -654,6 +674,7 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
 $$ language plpgsql;
 
 
+drop function if exists get_memberships(text) cascade;
 create or replace function get_memberships(grp text)
     returns json as $$
     declare data json;
@@ -674,6 +695,7 @@ create or replace function get_memberships(grp text)
 $$ language plpgsql;
 
 
+drop function if exists person_groups(text) cascade;
 create or replace function person_groups(person_id text)
     returns json as $$
     declare pid uuid;
@@ -691,7 +713,7 @@ create or replace function person_groups(person_id text)
     end;
 $$ language plpgsql;
 
-
+drop function if exists person_capabilities(text, boolean);
 create or replace function person_capabilities(person_id text, grants boolean default 'f')
     returns json as $$
     declare pid uuid;
@@ -707,6 +729,7 @@ create or replace function person_capabilities(person_id text, grants boolean de
 $$ language plpgsql;
 
 
+drop function if exists person_access(text) cascade;
 create or replace function person_access(person_id text)
     returns json as $$
     declare pid uuid;
@@ -725,6 +748,7 @@ create or replace function person_access(person_id text)
 $$ language plpgsql;
 
 
+drop function if exists user_groups(text) cascade;
 create or replace function user_groups(user_name text)
     returns json as $$
     declare ugrp text;
@@ -742,6 +766,7 @@ create or replace function user_groups(user_name text)
 $$ language plpgsql;
 
 
+drop function if exists user_capabilities(text, boolean) cascade;
 create or replace function user_capabilities(user_name text, grants boolean default 'f')
     returns json as $$
     declare ugrp text;
@@ -757,7 +782,7 @@ create or replace function user_capabilities(user_name text, grants boolean defa
 $$ language plpgsql;
 
 
-drop function if exists group_member_add(text, text);
+drop function if exists group_member_add(text, text) cascade;
 create or replace function group_member_add(group_name text, member text)
     returns json as $$
     declare gnam text;
@@ -788,7 +813,7 @@ create or replace function group_member_add(group_name text, member text)
 $$ language plpgsql;
 
 
-drop function if exists group_member_remove(text, text);
+drop function if exists group_member_remove(text, text) cascade;
 create or replace function group_member_remove(group_name text, member text)
     returns json as $$
     declare gnam text;
@@ -819,6 +844,7 @@ create or replace function group_member_remove(group_name text, member text)
 $$ language plpgsql;
 
 
+drop function if exists grp_mems(text) cascade;
 create or replace function grp_mems(gn text)
     returns table(group_name text,
                   group_member_name text,
@@ -836,6 +862,7 @@ create or replace function grp_mems(gn text)
 $$ language sql;
 
 
+drop function if exists group_members(text) cascade;
 create or replace function group_members(group_name text)
     returns json as $$
     declare direct_data json;
@@ -868,6 +895,7 @@ create or replace function group_members(group_name text)
 $$ language plpgsql;
 
 
+drop function if exists group_moderators(text) cascade;
 create or replace function group_moderators(group_name text)
     returns json as $$
     declare data json;
@@ -879,7 +907,7 @@ create or replace function group_moderators(group_name text)
     end;
 $$ language plpgsql;
 
-
+drop function if exists group_capabilities(text, boolean) cascade;
 create or replace function group_capabilities(group_name text, grants boolean default 'f')
     returns json as $$
     declare data json;

@@ -45,7 +45,7 @@ _guide="\
 
 setup() {
     psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "create extension pgcrypto"
-    psql -h $DBHOST -U $DBOWNER -d $DBNAME -f ./db.sql
+    psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db.sql
     echo 'setup complete'
 }
 
