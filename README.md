@@ -15,6 +15,16 @@ A generic database backend for use in IdPs.
 - audit log on all updates
 - use SQL functions to get authorization related information for application development
 
+# Usage
+
+Read the guide on how to install and run tests.
+
+```bash
+git clone git@github.com:leondutoit/pg-idp.git
+cd pg-idp
+./install.sh --guide
+```
+
 # Learn more
 
 Read the [docs](https://github.com/leondutoit/pg-idp/tree/master/docs).
