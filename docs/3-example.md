@@ -13,31 +13,55 @@ This example will demonstrate all the features mentioned in the `README`:
 - audit log on all updates
 - use SQL functions to get authorization related information for application development
 
-# Create persons, users, groups
+# Use case 1: external user rights management
+
+## Create persons, users, groups
 
 ```sql
 
 ```
 
-# Set up group membershpips, and moderators
+## Set up group membershpips, and moderators
 
 ```sql
 
 ```
 
-# Specify HTTP capabilities
+## Specify HTTP capabilities
 
 ```sql
 
 ```
 
-# Inspect the audit log
+# Use case 2: user access control
+
+## Create persons, users, groups
 
 ```sql
 
 ```
 
-# Use functions for authorization decisions
+## Set up group membershpips, and moderators
+
+```sql
+
+```
+
+## Specify HTTP capabilities
+
+```sql
+
+```
+
+## Use functions for authorization decisions
+
+```sql
+
+```
+
+# Use case 3: Audit
+
+## Inspect the audit log
 
 ```sql
 
