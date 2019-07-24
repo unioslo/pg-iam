@@ -37,9 +37,9 @@ _guide="\
     -------
 
     ./setup.sh --setup
-    ./setup.sh --test --keep-test-data
+    ./setup.sh --keep-test-data --test
     # do some interactive work in the DB, and then remove the data
-    ./setup.sh --test --del-existing-data
+    ./setup.sh --del-existing-data --test
 
 "
 

@@ -11,6 +11,7 @@ create table if not exists audit_log(
 );
 
 
+drop function if exists update_audit_log() cascade;
 create or replace function update_audit_log()
     returns trigger as $$
     declare old_data text;

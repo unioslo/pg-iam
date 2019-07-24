@@ -640,15 +640,15 @@ create or replace function check_no_data(del_existing boolean)
     returns boolean as $$
     declare ans boolean;
     begin
-        -- tests can only be run when _all_ tables are empty
-        -- to prevent a tragic production accident
+        -- by default, tests can only be run when _all_ tables are empty
+        -- to help mitigate a tragic production accident
         if del_existing = 'true' then
             select test_cascading_deletes(false) into ans;
         end if;
         assert (select count(*) from persons) = 0, 'persons not empty';
-        assert (select count(*) from users) = 0, 'persons not empty';
-        assert (select count(*) from groups) = 0, 'persons not empty';
-        assert (select count(*) from capabilities_http) = 0, 'persons not empty';
+        assert (select count(*) from users) = 0, 'users not empty';
+        assert (select count(*) from groups) = 0, 'groups not empty';
+        assert (select count(*) from capabilities_http) = 0, 'capabilities_http not empty';
         return true;
     end;
 $$ language plpgsql;
