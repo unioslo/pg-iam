@@ -593,11 +593,11 @@ create or replace function test_funcs()
         assert data->'direct_members'->0->>'group_member' = pgrp;
         assert data->'direct_members'->1->>'group_member' = 'p11-dali-group';
         assert data->'direct_members'->2->>'group_member' = 'p11-painter-group';
-        assert_failure data->'transitive_members'->0->>'group' = 'p11-painter-group';
-        assert_failure data->'transitive_members'->0->>'group_member' = 'p11-abtn-group';
-        assert_failure data->'transitive_members'->0->>'primary_member' = 'p11-abtn';
-        assert_failure data->'transitive_members'->0->>'group_activated' = 'true';
-        assert_failure data->'transitive_members'->0->>'group_expiry_date' is null;
+        assert data->'transitive_members'->0->>'group' = 'p11-painter-group';
+        assert data->'transitive_members'->0->>'group_member' = 'p11-abtn-group';
+        assert data->'transitive_members'->0->>'primary_member' = 'p11-abtn';
+        assert data->'transitive_members'->0->>'activated' = 'true';
+        assert data->'transitive_members'->0->>'expiry_date' is null;
         select person_id from persons where surname = 'Dali' into pid;
         assert data->'ultimate_members'->>0 = pid::text;
         assert data->'ultimate_members'->>1 = 'p11-abtn';
@@ -609,20 +609,50 @@ create or replace function test_funcs()
                 and group_name = 'p11-surrealist-group') = 0,
             'group_member_remove issue';
         -- group_capabilities
+        select group_capabilities('p11-surrealist-group') into data;
+        assert data->'capabilities_http'->>0 = 'p11-art';
         -- capability_grants
+        select capability_grants('p11-art') into data;
+        assert data->0->>'http_method' = 'GET';
+        assert data->0->>'uri_pattern' = '/(.*)/art';
         return true;
     end;
 $$ language plpgsql;
 
--- todo ensure tests can only be run when _all_ tables are empty
--- to prevent a tragic production accident
+
+create or replace function test_cascading_deletes()
+    returns boolean as $$
+    begin
+        return true;
+    end;
+$$ language plpgsql;
+
+
+create or replace function check_no_data()
+    returns boolean as $$
+    begin
+        -- todo ensure tests can only be run when _all_ tables are empty
+        -- to prevent a tragic production accident
+        return true;
+    end;
+$$ language plpgsql;
+
+
 delete from persons;
 delete from groups;
 delete from audit_log;
 delete from capabilities_http;
+
+select check_no_data();
 select test_persons_users_groups();
 select test_group_memeberships_moderators();
 select test_capabilities_http();
 select test_audit();
 select test_funcs();
--- test cascading deletes
+select test_cascading_deletes();
+
+drop function if exists test_persons_users_groups();
+drop function if exists test_group_memeberships_moderators();
+drop function if exists test_capabilities_http();
+drop function if exists test_audit();
+drop function if exists test_funcs();
