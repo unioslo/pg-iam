@@ -265,12 +265,21 @@ tsd_idp=> select capability_grants('art');
 
 # Use case 2: external user rights management
 
-What if another person needs access to our collection, but they do not have an account with us?
+What if another person needs access to our collection, but they do not have an account with us? We can simply create a person object for them and then add their person group to the appropriate group. If we have integrated with the external IdP, we can request ID information from them, and grant capabilities as access tokens.
 
 # Use case 3: Audit
 
-### Inspect the audit log
+Identity, Authentication and Authorization information is sensitive, and having an audit trail for all changes is essential. What if, for example someone changed the scope of access associated with a narrow capability to a broad one?
 
 ```sql
-
+update capabilities_http_grants set capability_uri_pattern = '/art/(.*)' where capability_name = 'surrealism';
 ```
+
+Then using the audit log table, one can identify this case, and many others:
+
+```txt
+tsd_idp=> select * from audit_log;
+          event_time           |        table_name        |                row_id                |      column_name       |       old_data       | new_data
+-------------------------------+--------------------------+--------------------------------------+------------------------+----------------------+-----------
+ 2019-07-25 15:43:35.868261+02 | capabilities_http_grants | d5d080e0-a324-445a-8565-21e4b056289d | capability_uri_pattern | /art/surrealism/(.*) | /art/(.*)
+ ```
