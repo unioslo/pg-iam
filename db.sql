@@ -901,11 +901,18 @@ create or replace function group_moderators(group_name text)
     declare data json;
     begin
         assert (select exists(select 1 from groups where groups.group_name = $1)) = 't', 'group does not exist';
-        select json_agg(gm.group_moderator_name) from group_moderators gm
-            where gm.group_name = $1 into data;
-        return json_build_object('moderators', data);
+        select json_agg(json_build_object(
+            'moderator', a.group_moderator_name,
+            'activated', b.group_activated,
+            'expiry_date', b.group_expiry_date)) from
+        (select gm.group_name, gm.group_moderator_name
+            from group_moderators gm where gm.group_name = $1)a join
+        (select g.group_name, g.group_activated, g.group_expiry_date
+            from groups g)b on a.group_name = b.group_name into data;
+        return json_build_object('group_name', group_name, 'group_moderators', data);
     end;
 $$ language plpgsql;
+
 
 drop function if exists group_capabilities(text, boolean) cascade;
 create or replace function group_capabilities(group_name text, grants boolean default 'f')

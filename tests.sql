@@ -597,6 +597,11 @@ create or replace function test_funcs()
         assert data->'ultimate_members'->>0 = pid::text;
         assert data->'ultimate_members'->>1 = 'p11-abtn';
         assert data->'ultimate_members'->>2 = 'p11-dali';
+        -- group_moderators
+        insert into group_moderators values ('p11-surrealist-group', 'p11-painter-group');
+        select group_moderators('p11-surrealist-group') into data;
+        assert data->>'group_name' = 'p11-surrealist-group';
+        assert data->'group_moderators' is not null;
         -- group_member_remove
         select group_member_remove('p11-surrealist-group', 'p11-dali') into ans;
         assert (select count(*) from group_memberships
