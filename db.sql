@@ -709,7 +709,7 @@ create or replace function person_groups(person_id text)
         assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_group from persons where persons.person_id = pid into pgrp;
         select get_memberships(pgrp) into pgroups;
-        select json_build_object('person_group', pgrp, 'groups', pgroups) into data;
+        select json_build_object('person_id', person_id, 'person_groups', pgroups) into data;
         return data;
     end;
 $$ language plpgsql;

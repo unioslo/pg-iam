@@ -526,13 +526,14 @@ create or replace function test_funcs()
             values ('p11-surrealist-group', 'secondary', 'generic');
         select person_id from persons where surname = 'Dali' into pid;
         select group_member_add('p11-surrealist-group', pid::text) into ans;
-        select json_array_elements(person_groups->'groups')
-            from person_groups(pid::text) into data;
+        select person_groups(pid::text) into data;
+        raise info '%', data;
         err := 'person_groups issue';
-        assert data->>'member_group' = 'p11-surrealist-group', err;
-        assert data->>'member_name' = pgrp, err;
-        assert data->>'group_activated' = 'true', err;
-        assert data->>'group_expiry_date' is null, err;
+        assert data->>'person_id' = pid::text, err;
+        assert data->'person_groups'->0->>'member_group' = 'p11-surrealist-group', err;
+        assert data->'person_groups'->0->>'member_name' = pgrp, err;
+        assert data->'person_groups'->0->>'group_activated' = 'true', err;
+        assert data->'person_groups'->0->>'group_expiry_date' is null, err;
         -- person_capabilities
         insert into capabilities_http (capability_name, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
