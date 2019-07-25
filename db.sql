@@ -743,7 +743,9 @@ create or replace function person_access(person_id text)
         select person_capabilities($1, 't') into p_data;
         select json_agg(user_capabilities(user_name, 't')) from users, persons
             where users.person_id = persons.person_id and users.person_id = pid into u_data;
-        select json_build_object('person_group_access', p_data, 'users_groups_access', u_data) into data;
+        select json_build_object('person_id', person_id,
+                                 'person_group_access', p_data,
+                                 'users_groups_access', u_data) into data;
         return data;
     end;
 $$ language plpgsql;
