@@ -1,7 +1,5 @@
 
-# Data Model
-
-## Object hierarchy and rules
+# Data Model and Rules
 
 ```txt
 Persons -----> Users ----> Groups (class:primary,   type:user)
