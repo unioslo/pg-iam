@@ -15,26 +15,33 @@ This example will demonstrate all the features mentioned in the `README`:
 
 # Use case 1: user access control
 
+Suppose we have three users: Salvador Dali, Andre Breton, and Juan Miro. We now want Andre to have access to our whole art collection, but to restrict Salvador's access to surrealism only. Additionally, we want Juan to have the same access as Andre, but the additional right to determine who can have these different levels of access in the future. Let's see how to accomplish this.
+
 ### Create persons, users, groups
 
 First we will create two persons, each with one account, and two groups which we will use to enforce access control policies.
 
 ```sql
--- the first person
+-- persons, users
 insert into persons (given_names, surname, person_expiry_date)
     values ('Salvador', 'Dali', '2050-10-01');
 insert into users (person_id, user_name, user_expiry_date)
     values ((select person_id from persons where surname = 'Dali'), 'p11-dali', '2040-12-01');
--- the second person
 insert into persons (given_names, surname, person_expiry_date)
     values ('Andre', 'Breton', '2050-10-01');
 insert into users (person_id, user_name, user_expiry_date)
     values ((select person_id from persons where surname = 'Breton'), 'p11-abtn', '2050-01-01');
+insert into persons (given_names, surname, person_expiry_date)
+    values ('Juan', 'Miro', '2060-10-01');
+insert into users (person_id, user_name, user_expiry_date)
+    values ((select person_id from persons where surname = 'Miro'), 'p11-jm', '2050-01-01');
 -- the groups
 insert into groups (group_name, group_class, group_type)
-    values ('p11-surrealist-group', 'secondary', 'generic');
+    values ('surrealist-group', 'secondary', 'generic');
 insert into groups (group_name, group_class, group_type)
-    values ('p11-art-group', 'secondary', 'generic');
+    values ('art-group', 'secondary', 'generic');
+insert into groups (group_name, group_class, group_type)
+    values ('admin-group', 'secondary', 'generic');
 ```
 
 Each person has an automatically created person group, and is activated by default.
@@ -43,8 +50,9 @@ Each person has an automatically created person group, and is activated by defau
 tsd_idp=> select person_id, person_activated, person_expiry_date, person_group surname from persons;
               person_id               | person_activated | person_expiry_date |                  surname
 --------------------------------------+------------------+--------------------+--------------------------------------------
- 834e1830-1cc9-45b1-9e2d-cf5ba9a98d71 | t                | 2050-10-01         | 834e1830-1cc9-45b1-9e2d-cf5ba9a98d71-group
- 1bdc3b7b-0687-4740-a699-8aea94cacc1e | t                | 2050-10-01         | 1bdc3b7b-0687-4740-a699-8aea94cacc1e-group
+ 187bb115-176b-4fd3-b84e-9a9d650e614c | t                | 2050-10-01         | 187bb115-176b-4fd3-b84e-9a9d650e614c-group
+ 4f2f9d33-fc46-4710-873e-a34da0161650 | t                | 2050-10-01         | 4f2f9d33-fc46-4710-873e-a34da0161650-group
+ 7a26a4cc-bba6-4be7-ad72-a55ed74e1964 | t                | 2060-10-01         | 7a26a4cc-bba6-4be7-ad72-a55ed74e1964-group
 ```
 
 Users also have automatically created groups, activation statuses, and expiry dates have been set.
@@ -53,8 +61,9 @@ Users also have automatically created groups, activation statuses, and expiry da
 tsd_idp=> select person_id, user_name, user_group, user_activated, user_expiry_date from users;
               person_id               | user_name |   user_group   | user_activated | user_expiry_date
 --------------------------------------+-----------+----------------+----------------+------------------
- 834e1830-1cc9-45b1-9e2d-cf5ba9a98d71 | p11-dali  | p11-dali-group | t              | 2040-12-01
- 1bdc3b7b-0687-4740-a699-8aea94cacc1e | p11-abtn  | p11-abtn-group | t              | 2050-01-01
+ 187bb115-176b-4fd3-b84e-9a9d650e614c | p11-dali  | p11-dali-group | t              | 2040-12-01
+ 4f2f9d33-fc46-4710-873e-a34da0161650 | p11-abtn  | p11-abtn-group | t              | 2050-01-01
+ 7a26a4cc-bba6-4be7-ad72-a55ed74e1964 | p11-jm    | p11-jm-group   | t              | 2050-01-01
 ```
 
 The automatically created groups are present in the `groups` table, while the group we created is also there. The person and user groups are `primary`, and have `group_primary_member`s, while the created groups are `secondary` and have no `group_primary_member`. In this case, neither have expiry dates set.
@@ -63,12 +72,15 @@ The automatically created groups are present in the `groups` table, while the gr
 tsd_idp=> select group_name, group_class, group_type, group_activated, group_expiry_date, group_primary_member from groups;
                  group_name                 | group_class | group_type | group_activated | group_expiry_date |         group_primary_member
 --------------------------------------------+-------------+------------+-----------------+-------------------+--------------------------------------
- 834e1830-1cc9-45b1-9e2d-cf5ba9a98d71-group | primary     | person     | t               | 2050-10-01        | 834e1830-1cc9-45b1-9e2d-cf5ba9a98d71
+ 187bb115-176b-4fd3-b84e-9a9d650e614c-group | primary     | person     | t               | 2050-10-01        | 187bb115-176b-4fd3-b84e-9a9d650e614c
  p11-dali-group                             | primary     | user       | t               | 2040-12-01        | p11-dali
- p11-surrealist-group                       | secondary   | generic    | t               |                   |
- 1bdc3b7b-0687-4740-a699-8aea94cacc1e-group | primary     | person     | t               | 2050-10-01        | 1bdc3b7b-0687-4740-a699-8aea94cacc1e
+ 4f2f9d33-fc46-4710-873e-a34da0161650-group | primary     | person     | t               | 2050-10-01        | 4f2f9d33-fc46-4710-873e-a34da0161650
  p11-abtn-group                             | primary     | user       | t               | 2050-01-01        | p11-abtn
- p11-art-group                              | secondary   | generic    | t               |                   |
+ 7a26a4cc-bba6-4be7-ad72-a55ed74e1964-group | primary     | person     | t               | 2060-10-01        | 7a26a4cc-bba6-4be7-ad72-a55ed74e1964
+ p11-jm-group                               | primary     | user       | t               | 2050-01-01        | p11-jm
+ surrealist-group                           | secondary   | generic    | t               |                   |
+ art-group                                  | secondary   | generic    | t               |                   |
+ admin-group                                | secondary   | generic    | t               |                   |
 ```
 
 ### Set up group memberships, and moderators
