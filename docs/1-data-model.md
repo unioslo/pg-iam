@@ -22,6 +22,7 @@ Capabilities -> Required Groups
 - Group-to-group relations:
     - member
         - groups can be members of other groups
+        - persons and/or user are members of other groups via their person or user groups, not directly
         - this can form Directed Acyclic Graphs
     - moderator
         - groups can moderate other groups, but not transitively or cyclically
