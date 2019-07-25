@@ -1,30 +1,48 @@
 
 # Data Model
 
-## Object hierarchy
+## Object hierarchy and rules
 
 ```txt
 Persons -----> Users ----> Groups (class:primary,   type:user)
   -----------------------> Groups (class:primary,   type:person)
                         -> Groups (class:secondary, type:generic)
-                            -> Groups (class:secondary: relations: members, moderators)
+                            -> Groups (class:primary or secondary, relations: members, moderators)
+
+Capabilities -> Required Groups
+             -> Grants
 ```
 
-Objects and relations:
 - `Persons`: root objects
 - `Users`: owned by `Persons`
-- `Groups`: three types, `user`, `person` (belonging to the `primary` class), and `generic` (belonging to the `secondary` class)
-- all three types of groups can have relations to other secondary groups
-- these relations can be either member or moderator relations
-
-## Object states
-
-- active/inactive
-    - person group state -> f(person state)
-    - user group state -> f(user state) -> f(person state)
-    - generic group state -> f(.)
-
-- expiry dates
-    - person group exp == person exp
-    - user group exp == user exp
-    - user exp <= person exp
+- `Groups`:
+    - `person` groups, class: `primary`, type: `person` and
+    - `user` groups, class: `primary`, type: `user` , automatically created, updated, deleted
+    - `generic` groups, class: `secondary`, type: `generic`
+- Group-to-group relations:
+    - member
+        - groups can be members of other groups
+        - this can form Directed Acyclic Graphs
+    - moderator
+        - groups can moderate other groups, but not transitively or cyclically
+- Activation
+    - `persons`
+        - a person's activation status determines their person group's status
+        - if a person is deactivated, then its person group, all its users and their groups, will aslo be deactivated
+    - `users`
+        - a user's activation status determines their user group's status
+        - a user can be inactive while the person it belongs to remains active
+    - `groups`
+        - secondary groups' activation status can be changed directly
+- Expiry dates
+    - `persons`
+        - a person group's expiry date is the same as the person's expiry date
+    - `users`
+        - a user group's expiry date is the same as the user's expiry date
+        - a user's expiry date cannot be later than the expiry date of the person it belongs to
+    - `groups`
+        - secondary groups' expiry date can be changed directly
+- Capabilities
+    - a capability can be obtained by a person or user who is a member of a set of specified requried groups
+    - capabilities are linked to grants on resources
+    - access control is therefore managed through group membership
