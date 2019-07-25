@@ -613,8 +613,9 @@ create or replace function test_funcs()
         assert data->'capabilities_http'->>0 = 'p11-art';
         -- capability_grants
         select capability_grants('p11-art') into data;
-        assert data->0->>'http_method' = 'GET';
-        assert data->0->>'uri_pattern' = '/(.*)/art';
+        assert data->>'capability_name' = 'p11-art';
+        assert data->'capability_grants'->0->>'http_method' = 'GET';
+        assert data->'capability_grants'->0->>'uri_pattern' = '/(.*)/art';
         return true;
     end;
 $$ language plpgsql;

@@ -622,8 +622,9 @@ create or replace function capability_grants(capability_name text)
         select json_agg(json_build_object(
                     'http_method', capability_http_method,
                     'uri_pattern', capability_uri_pattern))
-            from capabilities_http_grants where capabilities_http_grants.capability_name = $1 into data;
-        return data;
+            from capabilities_http_grants
+            where capabilities_http_grants.capability_name = $1 into data;
+        return json_build_object('capability_name', capability_name, 'capability_grants', data);
     end;
 $$ language plpgsql;
 
