@@ -725,7 +725,7 @@ create or replace function person_capabilities(person_id text, grants boolean de
         assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_group from persons where persons.person_id = pid into pgrp;
         select json_agg(grp_cpbts(member_group_name, grants)) from group_get_parents(pgrp) into data;
-        return data;
+        return json_build_object('person_id', person_id, 'person_capabilities', data);
     end;
 $$ language plpgsql;
 

@@ -527,7 +527,6 @@ create or replace function test_funcs()
         select person_id from persons where surname = 'Dali' into pid;
         select group_member_add('p11-surrealist-group', pid::text) into ans;
         select person_groups(pid::text) into data;
-        raise info '%', data;
         err := 'person_groups issue';
         assert data->>'person_id' = pid::text, err;
         assert data->'person_groups'->0->>'member_group' = 'p11-surrealist-group', err;
@@ -535,21 +534,20 @@ create or replace function test_funcs()
         assert data->'person_groups'->0->>'group_activated' = 'true', err;
         assert data->'person_groups'->0->>'group_expiry_date' is null, err;
         -- person_capabilities
-        insert into capabilities_http (capability_name, capability_default_claims,
-                                  capability_required_groups, capability_group_match_method,
-                                  capability_lifetime, capability_description, capability_expiry_date)
+        insert into capabilities_http (
+            capability_name, capability_default_claims,
+            capability_required_groups, capability_group_match_method,
+            capability_lifetime, capability_description, capability_expiry_date)
             values ('p11-art', '{"role": "p11_art_user"}',
                     '{"p11-surrealist-group", "p11-admin-group"}', 'exact',
                     '123', 'bla', current_date);
         select capability_id from capabilities_http where capability_name = 'p11-art' into cid;
         insert into capabilities_http_grants (capability_id, capability_name, capability_http_method, capability_uri_pattern)
             values (cid, 'p11-art', 'GET', '/(.*)/art');
-        select json_array_elements(person_capabilities) from
-            person_capabilities(pid::text, 't') into data;
+        select person_capabilities(pid::text, 't') into data;
         err := 'person_capabilities issue';
-        assert data->>'group' = 'p11-surrealist-group', err;
-        assert json_array_elements_text(data->'capabilities_http') = 'p11-art', err;
-        assert json_array_elements_text(data->'grants') is not null, err;
+        assert data->>'person_id' = pid::text, err;
+        assert data->'person_capabilities'->0->>'group' = 'p11-surrealist-group', err;
         -- person_access
         err := 'person_access issue';
         select person_access(pid::text) into data;
