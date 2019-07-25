@@ -168,35 +168,104 @@ Which means that Juan Miro can administer all access, in addition to having thos
 
 ### Specify HTTP capabilities
 
-```sql
+Suppose we have an HTTP API serving data from an art collection, containing surrealist works. We want to restrict what Dali can see to this part, and let Andre and Juan see everything. To do that we will create two capabilities, each requiring membership of different groups:
 
+```sql
+insert into capabilities_http (
+    capability_name, capability_default_claims,
+    capability_required_groups, capability_group_match_method,
+    capability_lifetime, capability_description, capability_expiry_date)
+    values ('surrealism', '{"role": "surrealist_user"}',
+            '{"surrealist-group", "art-group", "admin-group"}', 'exact',
+            '30', 'surrealist art collection access', '2020-10-01');
+insert into capabilities_http (
+    capability_name, capability_default_claims,
+    capability_required_groups, capability_group_match_method,
+    capability_lifetime, capability_description, capability_expiry_date)
+    values ('art', '{"role": "art_user"}',
+            '{"art-group", "admin-group"}', 'exact',
+            '30', 'art collection access', '2030-10-01');
 ```
 
-### Use functions for authorization decisions
+To get an overview:
+
+```txt
+tsd_idp=> select capability_name, capability_required_groups, capability_lifetime, capability_expiry_date from capabilities_http;
+ capability_name |        capability_required_groups        | capability_lifetime | capability_expiry_date
+-----------------+------------------------------------------+---------------------+------------------------
+ surrealism      | {surrealist-group,art-group,admin-group} |                  30 | 2020-10-01
+ art             | {art-group,admin-group}                  |                  30 | 2030-10-01
+```
+
+Lastly, we need to connect access grant to these new capabilities:
 
 ```sql
+insert into capabilities_http_grants (
+    capability_id, capability_name,
+    capability_http_method, capability_uri_pattern)
+    values ((select capability_id from capabilities_http where capability_name = 'surrealism'), 'surrealism', 'GET', '/art/surrealism/(.*)');
+insert into capabilities_http_grants (
+    capability_id, capability_name,
+    capability_http_method, capability_uri_pattern)
+    values ((select capability_id from capabilities_http where capability_name = 'art'), 'art', 'GET', '/art/(.*)');
+```
 
+To get an overview:
+
+```txt
+tsd_idp=> select capability_name, capability_http_method, capability_uri_pattern from capabilities_http_grants;
+ capability_name | capability_http_method | capability_uri_pattern
+-----------------+------------------------+------------------------
+ surrealism      | GET                    | /art/surrealism/(.*)
+ art             | GET                    | /art/(.*)
+```
+
+In the authentication and authorization server, tokens can be issued to the identities based on their group memberships. The `user_groups` function would be helpful in that case. E.g.:
+
+```txt
+tsd_idp=> select user_groups('jm');
+-------------------------------------------------
+ {                                              +
+     "groups": [                                +
+         {                                      +
+             "member_name": "jm-group",         +
+             "member_group": "admin-group",     +
+             "group_activated": true,           +
+             "group_expiry_date": null          +
+         },                                     +
+         {                                      +
+             "member_name": "admin-group",      +
+             "member_group": "art-group",       +
+             "group_activated": true,           +
+             "group_expiry_date": null          +
+         },                                     +
+         {                                      +
+             "member_name": "art-group",        +
+             "member_group": "surrealist-group",+
+             "group_activated": true,           +
+             "group_expiry_date": null          +
+         }                                      +
+     ],                                         +
+     "user_group": "jm-group"                   +
+ }
+```
+
+When these tokens are used in subsequent requests for resource access, then the capabilities can be inspected to see if they allow the request to go ahead. In the the latter case, the `capability_grants` function would be useful. E.g.:
+
+```txt
+tsd_idp=> select capability_grants('art');
+------------------------------------
+ [                                 +
+     {                             +
+         "http_method": "GET",     +
+         "uri_pattern": "/art/(.*)"+
+     }                             +
+ ]
 ```
 
 # Use case 2: external user rights management
 
-#### Create persons, users, groups
-
-```sql
-
-```
-
-### Set up group membershpips, and moderators
-
-```sql
-
-```
-
-### Specify HTTP capabilities
-
-```sql
-
-```
+What if another person needs access to our collection, but they do not have an account with us?
 
 # Use case 3: Audit
 
