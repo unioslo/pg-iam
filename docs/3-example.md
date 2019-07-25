@@ -47,12 +47,12 @@ insert into groups (group_name, group_class, group_type)
 Each person has an automatically created person group, and is activated by default.
 
 ```txt
-tsd_idp=> select person_id, person_activated, person_expiry_date, person_group surname from persons;
-              person_id               | person_activated | person_expiry_date |                  surname
---------------------------------------+------------------+--------------------+--------------------------------------------
- b020efd0-3a98-4d2c-8d3f-7f94a3e3ec31 | t                | 2050-10-01         | b020efd0-3a98-4d2c-8d3f-7f94a3e3ec31-group
- a38732da-4eff-476e-9fbb-363fd053704b | t                | 2050-10-01         | a38732da-4eff-476e-9fbb-363fd053704b-group
- a749c99d-ea2c-4d04-8263-5542945bfb80 | t                | 2060-10-01         | a749c99d-ea2c-4d04-8263-5542945bfb80-group
+tsd_idp=> select person_id, person_activated, person_expiry_date, person_group, surname from persons;
+              person_id               | person_activated | person_expiry_date |                person_group                | surname
+--------------------------------------+------------------+--------------------+--------------------------------------------+---------
+ b020efd0-3a98-4d2c-8d3f-7f94a3e3ec31 | t                | 2050-10-01         | b020efd0-3a98-4d2c-8d3f-7f94a3e3ec31-group | Dali
+ a38732da-4eff-476e-9fbb-363fd053704b | t                | 2050-10-01         | a38732da-4eff-476e-9fbb-363fd053704b-group | Breton
+ a749c99d-ea2c-4d04-8263-5542945bfb80 | t                | 2060-10-01         | a749c99d-ea2c-4d04-8263-5542945bfb80-group | Miro
 ```
 
 Users also have automatically created groups, activation statuses, and expiry dates have been set.
