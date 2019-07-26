@@ -154,14 +154,14 @@ If one is only interested in who the members are, regardless of the graph, then 
 
 ```txt
 tsd_idp=> select group_moderators('surrealist-group');
-         group_moderators
-----------------------------------
- {"moderators" : ["admin-group"]}
+                                group_moderators
+---------------------------------------------------------------------------------
+ [{"group_moderator" : "admin-group", "activated" : true, "expiry_date" : null}]
 
 tsd_idp=> select group_moderators('art-group');
-         group_moderators
-----------------------------------
- {"moderators" : ["admin-group"]}
+                                group_moderators
+---------------------------------------------------------------------------------
+ [{"group_moderator" : "admin-group", "activated" : true, "expiry_date" : null}]
 ```
 
 Which means that Juan Miro can administer all access, in addition to having those accesses himself. Next we can use these groups to set up our desired access control.

@@ -912,7 +912,7 @@ create or replace function group_moderators(group_name text)
             from group_moderators gm where gm.group_name = $1)a join
         (select g.group_name, g.group_activated, g.group_expiry_date
             from groups g)b on a.group_name = b.group_name into data;
-        return json_build_object('group_moderators', data, 'group_name', group_name);
+        return json_build_object('group_name', group_name, 'group_moderators', data);
     end;
 $$ language plpgsql;
 
