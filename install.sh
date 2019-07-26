@@ -2,7 +2,7 @@
 
 if [ $# -lt 1 ]; then
     echo "Missing arguments, exiting"
-    echo "For help do: ./setup.sh --guide"
+    echo "For help do: ./install.sh --guide"
     exit 1
 fi
 
@@ -36,10 +36,10 @@ _guide="\
     Example
     -------
 
-    ./setup.sh --setup
-    ./setup.sh --keep-test-data --test
+    ./install.sh --setup
+    ./install.sh --keep-test-data --test
     # do some interactive work in the DB, and then remove the data
-    ./setup.sh --del-existing-data --test
+    ./install.sh --del-existing-data --test
 
 "
 

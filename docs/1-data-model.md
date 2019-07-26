@@ -8,7 +8,10 @@ Persons -----> Users ----> Groups (class:primary,   type:user)
                             -> Groups (class:primary or secondary, relations: members, moderators)
 
 Capabilities -> Required Groups
-             -> Grants
+             -> Grants (HTTP)
+
+Grants -> HTTP method
+       -> URI pattern
 ```
 
 - `Persons`: root objects
@@ -45,3 +48,5 @@ Capabilities -> Required Groups
     - a capability can be obtained by a person or user who is a member of a set of specified requried groups
     - capabilities are linked to grants on resources
     - access control is therefore managed through group membership
+- Grants
+    - HTTP grants associate an HTTP method and URI pattern with a named capability
