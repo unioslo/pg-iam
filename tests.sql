@@ -547,7 +547,7 @@ create or replace function test_funcs()
         select person_capabilities(pid::text, 't') into data;
         err := 'person_capabilities issue';
         assert data->>'person_id' = pid::text, err;
-        assert data->'person_capabilities'->0->>'group' = 'p11-surrealist-group', err;
+        assert data->'person_capabilities'->0->>'group_name' = 'p11-surrealist-group', err;
         -- person_access
         err := 'person_access issue';
         select person_access(pid::text) into data;
@@ -559,18 +559,20 @@ create or replace function test_funcs()
         select group_member_add('p11-surrealist-group', 'p11-dali') into ans;
         assert (select count(*) from group_memberships where group_member_name = 'p11-dali-group') = 1, 'group_member_add issue';
         -- user_groups
-        select json_array_elements(user_groups->'groups') from user_groups('p11-dali') into data;
+        select user_groups('p11-dali') into data;
         err := 'user_groups issue';
-        assert data->>'member_name' = 'p11-dali-group', err;
-        assert data->>'member_group' = 'p11-surrealist-group', err;
-        assert data->>'group_activated' = 'true', err;
-        assert data->>'group_expiry_date' is null, err;
+        assert data->>'user_name' = 'p11-dali', err;
+        assert data->'user_groups'->0->>'member_name' = 'p11-dali-group', err;
+        assert data->'user_groups'->0->>'member_group' = 'p11-surrealist-group', err;
+        assert data->'user_groups'->0->>'group_activated' = 'true', err;
+        assert data->'user_groups'->0->>'group_expiry_date' is null, err;
         -- user_capabilities
-        select json_array_elements(user_capabilities) from
-            user_capabilities('p11-dali', 't') into data;
-        assert data->>'group' = 'p11-surrealist-group', err;
-        assert json_array_elements_text(data->'capabilities_http') = 'p11-art', err;
-        assert json_array_elements_text(data->'grants') is not null, err;
+        select user_capabilities('p11-dali', 't') into data;
+        err := 'user_capabilities issue';
+        assert data->>'user_name' = 'p11-dali', err;
+        assert data->'user_capabilities'->0->>'group_name' = 'p11-surrealist-group', err;
+        assert data->'user_capabilities'->0->'group_capabilities_http'->>0 = 'p11-art', err;
+        assert data->'user_capabilities'->0->>'grants' is not null, err;
         -- group_members
         insert into persons (given_names, surname, person_expiry_date)
             values ('Andre', 'Breton', '2050-10-01');
@@ -584,23 +586,25 @@ create or replace function test_funcs()
         select group_member_add('p11-surrealist-group', 'p11-painter-group') into ans;
         select group_members('p11-surrealist-group') into data;
         select person_group from persons where surname = 'Dali' into pgrp;
-        assert data->'direct_members'->0->>'group_member' = pgrp;
-        assert data->'direct_members'->1->>'group_member' = 'p11-dali-group';
-        assert data->'direct_members'->2->>'group_member' = 'p11-painter-group';
-        assert data->'transitive_members'->0->>'group' = 'p11-painter-group';
-        assert data->'transitive_members'->0->>'group_member' = 'p11-abtn-group';
-        assert data->'transitive_members'->0->>'primary_member' = 'p11-abtn';
-        assert data->'transitive_members'->0->>'activated' = 'true';
-        assert data->'transitive_members'->0->>'expiry_date' is null;
+        err := 'group_members issue';
+        assert data->'direct_members'->0->>'group_member' = pgrp, err;
+        assert data->'direct_members'->1->>'group_member' = 'p11-dali-group', err;
+        assert data->'direct_members'->2->>'group_member' = 'p11-painter-group', err;
+        assert data->'transitive_members'->0->>'group' = 'p11-painter-group', err;
+        assert data->'transitive_members'->0->>'group_member' = 'p11-abtn-group', err;
+        assert data->'transitive_members'->0->>'primary_member' = 'p11-abtn', err;
+        assert data->'transitive_members'->0->>'activated' = 'true', err;
+        assert data->'transitive_members'->0->>'expiry_date' is null, err;
         select person_id from persons where surname = 'Dali' into pid;
-        assert data->'ultimate_members'->>0 = pid::text;
-        assert data->'ultimate_members'->>1 = 'p11-abtn';
-        assert data->'ultimate_members'->>2 = 'p11-dali';
+        assert data->'ultimate_members'->>0 = pid::text, err;
+        assert data->'ultimate_members'->>1 = 'p11-abtn', err;
+        assert data->'ultimate_members'->>2 = 'p11-dali', err;
         -- group_moderators
         insert into group_moderators values ('p11-surrealist-group', 'p11-painter-group');
         select group_moderators('p11-surrealist-group') into data;
-        assert data->>'group_name' = 'p11-surrealist-group';
-        assert data->'group_moderators' is not null;
+        err := 'group_moderators issue';
+        assert data->>'group_name' = 'p11-surrealist-group', err;
+        assert data->'group_moderators' is not null, err;
         -- group_member_remove
         select group_member_remove('p11-surrealist-group', 'p11-dali') into ans;
         assert (select count(*) from group_memberships
@@ -609,12 +613,15 @@ create or replace function test_funcs()
             'group_member_remove issue';
         -- group_capabilities
         select group_capabilities('p11-surrealist-group') into data;
-        assert data->'capabilities_http'->>0 = 'p11-art';
+        err := 'group_capabilities issue';
+        assert data->>'group_name' = 'p11-surrealist-group', err;
+        assert data->'group_capabilities_http'->>0 = 'p11-art', err;
         -- capability_grants
         select capability_grants('p11-art') into data;
-        assert data->>'capability_name' = 'p11-art';
-        assert data->'capability_grants'->0->>'http_method' = 'GET';
-        assert data->'capability_grants'->0->>'uri_pattern' = '/(.*)/art';
+        err := 'capability_grants issue';
+        assert data->>'capability_name' = 'p11-art', err;
+        assert data->'capability_grants'->0->>'http_method' = 'GET', err;
+        assert data->'capability_grants'->0->>'uri_pattern' = '/(.*)/art', err;
         return true;
     end;
 $$ language plpgsql;

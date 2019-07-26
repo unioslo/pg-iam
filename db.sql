@@ -665,11 +665,11 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
         end loop;
         select json_agg(ct) from cpb into data;
         if grants = 'f' then
-            return json_build_object('group', grp, 'capabilities_http', data);
+            return json_build_object('group_name', grp, 'group_capabilities_http', data);
         else
             select json_agg(json_build_object(capability_name, capability_grants(capability_name)))
                 from capabilities_http where capability_name in (select * from cpb) into grant_data;
-            return json_build_object('group', grp, 'capabilities_http', data, 'grants', grant_data);
+            return json_build_object('group_name', grp, 'group_capabilities_http', data, 'grants', grant_data);
         end if;
     end;
 $$ language plpgsql;
@@ -763,7 +763,7 @@ create or replace function user_groups(user_name text)
         assert exst = 't', 'user does not exist';
         select user_group from users where users.user_name = $1 into ugrp;
         select get_memberships(ugrp) into ugroups;
-        select json_build_object('user_group', ugrp, 'groups', ugroups) into data;
+        select json_build_object('user_name', user_name, 'user_groups', ugroups) into data;
         return data;
     end;
 $$ language plpgsql;
@@ -780,7 +780,7 @@ create or replace function user_capabilities(user_name text, grants boolean defa
         assert exst = 't', 'user does not exist';
         select user_group from users where users.user_name = $1 into ugrp;
         select json_agg(grp_cpbts(member_group_name, grants)) from group_get_parents(ugrp) into data;
-        return data;
+        return json_build_object('user_name', user_name, 'user_capabilities', data);
     end;
 $$ language plpgsql;
 
@@ -912,7 +912,7 @@ create or replace function group_moderators(group_name text)
             from group_moderators gm where gm.group_name = $1)a join
         (select g.group_name, g.group_activated, g.group_expiry_date
             from groups g)b on a.group_name = b.group_name into data;
-        return json_build_object('group_name', group_name, 'group_moderators', data);
+        return json_build_object('group_moderators', data, 'group_name', group_name);
     end;
 $$ language plpgsql;
 
