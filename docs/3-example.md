@@ -50,9 +50,9 @@ Each person has an automatically created person group, and is activated by defau
 tsd_idp=> select person_id, person_activated, person_expiry_date, person_group, surname from persons;
               person_id               | person_activated | person_expiry_date |                person_group                | surname
 --------------------------------------+------------------+--------------------+--------------------------------------------+---------
- b020efd0-3a98-4d2c-8d3f-7f94a3e3ec31 | t                | 2050-10-01         | b020efd0-3a98-4d2c-8d3f-7f94a3e3ec31-group | Dali
- a38732da-4eff-476e-9fbb-363fd053704b | t                | 2050-10-01         | a38732da-4eff-476e-9fbb-363fd053704b-group | Breton
- a749c99d-ea2c-4d04-8263-5542945bfb80 | t                | 2060-10-01         | a749c99d-ea2c-4d04-8263-5542945bfb80-group | Miro
+ 49f25506-afeb-474f-92c4-02982c978e19 | t                | 2050-10-01         | 49f25506-afeb-474f-92c4-02982c978e19-group | Dali
+ 9b087a8e-cbb6-440a-adb4-9cdbf3869f0a | t                | 2050-10-01         | 9b087a8e-cbb6-440a-adb4-9cdbf3869f0a-group | Breton
+ ae935036-6991-4320-80b1-079da9ddf346 | t                | 2060-10-01         | ae935036-6991-4320-80b1-079da9ddf346-group | Miro
 ```
 
 Users also have automatically created groups, activation statuses, and expiry dates have been set.
@@ -61,9 +61,9 @@ Users also have automatically created groups, activation statuses, and expiry da
 tsd_idp=> select person_id, user_name, user_group, user_activated, user_expiry_date from users;
               person_id               | user_name | user_group | user_activated | user_expiry_date
 --------------------------------------+-----------+------------+----------------+------------------
- b020efd0-3a98-4d2c-8d3f-7f94a3e3ec31 | dali      | dali-group | t              | 2040-12-01
- a38732da-4eff-476e-9fbb-363fd053704b | abtn      | abtn-group | t              | 2050-01-01
- a749c99d-ea2c-4d04-8263-5542945bfb80 | jm        | jm-group   | t              | 2050-01-01
+ 49f25506-afeb-474f-92c4-02982c978e19 | dali      | dali-group | t              | 2040-12-01
+ 9b087a8e-cbb6-440a-adb4-9cdbf3869f0a | abtn      | abtn-group | t              | 2050-01-01
+ ae935036-6991-4320-80b1-079da9ddf346 | jm        | jm-group   | t              | 2050-01-01
 ```
 
 The automatically created groups are present in the `groups` table, while the group we created is also there. The person and user groups are `primary`, and have `group_primary_member`s, while the created groups are `secondary` and have no `group_primary_member`. In this case, neither have expiry dates set.
@@ -72,15 +72,15 @@ The automatically created groups are present in the `groups` table, while the gr
 tsd_idp=> select group_name, group_class, group_type, group_activated, group_expiry_date, group_primary_member from groups;
                  group_name                 | group_class | group_type | group_activated | group_expiry_date |         group_primary_member
 --------------------------------------------+-------------+------------+-----------------+-------------------+--------------------------------------
- b020efd0-3a98-4d2c-8d3f-7f94a3e3ec31-group | primary     | person     | t               | 2050-10-01        | b020efd0-3a98-4d2c-8d3f-7f94a3e3ec31
+ 49f25506-afeb-474f-92c4-02982c978e19-group | primary     | person     | t               | 2050-10-01        | 49f25506-afeb-474f-92c4-02982c978e19
  dali-group                                 | primary     | user       | t               | 2040-12-01        | dali
- a38732da-4eff-476e-9fbb-363fd053704b-group | primary     | person     | t               | 2050-10-01        | a38732da-4eff-476e-9fbb-363fd053704b
+ 9b087a8e-cbb6-440a-adb4-9cdbf3869f0a-group | primary     | person     | t               | 2050-10-01        | 9b087a8e-cbb6-440a-adb4-9cdbf3869f0a
  abtn-group                                 | primary     | user       | t               | 2050-01-01        | abtn
- a749c99d-ea2c-4d04-8263-5542945bfb80-group | primary     | person     | t               | 2060-10-01        | a749c99d-ea2c-4d04-8263-5542945bfb80
+ ae935036-6991-4320-80b1-079da9ddf346-group | primary     | person     | t               | 2060-10-01        | ae935036-6991-4320-80b1-079da9ddf346
  jm-group                                   | primary     | user       | t               | 2050-01-01        | jm
  surrealist-group                           | secondary   | generic    | t               |                   |
  art-group                                  | secondary   | generic    | t               |                   |
- admin-group                                | secondary   | generic    | t               |                   |            |                   |
+ admin-group                                | secondary   | generic    | t               |                   |
 ```
 
 ### Set up group memberships, and moderators
@@ -154,14 +154,32 @@ If one is only interested in who the members are, regardless of the graph, then 
 
 ```txt
 tsd_idp=> select group_moderators('surrealist-group');
-                                group_moderators
----------------------------------------------------------------------------------
- [{"group_moderator" : "admin-group", "activated" : true, "expiry_date" : null}]
+                group_moderators
+-----------------------------------------
+ {                                      +
+     "group_name": "surrealist-group",  +
+     "group_moderators": [              +
+         {                              +
+             "activated": true,         +
+             "moderator": "admin-group",+
+             "expiry_date": null        +
+         }                              +
+     ]                                  +
+ }
 
 tsd_idp=> select group_moderators('art-group');
-                                group_moderators
----------------------------------------------------------------------------------
- [{"group_moderator" : "admin-group", "activated" : true, "expiry_date" : null}]
+                group_moderators
+-----------------------------------------
+ {                                      +
+     "group_name": "art-group",         +
+     "group_moderators": [              +
+         {                              +
+             "activated": true,         +
+             "moderator": "admin-group",+
+             "expiry_date": null        +
+         }                              +
+     ]                                  +
+ }
 ```
 
 Which means that Juan Miro can administer all access, in addition to having those accesses himself. Next we can use these groups to set up our desired access control.
@@ -226,7 +244,8 @@ In the authentication and authorization server, tokens can be issued to the iden
 tsd_idp=> select user_groups('jm');
 -------------------------------------------------
  {                                              +
-     "groups": [                                +
+     "user_name": "jm",                         +
+     "user_groups": [                           +
          {                                      +
              "member_name": "jm-group",         +
              "member_group": "admin-group",     +
@@ -245,8 +264,7 @@ tsd_idp=> select user_groups('jm');
              "group_activated": true,           +
              "group_expiry_date": null          +
          }                                      +
-     ],                                         +
-     "user_group": "jm-group"                   +
+     ]                                          +
  }
 ```
 
@@ -254,13 +272,16 @@ When these tokens are used in subsequent requests for resource access, then the 
 
 ```txt
 tsd_idp=> select capability_grants('art');
-------------------------------------
- [                                 +
-     {                             +
-         "http_method": "GET",     +
-         "uri_pattern": "/art/(.*)"+
-     }                             +
- ]
+----------------------------------------
+ {                                     +
+     "capability_name": "art",         +
+     "capability_grants": [            +
+         {                             +
+             "http_method": "GET",     +
+             "uri_pattern": "/art/(.*)"+
+         }                             +
+     ]                                 +
+ }
 ```
 
 # Use case 2: external user rights management
