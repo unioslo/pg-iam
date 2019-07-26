@@ -8,10 +8,10 @@ fi
 
 _guide="\
 
-    pg-idp
+    pg-iam
     ------
 
-    By default, running tests will not work if any of the pg-idp tables
+    By default, running tests will not work if any of the pg-iam tables
     have data in them. You can remove existing data by using the --del-existing-data
     flag. Similarly, any data created by tests will be removed by default. This too
     can be overridden, with the --keep-test-data flag.
@@ -27,7 +27,7 @@ _guide="\
 
     Options
     -------
-    --del-existing-data     Delete any data found in the pg-idp tables before running tests.
+    --del-existing-data     Delete any data found in the pg-iam tables before running tests.
     --keep-test-data        Do not delete test data.
     --setup                 Create the DB schema.
     --test                  Run SQL tests to ensure the DB schema works.

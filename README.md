@@ -1,5 +1,5 @@
 
-# pg-idp
+# pg-iam
 
 A generic database backend for use in IdPs.
 
@@ -20,14 +20,14 @@ A generic database backend for use in IdPs.
 Read the guide on how to install and run tests.
 
 ```bash
-git clone git@github.com:leondutoit/pg-idp.git
-cd pg-idp
+git clone git@github.com:leondutoit/pg-iam.git
+cd pg-iam
 ./install.sh --guide
 ```
 
 # Learn more
 
-Read the [docs](https://github.com/leondutoit/pg-idp/tree/master/docs).
+Read the [docs](https://github.com/leondutoit/pg-iam/tree/master/docs).
 
 # LICENSE
 

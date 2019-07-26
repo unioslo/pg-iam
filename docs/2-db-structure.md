@@ -16,11 +16,11 @@ capabilities_http_grants
 audit_log
 ```
 
-To investigate the tables more, it is best to install `pg-idp` and inspect the DB descriptions via `\d`.
+To investigate the tables more, it is best to install `pg-iam` and inspect the DB descriptions via `\d`.
 
 ## Function overview
 
-To ease routine tasks for getting information, `pg-idp` provides a set of helper functions which combine information from various tables.
+To ease routine tasks for getting information, `pg-iam` provides a set of helper functions which combine information from various tables.
 
 ```sql
 person_groups(person_id text)

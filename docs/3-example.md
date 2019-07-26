@@ -1,5 +1,5 @@
 
-# pg-idp in action
+# pg-iam in action
 
 This example will demonstrate all the features mentioned in the `README`:
 
