@@ -53,7 +53,7 @@ create table if not exists persons(
     person_group text,
     given_names text not null,
     surname text not null,
-    national_id_number text,
+    id_number text,
     passport_number text,
     password text,
     otp_secret text,
