@@ -337,11 +337,11 @@ create or replace view pgiam.first_order_members as
     where gm.group_member_name = g.group_name;
 
 
-drop table if exists members cascade;
-create table if not exists members(group_name text, group_member_name text, group_class text, group_primary_member text);
+drop table if exists pgiam.members cascade;
+create table if not exists pgiam.members(group_name text, group_member_name text, group_class text, group_primary_member text);
 drop function if exists group_get_children(text) cascade;
 create or replace function group_get_children(parent_group text)
-    returns setof members as $$
+    returns setof pgiam.members as $$
     declare num int;
     declare gn text;
     declare gmn text;
@@ -410,11 +410,11 @@ create or replace function group_get_children(parent_group text)
 $$ language plpgsql;
 
 
-drop table if exists memberships cascade;
-create table if not exists memberships(member_name text, member_group_name text);
+drop table if exists pgiam.memberships cascade;
+create table if not exists pgiam.memberships(member_name text, member_group_name text);
 drop function if exists group_get_parents(text) cascade;
 create or replace function group_get_parents(child_group text)
-    returns setof memberships as $$
+    returns setof pgiam.memberships as $$
     declare num int;
     declare mgn text;
     declare mn text;
