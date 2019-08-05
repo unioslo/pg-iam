@@ -1,4 +1,6 @@
 
+create schema if not exists pgiam;
+
 
 drop table if exists audit_log;
 create table if not exists audit_log(
@@ -329,7 +331,7 @@ create trigger ensure_group_memberships_immutability before update on group_memb
     for each row execute procedure group_memberships_immutability();
 
 
-create view first_order_members as
+create or replace view pgiam.first_order_members as
     select gm.group_name, gm.group_member_name, g.group_class, g.group_type, g.group_primary_member
     from group_memberships gm, groups g
     where gm.group_member_name = g.group_name;
@@ -354,19 +356,19 @@ create or replace function group_get_children(parent_group text)
         create temporary table if not exists mem(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
         delete from sec;
         delete from mem;
-        select count(*) from first_order_members where group_name = parent_group
+        select count(*) from pgiam.first_order_members where group_name = parent_group
             and group_class = 'secondary' into num;
         if num = 0 then
             return query execute format ('select group_name, group_member_name, group_class, group_primary_member
-                from first_order_members where group_name = $1 order by group_primary_member') using parent_group;
+                from pgiam.first_order_members where group_name = $1 order by group_primary_member') using parent_group;
         else
             for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
-                from first_order_members where group_name = parent_group
+                from pgiam.first_order_members where group_name = parent_group
                 and group_class = 'primary' loop
                 insert into mem values (gn, gmn, gc, gpm);
             end loop;
             for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
-                from first_order_members where group_name = parent_group
+                from pgiam.first_order_members where group_name = parent_group
                 and group_class = 'secondary' loop
                 insert into sec values (gn, gmn, gc, gpm);
             end loop;
@@ -383,7 +385,7 @@ create or replace function group_get_children(parent_group text)
                     new_current_member := gmn;
                     -- first add primary groups to members, and remove them from sec
                     for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
-                        from first_order_members where group_name = new_current_member loop
+                        from pgiam.first_order_members where group_name = new_current_member loop
                         if gc = 'primary' then
                             insert into mem values (gn, gmn, gc, gpm);
                             delete from sec where group_member_name = gmn;
@@ -393,7 +395,7 @@ create or replace function group_get_children(parent_group text)
                             -- this new secondary member can have both primary and seconday
                             -- members itself, but just add all its members to sec, and we will handle them
                             for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
-                                from first_order_members where group_name = recursive_current_member loop
+                                from pgiam.first_order_members where group_name = recursive_current_member loop
                                 insert into sec values (gn, gmn, gc, gpm);
                             end loop;
                         end if;
@@ -422,7 +424,7 @@ create or replace function group_get_parents(child_group text)
         create temporary table if not exists parents(member_name text, member_group_name text) on commit drop;
         delete from candidates;
         delete from parents;
-        for gn in select group_name from first_order_members where group_member_name = child_group loop
+        for gn in select group_name from pgiam.first_order_members where group_member_name = child_group loop
             insert into candidates values (child_group, gn);
         end loop;
         select count(*) from candidates into num;
@@ -432,7 +434,7 @@ create or replace function group_get_parents(child_group text)
             delete from candidates where member_name = mn and member_group_name = mgn;
             -- now check if the current candidate has parents
             -- so we find all recursive memberships
-            for gn in select group_name from first_order_members where group_member_name = mgn loop
+            for gn in select group_name from pgiam.first_order_members where group_member_name = mgn loop
                 insert into candidates values (mgn, gn);
             end loop;
             select count(*) from candidates into num;

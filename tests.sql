@@ -225,7 +225,7 @@ create or replace function test_group_memeberships_moderators()
 
         */
         raise notice 'group_name, group_member_name, group_class, group_type, group_primary_member';
-        for row in select * from first_order_members loop
+        for row in select * from pgiam.first_order_members loop
             raise notice '%', row;
         end loop;
 
