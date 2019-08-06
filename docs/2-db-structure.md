@@ -83,7 +83,7 @@ group_capabilities(group_name text)
     {group_name: '', group_capabilities: []}
 */
 
-capability_grants(capabilities_name text)
+capability_grants(capability_name text)
 /*
     Returns:
     {capability_name: '', capability_grants: []}
