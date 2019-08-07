@@ -661,6 +661,7 @@ create or replace function check_no_data(del_existing boolean)
         assert (select count(*) from users) = 0, 'users not empty';
         assert (select count(*) from groups) = 0, 'groups not empty';
         assert (select count(*) from capabilities_http) = 0, 'capabilities_http not empty';
+        assert (select count(*) from capabilities_http_grants) = 0, 'capabilities_http_grants not empty';
         return true;
     end;
 $$ language plpgsql;
