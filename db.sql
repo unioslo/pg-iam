@@ -611,7 +611,7 @@ create or replace function capabilities_http_grants_immutability()
     end;
 $$ language plpgsql;
 create trigger ensure_capabilities_http_grants_immutability before update on capabilities_http_grants
-    for each row execute procedure capability_grants_immutability();
+    for each row execute procedure capabilities_http_grants_immutability();
 
 
 drop function if exists capability_grants(text) cascade;
