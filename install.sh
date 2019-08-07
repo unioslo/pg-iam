@@ -55,8 +55,6 @@ sqltest() {
 
 DELETE_EXISTING_DATA=false
 KEEP_TEST_DATA=false
-export $DELETE_EXISTING_DATA
-export $KEEP_TEST_DATA
 
 while (( "$#" )); do
     case $1 in
