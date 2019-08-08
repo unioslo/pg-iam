@@ -8,9 +8,9 @@ create or replace function test_persons_users_groups()
     declare pid uuid;
     declare num int;
     begin
-        insert into persons (given_names, surname, person_expiry_date)
-            values ('Sarah', 'Conner', '2020-10-01');
-        select person_id from persons where surname = 'Conner' into pid;
+        insert into persons (full_name, person_expiry_date)
+            values ('Sarah Conner', '2020-10-01');
+        select person_id from persons where full_name like '%Conner' into pid;
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p11-sconne', '2020-03-28');
         insert into users (person_id, user_name, user_expiry_date)
@@ -141,31 +141,31 @@ create or replace function test_group_memeberships_moderators()
     declare row record;
     begin
         -- create persons and users
-        insert into persons (given_names, surname, person_expiry_date)
-            values ('Sarah', 'Conner', '2020-10-01');
-        select person_id from persons where surname = 'Conner' into pid;
+        insert into persons (full_name, person_expiry_date)
+            values ('Sarah Conner', '2020-10-01');
+        select person_id from persons where full_name like '%Conner' into pid;
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p11-sconne', '2020-03-28');
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p66-sconne', '2019-12-01');
-        insert into persons (given_names, surname, person_expiry_date)
-            values ('John', 'Conner2', '2020-10-01');
-        select person_id from persons where surname = 'Conner2' into pid;
+        insert into persons (full_name, person_expiry_date)
+            values ('John Conner2', '2020-10-01');
+        select person_id from persons where full_name like '%Conner2' into pid;
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p11-jconn', '2020-03-28');
-        insert into persons (given_names, surname, person_expiry_date)
-            values ('Frank', 'Castle', '2020-10-01');
-        select person_id from persons where surname = 'Castle' into pid;
+        insert into persons (full_name, person_expiry_date)
+            values ('Frank Castle', '2020-10-01');
+        select person_id from persons where full_name like '%Castle' into pid;
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p11-fcl', '2020-03-28');
-        insert into persons (given_names, surname, person_expiry_date)
-            values ('Virginia', 'Woolf', '2020-10-01');
-        select person_id from persons where surname = 'Woolf' into pid;
+        insert into persons (full_name, person_expiry_date)
+            values ('Virginia Woolf', '2020-10-01');
+        select person_id from persons where full_name like '%Woolf' into pid;
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p11-vwf', '2020-03-28');
-        insert into persons (given_names, surname, person_expiry_date)
-            values ('David', 'Gilgamesh', '2020-10-01');
-        select person_id from persons where surname = 'Gilgamesh' into pid;
+        insert into persons (full_name, person_expiry_date)
+            values ('David Gilgamesh', '2020-10-01');
+        select person_id from persons where full_name like '%Gilgamesh' into pid;
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p11-dgmsh', '2020-03-28');
         -- create groups
@@ -519,12 +519,12 @@ create or replace function test_funcs()
     declare ans text;
     begin
         -- person_groups
-        insert into persons (given_names, surname, person_expiry_date)
-            values ('Salvador', 'Dali', '2050-10-01');
-        select person_group from persons where surname = 'Dali' into pgrp;
+        insert into persons (full_name, person_expiry_date)
+            values ('Salvador Dali', '2050-10-01');
+        select person_group from persons where full_name like '%Dali' into pgrp;
         insert into groups (group_name, group_class, group_type)
             values ('p11-surrealist-group', 'secondary', 'generic');
-        select person_id from persons where surname = 'Dali' into pid;
+        select person_id from persons where full_name like '%Dali' into pid;
         select group_member_add('p11-surrealist-group', pid::text) into ans;
         select person_groups(pid::text) into data;
         err := 'person_groups issue';
@@ -574,18 +574,18 @@ create or replace function test_funcs()
         assert data->'user_capabilities'->0->'group_capabilities_http'->>0 = 'p11-art', err;
         assert data->'user_capabilities'->0->>'grants' is not null, err;
         -- group_members
-        insert into persons (given_names, surname, person_expiry_date)
-            values ('Andre', 'Breton', '2050-10-01');
-        select person_group from persons where surname = 'Breton' into pgrp;
+        insert into persons (full_name, person_expiry_date)
+            values ('Andre Breton', '2050-10-01');
+        select person_group from persons where full_name like '%Breton' into pgrp;
         insert into groups (group_name, group_class, group_type)
             values ('p11-painter-group', 'secondary', 'generic');
-        select person_id from persons where surname = 'Breton' into pid;
+        select person_id from persons where full_name like '%Breton' into pid;
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p11-abtn', '2050-01-01');
         select group_member_add('p11-painter-group', 'p11-abtn') into ans;
         select group_member_add('p11-surrealist-group', 'p11-painter-group') into ans;
         select group_members('p11-surrealist-group') into data;
-        select person_group from persons where surname = 'Dali' into pgrp;
+        select person_group from persons where full_name like '%Dali' into pgrp;
         err := 'group_members issue';
         assert data->'direct_members'->0->>'group_member' = pgrp, err;
         assert data->'direct_members'->1->>'group_member' = 'p11-dali-group', err;
@@ -595,7 +595,7 @@ create or replace function test_funcs()
         assert data->'transitive_members'->0->>'primary_member' = 'p11-abtn', err;
         assert data->'transitive_members'->0->>'activated' = 'true', err;
         assert data->'transitive_members'->0->>'expiry_date' is null, err;
-        select person_id from persons where surname = 'Dali' into pid;
+        select person_id from persons where full_name like '%Dali' into pid;
         assert data->'ultimate_members'->>0 = pid::text, err;
         assert data->'ultimate_members'->>1 = 'p11-abtn', err;
         assert data->'ultimate_members'->>2 = 'p11-dali', err;
