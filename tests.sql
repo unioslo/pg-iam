@@ -627,7 +627,7 @@ create or replace function test_funcs()
 $$ language plpgsql;
 
 
-create or replace function test_cascading_deletes(keep_data boolean)
+create or replace function test_cascading_deletes(keep_data boolean default 'false')
     returns boolean as $$
     begin
         if keep_data = 'true' then
@@ -648,7 +648,7 @@ create or replace function test_cascading_deletes(keep_data boolean)
 $$ language plpgsql;
 
 
-create or replace function check_no_data(del_existing boolean)
+create or replace function check_no_data(del_existing boolean default 'false')
     returns boolean as $$
     declare ans boolean;
     begin

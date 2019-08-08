@@ -57,6 +57,7 @@ create table if not exists persons(
     passport_number text,
     password text,
     otp_secret text,
+    email text,
     person_metadata json
 );
 
