@@ -4,6 +4,7 @@ create schema if not exists pgiam;
 
 drop table if exists audit_log;
 create table if not exists audit_log(
+    identity text default null,
     event_time timestamptz default now(),
     table_name text not null,
     row_id uuid not null,
@@ -20,8 +21,10 @@ create or replace function update_audit_log()
     declare new_data text;
     declare colname text;
     declare table_name text;
+    declare session_identity text;
     begin
         table_name := TG_TABLE_NAME::text;
+        session_identity := current_setting('session.identity', 't');
         for colname in execute
             format('select c.column_name::text
                     from pg_catalog.pg_statio_all_tables as st
@@ -35,8 +38,8 @@ create or replace function update_audit_log()
             execute format('select ($1).%s::text', colname) using OLD into old_data;
             execute format('select ($1).%s::text', colname) using NEW into new_data;
             if old_data != new_data then
-                insert into audit_log (table_name, row_id, column_name, old_data, new_data)
-                    values (table_name, OLD.row_id, colname, old_data, new_data);
+                insert into audit_log (identity, table_name, row_id, column_name, old_data, new_data)
+                    values (session_identity, table_name, OLD.row_id, colname, old_data, new_data);
             end if;
         end loop;
         return new;

@@ -95,6 +95,7 @@ create or replace function test_persons_users_groups()
             raise notice 'group_type immutable';
         end;
         -- states; cascades, constraints
+        set session "request.identity" = 'milen';
         update persons set person_activated = 'f';
         assert (select count(*) from users where user_activated = 't') = 0,
             'person state changes not propagating to users';
