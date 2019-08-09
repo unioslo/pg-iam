@@ -1,7 +1,7 @@
 
 create schema if not exists pgiam;
 
-
+-- todo: consider partitioning
 drop table if exists audit_log_objects;
 create table if not exists audit_log_objects(
     identity text default null,
@@ -12,6 +12,17 @@ create table if not exists audit_log_objects(
     column_name text,
     old_data text,
     new_data text
+);
+
+-- todo: consider partitioning
+drop table if exists audit_log_relations;
+create table if not exists audit_log_relations(
+    identity text default null,
+    operation text not null,
+    event_time timestamptz default now(),
+    table_name text not null,
+    parent text,
+    child text
 );
 
 
@@ -47,6 +58,46 @@ create or replace function update_audit_log_objects()
             insert into audit_log_objects (identity, operation, table_name, row_id, column_name, old_data, new_data)
                 values (session_identity, TG_OP, table_name, OLD.row_id, null, null, null);
         end if;
+        return new;
+    end;
+$$ language plpgsql;
+
+
+drop function if exists update_audit_log_relations() cascade;
+create or replace function update_audit_log_relations()
+    returns trigger as $$
+    declare table_name text;
+    declare parent text;
+    declare child text;
+    declare session_identity text;
+    begin
+        session_identity := current_setting('session.identity', 't');
+        table_name := TG_TABLE_NAME::text;
+        if TG_OP = 'INSERT' then
+            if table_name = 'group_memberships' then
+                parent := NEW.group_name;
+                child := NEW.group_member_name;
+            elsif table_name = 'group_moderators' then
+                parent := NEW.group_name;
+                child := NEW.group_moderator_name;
+            elsif table_name = 'capabilities_http_grants' then
+                parent := NEW.capability_name;
+                child := NEW.capability_http_method || ',' || NEW.capability_uri_pattern;
+            end if;
+        elsif TG_OP = 'DELETE' then
+            if table_name = 'group_memberships' then
+                parent := OLD.group_name;
+                child := OLD.group_member_name;
+            elsif table_name = 'group_moderators' then
+                parent := OLD.group_name;
+                child := OLD.group_moderator_name;
+            elsif table_name = 'capabilities_http_grants' then
+                parent := OLD.capability_name;
+                child := OLD.capability_http_method || ',' || OLD.capability_uri_pattern;
+            end if;
+        end if;
+        insert into audit_log_relations(identity, operation, table_name, parent, child)
+            values (session_identity, TG_OP, table_name, parent, child);
         return new;
     end;
 $$ language plpgsql;
@@ -321,7 +372,11 @@ create table if not exists group_memberships(
     group_member_name text not null references groups (group_name) on delete cascade,
     unique (group_name, group_member_name)
 );
--- new audit table and func
+
+
+create trigger group_memberships_audit after update or insert or delete on group_memberships
+    for each row execute procedure update_audit_log_relations();
+
 
 drop function if exists group_memberships_immutability() cascade;
 create or replace function group_memberships_immutability()
@@ -496,7 +551,10 @@ create table if not exists group_moderators(
     group_moderator_name text not null references groups (group_name) on delete cascade,
     unique (group_name, group_moderator_name)
 );
--- new audit table and func
+
+
+create trigger group_moderators_audit after update or insert or delete on group_moderators
+    for each row execute procedure update_audit_log_relations();
 
 
 drop function if exists group_moderators_immutability() cascade;
@@ -605,9 +663,9 @@ create table capabilities_http_grants(
     capability_uri_pattern text not null -- string or regex referring to a set of resources
 );
 
--- consider using relation_audit_log
---create trigger capabilities_http_grants_audit after update or insert or delete on capabilities_http_grants
-  --  for each row execute procedure update_audit_log_objects();
+
+create trigger capabilities_http_grants_audit after update or insert or delete on capabilities_http_grants
+    for each row execute procedure update_audit_log_relations();
 
 
 drop function if exists capabilities_http_grants_immutability() cascade;

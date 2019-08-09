@@ -501,6 +501,7 @@ create or replace function test_audit()
         select row_id from persons where person_id = pid into rid;
         update persons set person_activated = 'f' where person_id = pid;
         msg := 'audit_log does not work';
+        -- todo: redo this, add relations audit table
         --assert (select old_data from audit_log
           --      where row_id = rid and column_name = 'person_activated') = 'true', msg;
         --assert (select new_data from audit_log
@@ -643,6 +644,7 @@ create or replace function test_cascading_deletes(keep_data boolean default 'fal
         delete from persons;
         delete from groups;
         delete from audit_log_objects;
+        delete from audit_log_relations;
         delete from capabilities_http;
         return true;
     end;
