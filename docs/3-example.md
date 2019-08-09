@@ -299,7 +299,7 @@ update capabilities_http_grants set capability_uri_pattern = '/art/(.*)' where c
 Then using the audit log table, one can identify this case, and many others:
 
 ```txt
-tsd_idp=> select * from audit_log;
+tsd_idp=> select * from audit_log_objects;
           event_time           |        table_name        |                row_id                |      column_name       |       old_data       | new_data
 -------------------------------+--------------------------+--------------------------------------+------------------------+----------------------+-----------
  2019-07-25 15:43:35.868261+02 | capabilities_http_grants | d5d080e0-a324-445a-8565-21e4b056289d | capability_uri_pattern | /art/surrealism/(.*) | /art/(.*)

@@ -14,6 +14,7 @@ group_moderators
 capabilities_http
 capabilities_http_grants
 audit_log_objects
+audit_log_relations
 ```
 
 To investigate the tables more, it is best to install `pg-iam` and inspect the DB descriptions via `\d`.
