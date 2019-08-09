@@ -2,20 +2,21 @@
 create schema if not exists pgiam;
 
 
-drop table if exists audit_log;
-create table if not exists audit_log(
+drop table if exists audit_log_objects;
+create table if not exists audit_log_objects(
     identity text default null,
+    operation text not null,
     event_time timestamptz default now(),
     table_name text not null,
     row_id uuid not null,
-    column_name text not null,
+    column_name text,
     old_data text,
     new_data text
 );
 
 
-drop function if exists update_audit_log() cascade;
-create or replace function update_audit_log()
+drop function if exists update_audit_log_objects() cascade;
+create or replace function update_audit_log_objects()
     returns trigger as $$
     declare old_data text;
     declare new_data text;
@@ -37,11 +38,15 @@ create or replace function update_audit_log()
         loop
             execute format('select ($1).%s::text', colname) using OLD into old_data;
             execute format('select ($1).%s::text', colname) using NEW into new_data;
-            if old_data != new_data then
-                insert into audit_log (identity, table_name, row_id, column_name, old_data, new_data)
-                    values (session_identity, table_name, OLD.row_id, colname, old_data, new_data);
+            if old_data != new_data or (old_data is null and new_data is not null) then
+                insert into audit_log_objects (identity, operation, table_name, row_id, column_name, old_data, new_data)
+                    values (session_identity, TG_OP, table_name, NEW.row_id, colname, old_data, new_data);
             end if;
         end loop;
+        if TG_OP = 'DELETE' then
+            insert into audit_log_objects (identity, operation, table_name, row_id, column_name, old_data, new_data)
+                values (session_identity, TG_OP, table_name, OLD.row_id, null, null, null);
+        end if;
         return new;
     end;
 $$ language plpgsql;
@@ -64,8 +69,8 @@ create table if not exists persons(
 );
 
 
-create trigger persons_audit after update on persons
-    for each row execute procedure update_audit_log();
+create trigger persons_audit after update or insert or delete on persons
+    for each row execute procedure update_audit_log_objects();
 
 
 drop function if exists person_immutability() cascade;
@@ -139,8 +144,8 @@ create table if not exists users(
 );
 
 
-create trigger users_audit after update on users
-    for each row execute procedure update_audit_log();
+create trigger users_audit after update or insert or delete on users
+    for each row execute procedure update_audit_log_objects();
 
 
 drop function if exists user_immutability() cascade;
@@ -226,8 +231,8 @@ create table if not exists groups(
 );
 
 
-create trigger groups_audit after update on groups
-    for each row execute procedure update_audit_log();
+create trigger groups_audit after update or insert or delete on groups
+    for each row execute procedure update_audit_log_objects();
 
 
 drop function if exists group_deletion() cascade;
@@ -316,7 +321,7 @@ create table if not exists group_memberships(
     group_member_name text not null references groups (group_name) on delete cascade,
     unique (group_name, group_member_name)
 );
-
+-- new audit table and func
 
 drop function if exists group_memberships_immutability() cascade;
 create or replace function group_memberships_immutability()
@@ -491,6 +496,7 @@ create table if not exists group_moderators(
     group_moderator_name text not null references groups (group_name) on delete cascade,
     unique (group_name, group_moderator_name)
 );
+-- new audit table and func
 
 
 drop function if exists group_moderators_immutability() cascade;
@@ -555,8 +561,8 @@ create table if not exists capabilities_http(
 );
 
 
-create trigger capabilities_http_audit after update on capabilities_http
-    for each row execute procedure update_audit_log();
+create trigger capabilities_http_audit after update or insert or delete on capabilities_http
+    for each row execute procedure update_audit_log_objects();
 
 
 drop function if exists capabilities_http_immutability() cascade;
@@ -599,9 +605,9 @@ create table capabilities_http_grants(
     capability_uri_pattern text not null -- string or regex referring to a set of resources
 );
 
-
-create trigger capabilities_http_grants_audit after update on capabilities_http_grants
-    for each row execute procedure update_audit_log();
+-- consider using relation_audit_log
+--create trigger capabilities_http_grants_audit after update or insert or delete on capabilities_http_grants
+  --  for each row execute procedure update_audit_log_objects();
 
 
 drop function if exists capabilities_http_grants_immutability() cascade;
