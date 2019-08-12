@@ -1,7 +1,7 @@
 
 create schema if not exists pgiam;
 
--- todo: consider partitioning
+
 drop table if exists audit_log_objects;
 create table if not exists audit_log_objects(
     identity text default null,
@@ -12,9 +12,17 @@ create table if not exists audit_log_objects(
     column_name text,
     old_data text,
     new_data text
-);
+) partition by list (table_name);
+create table audit_log_objects_persons
+    partition of audit_log_objects for values in ('persons');
+create table audit_log_objects_users
+    partition of audit_log_objects for values in ('users');
+create table audit_log_objects_groups
+    partition of audit_log_objects for values in ('groups');
+create table audit_log_objects_capabilities_http
+    partition of audit_log_objects for values in ('capabilities_http');
 
--- todo: consider partitioning
+
 drop table if exists audit_log_relations;
 create table if not exists audit_log_relations(
     identity text default null,
@@ -23,7 +31,13 @@ create table if not exists audit_log_relations(
     table_name text not null,
     parent text,
     child text
-);
+) partition by list (table_name);
+create table audit_log_relations_group_memberships
+    partition of audit_log_relations for values in ('group_memberships');
+create table audit_log_relations_group_moderators
+    partition of audit_log_relations for values in ('group_moderators');
+create table audit_log_relations_capabilities_http_grants
+    partition of audit_log_relations for values in ('capabilities_http_grants');
 
 
 drop function if exists update_audit_log_objects() cascade;
