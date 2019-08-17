@@ -122,7 +122,7 @@ create table if not exists persons(
     row_id uuid unique not null default gen_random_uuid(),
     person_id uuid unique not null default gen_random_uuid(),
     person_activated boolean not null default 't',
-    person_expiry_date date,
+    person_expiry_date timestamptz,
     person_group text,
     full_name text not null,
     id_number text,
@@ -202,7 +202,7 @@ create table if not exists users(
     person_id uuid not null references persons (person_id) on delete cascade,
     user_id uuid unique not null default gen_random_uuid(),
     user_activated boolean not null default 't',
-    user_expiry_date date,
+    user_expiry_date timestamptz,
     user_name text unique not null,
     user_group text,
     user_metadata json
@@ -286,7 +286,7 @@ create table if not exists groups(
     row_id uuid unique not null default gen_random_uuid(),
     group_id uuid unique not null default gen_random_uuid(),
     group_activated boolean not null default 't',
-    group_expiry_date date,
+    group_expiry_date timestamptz,
     group_name text unique not null,
     group_class text check (group_class in ('primary', 'secondary')),
     group_type text check (group_type in ('person', 'user', 'generic')),
@@ -674,7 +674,11 @@ create table capabilities_http_grants(
     capability_id uuid references capabilities_http (capability_id) on delete cascade,
     capability_name text references capabilities_http (capability_name),
     capability_http_method text not null check (capability_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
-    capability_uri_pattern text not null -- string or regex referring to a set of resources
+    capability_uri_pattern text not null, -- string or regex referring to a set of resources
+    capability_grant_required_groups text[],
+    capability_grant_start_date timestamptz,
+    capability_grant_end_date timestamptz,
+    capability_grant_max_num_usages int
 );
 
 
@@ -936,7 +940,7 @@ create or replace function grp_mems(gn text)
                   group_member_name text,
                   group_primary_member text,
                   group_activated boolean,
-                  group_expiry_date date) as $$
+                  group_expiry_date timestamptz) as $$
     select a.group_name,
            a.group_member_name,
            a.group_primary_member,
