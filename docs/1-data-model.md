@@ -50,3 +50,41 @@ Grants -> HTTP method
     - access control is therefore managed through group membership
 - Grants
     - HTTP grants associate an HTTP method and URI pattern with a named capability
+
+# Group membership graphs
+
+Group memberships are Directed Acyclic Graphs, with the additional restriction that any given node can only have one parent.
+
+The following is therefore allowed:
+
+```txt
+a -> b -> c
+  -> d
+```
+
+While this is not:
+
+```
+a -> b -> c
+  -> d -> c
+```
+
+Such membership graphs allow implementing granular access on resources organised into tree hierarchies as such:
+
+```txt
+folder1
+    /folder2
+        /folder4
+        /folder5
+    /folder3
+```
+
+One can then have the following membership graph to control access to these folders:
+
+```txt
+g1 -> g2 -> g4
+         -> g5
+   -> g3
+```
+
+Where `g1` would have access to `folder1`, `g2` to `folder1`, and `folder2`, `g4` to `folder1`, `folder2`, and `folder4`, and so on.
