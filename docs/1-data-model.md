@@ -64,7 +64,7 @@ a -> b -> c
 
 While this is not:
 
-```
+```txt
 a -> b -> c
   -> d -> c
 ```
