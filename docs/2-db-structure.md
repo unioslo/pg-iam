@@ -48,6 +48,12 @@ user_groups(user_name text)
     {user_name: '', user_groups: []}
 */
 
+user_moderators(user_name text)
+/*
+    Returns:
+    {user_name: '', user_moderators:: []}
+*/
+
 user_capabilities(user_name text, grants boolean)
 /*
     Returns:

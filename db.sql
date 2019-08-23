@@ -168,7 +168,7 @@ create or replace function person_management()
             if OLD.person_group is null then
                 new_pgrp := NEW.person_id || '-group';
                 update persons set person_group = new_pgrp where person_id = NEW.person_id;
-                insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption, group_expiry_date)
+                insert into groups (group_name, group_class, group_type, group_primary_member, group_description, group_expiry_date)
                     values (new_pgrp, 'primary', 'person', NEW.person_id, 'personal group', NEW.person_expiry_date);
             end if;
         elsif (TG_OP = 'DELETE') then
@@ -245,7 +245,7 @@ create or replace function user_management()
             if OLD.user_group is null then
                 new_ugrp := NEW.user_name || '-group';
                 update users set user_group = new_ugrp where user_name = NEW.user_name;
-                insert into groups (group_name, group_class, group_type, group_primary_member, group_desciption)
+                insert into groups (group_name, group_class, group_type, group_primary_member, group_description)
                     values (new_ugrp, 'primary', 'user', NEW.user_name, 'user group');
                 select person_expiry_date from persons where person_id = NEW.person_id into person_exp;
                 if NEW.user_expiry_date is not null then
@@ -291,7 +291,7 @@ create table if not exists groups(
     group_class text check (group_class in ('primary', 'secondary')),
     group_type text check (group_type in ('person', 'user', 'generic')),
     group_primary_member text,
-    group_desciption text,
+    group_description text,
     group_metadata json
 );
 
@@ -550,8 +550,6 @@ create or replace function group_memberships_check_dag_requirements()
         response := NEW.group_member_name || ' is already a member of ' || NEW.group_name;
         assert (select NEW.group_member_name in
             (select group_member_name from group_get_children(NEW.group_name))) = 'f', response;
-        assert (select NEW.group_member_name in
-            (select group_name from group_get_children(NEW.group_name) where group_name != NEW.group_name)) = 'f', response;
         return new;
     end;
 $$ language plpgsql;
@@ -851,6 +849,31 @@ create or replace function user_groups(user_name text)
         select user_group from users where users.user_name = $1 into ugrp;
         select get_memberships(ugrp) into ugroups;
         select json_build_object('user_name', user_name, 'user_groups', ugroups) into data;
+        return data;
+    end;
+$$ language plpgsql;
+
+
+drop function if exists user_moderators(text);
+create or replace function user_moderators(user_name text)
+    returns json as $$
+    declare exst boolean;
+    declare ugrps json;
+    declare mods json;
+    declare data json;
+    begin
+        execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
+        assert exst = 't', 'user does not exist';
+        select user_groups->>'user_groups' from user_groups(user_name) into ugrps;
+        if ugrps is null then
+            mods := '[]'::json;
+        else
+            select json_agg(group_name) from group_moderators
+                where group_moderator_name in
+                (select json_array_elements(user_groups->'user_groups')->>'member_group'
+                from user_groups(user_name)) into mods;
+        end if;
+        select json_build_object('user_name', user_name, 'user_moderators', mods) into data;
         return data;
     end;
 $$ language plpgsql;

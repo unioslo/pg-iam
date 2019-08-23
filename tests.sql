@@ -255,6 +255,12 @@ create or replace function test_group_memeberships_moderators()
         exception when assert_failure then
             raise notice 'group_memberships: cyclicality check works';
         end;
+        begin
+            insert into group_memberships (group_name, group_member_name) values ('p11-admin-group','p11-export-group');
+            assert false;
+        exception when assert_failure then
+            raise notice 'group_memberships: cyclicality check works';
+        end;
         -- immutability
         begin
             update group_memberships set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
@@ -607,6 +613,10 @@ create or replace function test_funcs()
         err := 'group_moderators issue';
         assert data->>'group_name' = 'p11-surrealist-group', err;
         assert data->'group_moderators' is not null, err;
+        -- user_moderators
+        select user_moderators('p11-abtn') into data;
+        assert data->'user_moderators'->>0 = 'p11-surrealist-group', err;
+        err := 'user_moderators issue';
         -- group_member_remove
         select group_member_remove('p11-surrealist-group', 'p11-dali') into ans;
         assert (select count(*) from group_memberships
