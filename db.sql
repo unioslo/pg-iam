@@ -127,7 +127,7 @@ create table if not exists persons(
     full_name text not null,
     id_number text,
     passport_number text,
-    identifiers json,
+    identifiers json, -- e.g. [{k1: v1, k2: v2}, {...}]
     password text,
     otp_secret text,
     email text,
@@ -155,6 +155,29 @@ create or replace function person_immutability()
 $$ language plpgsql;
 create trigger ensure_person_immutability before update on persons
     for each row execute procedure person_immutability();
+
+
+drop function if exists person_uniqueness() cascade;
+create or replace function person_uniqueness()
+    returns trigger as $$
+    declare element jsonb;
+    begin
+        begin
+            for element in select json_array_elements(NEW.identifiers)::jsonb loop
+                if 't' in (select element <@ json_array_elements(identifiers)::jsonb from persons) then
+                    raise integrity_constraint_violation
+                        using message = 'value already contained in identifiers';
+                end if;
+            end loop;
+        exception when invalid_parameter_value then
+            raise exception
+                using message = 'identifiers should be a json array, like [{k,v}, {...}]';
+        end;
+        return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_person_uniqueness before insert on persons
+    for each row execute procedure person_uniqueness();
 
 
 drop function if exists person_management() cascade;
@@ -204,7 +227,7 @@ create table if not exists users(
     user_id uuid unique not null default gen_random_uuid(),
     user_activated boolean not null default 't',
     user_expiry_date timestamptz,
-    user_name text unique not null,
+    user_name text unique not null, -- need unique on (pXX-)name
     user_group text,
     user_metadata json
 );

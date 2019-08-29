@@ -19,6 +19,23 @@ create or replace function test_persons_users_groups()
         assert (select count(*) from persons) = 1, 'person creation issue';
         assert (select count(*) from users) = 2, 'user creation issue';
         assert (select count(*) from groups) = 3, 'group creation issue';
+        -- person identifiers uniqueness
+        begin
+            insert into persons (full_name, identifiers)
+                values ('Piet Mondrian', '[{"k1": 0}, {"k2": 1}]'::json);
+            insert into persons (full_name, identifiers)
+                values ('Piet Mondrian', '[{"k2": 1}]'::json);
+            assert false;
+        exception when others then
+            raise notice 'persons identifiers are ensured to be unique';
+        end;
+        begin
+            insert into person (full_name, identifiers)
+                values ('Jackson Pollock', '{"k3": 99}'::json);
+            assert false;
+        exception when others then
+            raise notice 'persons identifiers are ensured to be json arrays';
+        end;
         -- person attribute immutability
         begin
             update persons set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
