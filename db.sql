@@ -127,6 +127,7 @@ create table if not exists persons(
     full_name text not null,
     id_number text,
     passport_number text,
+    identifiers json,
     password text,
     otp_secret text,
     email text,
