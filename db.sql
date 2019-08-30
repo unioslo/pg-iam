@@ -127,7 +127,7 @@ create table if not exists persons(
     full_name text not null,
     id_number text,
     passport_number text,
-    identifiers json, -- e.g. [{k1: v1, k2: v2}, {...}]
+    identifiers jsonb, -- e.g. [{k1: v1, k2: v2}, {...}]
     password text,
     otp_secret text,
     email text,
@@ -163,8 +163,8 @@ create or replace function person_uniqueness()
     declare element jsonb;
     begin
         begin
-            for element in select json_array_elements(NEW.identifiers)::jsonb loop
-                if 't' in (select element <@ json_array_elements(identifiers)::jsonb from persons) then
+            for element in select jsonb_array_elements(NEW.identifiers) loop
+                if 't' in (select element <@ jsonb_array_elements(identifiers) from persons) then
                     raise integrity_constraint_violation
                         using message = 'value already contained in identifiers';
                 end if;
