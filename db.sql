@@ -120,7 +120,7 @@ $$ language plpgsql;
 drop table if exists persons cascade;
 create table if not exists persons(
     row_id uuid unique not null default gen_random_uuid(),
-    person_id uuid unique not null default gen_random_uuid(),
+    person_id uuid unique not null primary key default gen_random_uuid(),
     person_activated boolean not null default 't',
     person_expiry_date timestamptz,
     person_group text,
@@ -227,7 +227,7 @@ create table if not exists users(
     user_id uuid unique not null default gen_random_uuid(),
     user_activated boolean not null default 't',
     user_expiry_date timestamptz,
-    user_name text unique not null, -- need unique on (pXX-)name
+    user_name text unique not null primary key,
     user_group text,
     user_metadata json
 );
@@ -311,7 +311,7 @@ create table if not exists groups(
     group_id uuid unique not null default gen_random_uuid(),
     group_activated boolean not null default 't',
     group_expiry_date timestamptz,
-    group_name text unique not null,
+    group_name text unique not null primary key,
     group_class text check (group_class in ('primary', 'secondary')),
     group_type text check (group_type in ('person', 'user', 'generic')),
     group_primary_member text,
