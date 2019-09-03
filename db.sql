@@ -131,7 +131,7 @@ create table if not exists persons(
     password text,
     otp_secret text,
     email text,
-    person_metadata json
+    person_metadata jsonb
 );
 
 
