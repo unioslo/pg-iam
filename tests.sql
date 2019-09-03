@@ -7,6 +7,9 @@ create or replace function test_persons_users_groups()
     returns boolean as $$
     declare pid uuid;
     declare num int;
+    declare uid int;
+    declare gid int;
+    declare pgrp text;
     begin
         insert into persons (full_name, person_expiry_date)
             values ('Sarah Conner', '2020-10-01');
@@ -19,6 +22,52 @@ create or replace function test_persons_users_groups()
         assert (select count(*) from persons) = 1, 'person creation issue';
         assert (select count(*) from users) = 2, 'user creation issue';
         assert (select count(*) from groups) = 3, 'group creation issue';
+        -- posix uids
+        select user_posix_uid from users where user_name = 'p66-sconne' into uid;
+        assert (select generate_new_posix_uid() = uid + 1), 'uid generation not monotonically increasing';
+        begin
+            insert into users (person_id, user_name, uid) values (pid, 'p33-sconne', 0);
+            assert false;
+        exception when others then
+            raise notice 'cannot assign uid between 0 and 999, as expected';
+        end;
+        begin
+            insert into users (person_id, user_name, uid) values (pid, 'p33-sconne', 200001);
+            assert false;
+        exception when others then
+            raise notice 'cannot assign uid between 200000 and 220000, as expected';
+        end;
+        begin
+            update users set user_posix_uid = '2000' where user_name = 'p11-sconne';
+            assert false;
+        exception when others then
+            raise info 'uid is immutable';
+        end;
+        -- posix gids
+        select  group_posix_gid from groups where group_name = 'p66-sconne-group' into gid;
+        assert (select generate_new_posix_gid() = gid + 1), 'gid generation not monotonically increasing';
+        select person_group from persons where person_id = pid into pgrp;
+        select group_posix_gid from groups where group_name = pgrp into gid;
+        assert gid is null, 'person groups are being assigned gids';
+        begin
+            insert into groups (group_name, group_type, group_posix_gid)
+                values ('g1', 'generic', 0);
+            assert false;
+        exception when others then
+            raise notice 'cannot assign gid between 0 and 999, as expected';
+        end;
+        begin
+            insert into groups (group_name, group_type, group_posix_gid)
+                values ('g1', 'generic', 200001);
+        exception when others then
+            raise notice 'cannot assign gid between 200000 and 220000, as expected';
+        end;
+        begin
+            update groups set group_posix_gid = '2000' where group_name = 'p11-sconne-group';
+            assert false;
+        exception when others then
+            raise info 'gid is immutable';
+        end;
         -- person identifiers uniqueness
         begin
             insert into persons (full_name, identifiers)

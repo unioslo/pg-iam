@@ -220,6 +220,40 @@ create trigger person_group_trigger after insert or delete or update on persons
     for each row execute procedure person_management();
 
 
+drop function if exists generate_new_posix_id(text, text) cascade;
+create or replace function generate_new_posix_id(table_name text, colum_name text)
+    returns int as $$
+    declare current_max_id int;
+    declare new_id int;
+    begin
+        execute format('select max(%I) from %I',
+            quote_ident(colum_name), quote_ident(table_name))
+            into current_max_id;
+        if current_max_id is null then
+            new_id := 1000;
+        elsif current_max_id >= 0 and current_max_id <= 999 then
+            new_id := 1000;
+        elsif current_max_id >= 200000 and current_max_id <= 220000 then
+            new_id := 220001;
+        else
+            new_id := current_max_id + 1;
+        end if;
+        return new_id;
+    end;
+$$ language plpgsql;
+
+
+drop function if exists generate_new_posix_uid() cascade;
+create or replace function generate_new_posix_uid()
+    returns int as $$
+    declare new_uid int;
+    begin
+        select generate_new_posix_id('users', 'user_posix_uid') into new_uid;
+        return new_uid;
+    end;
+$$ language plpgsql;
+
+
 drop table if exists users cascade;
 create table if not exists users(
     row_id uuid unique not null default gen_random_uuid(),
@@ -229,7 +263,10 @@ create table if not exists users(
     user_expiry_date timestamptz,
     user_name text unique not null primary key,
     user_group text,
-    user_metadata json
+    user_posix_uid int unique
+        check ((user_posix_uid > 999 and user_posix_uid < 200000) or user_posix_uid > 220000)
+        default generate_new_posix_uid(), -- note: can still create holes
+    user_metadata jsonb
 );
 
 
@@ -249,6 +286,8 @@ create or replace function user_immutability()
             raise exception using message = 'user_name is immutable';
         elsif OLD.user_group != NEW.user_group then
             raise exception using message = 'user_group is immutable';
+        elsif OLD.user_posix_uid != NEW.user_posix_uid then
+            raise exception using message = 'user_posix_uid is immutable';
         end if;
     return new;
     end;
@@ -305,6 +344,17 @@ create trigger user_group_trigger after insert or delete or update on users
     for each row execute procedure user_management();
 
 
+drop function if exists generate_new_posix_gid() cascade;
+create or replace function generate_new_posix_gid()
+    returns int as $$
+    declare new_gid int;
+    begin
+        select generate_new_posix_id('groups', 'group_posix_gid') into new_gid;
+        return new_gid;
+    end;
+$$ language plpgsql;
+
+
 drop table if exists groups cascade;
 create table if not exists groups(
     row_id uuid unique not null default gen_random_uuid(),
@@ -316,8 +366,31 @@ create table if not exists groups(
     group_type text check (group_type in ('person', 'user', 'generic')),
     group_primary_member text,
     group_description text,
-    group_metadata json
+    group_posix_gid int unique -- person groups do not have gids
+        check ((group_posix_gid > 999 and group_posix_gid < 200000) or group_posix_gid > 220000),
+    group_metadata jsonb
 );
+
+
+drop function if exists posix_gid() cascade;
+create or replace function posix_gid()
+    returns trigger as $$
+    begin
+        if NEW.group_type != 'person' then
+            if NEW.group_posix_gid is null then
+                -- only auto select if nothing is provided
+                -- to enable the transition historical data
+                -- risk: possibility to generate holes
+                select generate_new_posix_gid() into NEW.group_posix_gid;
+            end if;
+        else
+            NEW.group_posix_gid := null;
+        end if;
+    return new;
+    end;
+$$ language plpgsql;
+create trigger set_posix_gid before insert on groups
+    for each row execute procedure posix_gid();
 
 
 create trigger groups_audit after update or insert or delete on groups
@@ -365,6 +438,8 @@ create or replace function group_immutability()
             raise exception using message = 'group_type is immutable';
         elsif OLD.group_primary_member != NEW.group_primary_member then
             raise exception using message = 'group_primary_member is immutable';
+        elsif OLD.group_posix_gid != NEW.group_posix_gid then
+            raise exception using message = 'group_posix_gid is immutable';
         end if;
     return new;
     end;
