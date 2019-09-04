@@ -860,7 +860,7 @@ $$ language plpgsql;
 
 
 drop function if exists get_memberships(text) cascade;
-create or replace function get_memberships(grp text)
+create or replace function get_memberships(member text, grp text)
     returns json as $$
     declare data json;
     begin
@@ -870,9 +870,10 @@ create or replace function get_memberships(grp text)
                 $2, member_group_name,
                 $3, group_activated,
                 $4, group_expiry_date))
-            from (select member_name, member_group_name from group_get_parents($5))a
+            from (select member_name, member_group_name from group_get_parents($5)
+                  union select %s, %s)a
             join (select group_name, group_activated, group_expiry_date from groups)b
-            on a.member_group_name = b.group_name')
+            on a.member_group_name = b.group_name', quote_literal(member), quote_literal(grp))
             using 'member_name', 'member_group', 'group_activated', 'group_expiry_date', grp
             into data;
         return data;
@@ -892,7 +893,7 @@ create or replace function person_groups(person_id text)
         pid := $1::uuid;
         assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_group from persons where persons.person_id = pid into pgrp;
-        select get_memberships(pgrp) into pgroups;
+        select get_memberships(person_id, pgrp) into pgroups;
         select json_build_object('person_id', person_id, 'person_groups', pgroups) into data;
         return data;
     end;
@@ -946,7 +947,7 @@ create or replace function user_groups(user_name text)
         execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
         assert exst = 't', 'user does not exist';
         select user_group from users where users.user_name = $1 into ugrp;
-        select get_memberships(ugrp) into ugroups;
+        select get_memberships(user_name, ugrp) into ugroups;
         select json_build_object('user_name', user_name, 'user_groups', ugroups) into data;
         return data;
     end;
