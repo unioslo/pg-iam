@@ -68,6 +68,10 @@ create or replace function test_persons_users_groups()
         exception when others then
             raise info 'gid is immutable';
         end;
+        insert into users (person_id, user_name, user_expiry_date, user_group_posix_gid)
+            values (pid, 'p89-sconne', '2019-12-01', 9001);
+        assert (select group_posix_gid from groups where group_name = 'p89-sconne-group') = 9001,
+            'cannot explicitly set user gid';
         -- person identifiers uniqueness
         begin
             insert into persons (full_name, identifiers)

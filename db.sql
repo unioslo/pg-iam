@@ -125,8 +125,6 @@ create table if not exists persons(
     person_expiry_date timestamptz,
     person_group text,
     full_name text not null,
-    id_number text,
-    passport_number text,
     identifiers jsonb, -- e.g. [{k1: v1, k2: v2}, {...}]
     password text,
     otp_secret text,
@@ -266,6 +264,8 @@ create table if not exists users(
     user_posix_uid int unique
         check ((user_posix_uid > 999 and user_posix_uid < 200000) or user_posix_uid > 220000)
         default generate_new_posix_uid(), -- note: can still create holes
+    user_group_posix_gid int
+        check ((user_group_posix_gid > 999 and user_group_posix_gid < 200000) or user_group_posix_gid > 220000),
     user_metadata jsonb
 );
 
@@ -303,13 +303,20 @@ create or replace function user_management()
     declare new_ugrp text;
     declare person_exp date;
     declare user_exp date;
+    declare ugroup_posix_gid int;
     begin
         if (TG_OP = 'INSERT') then
             if OLD.user_group is null then
                 new_ugrp := NEW.user_name || '-group';
                 update users set user_group = new_ugrp where user_name = NEW.user_name;
-                insert into groups (group_name, group_class, group_type, group_primary_member, group_description)
-                    values (new_ugrp, 'primary', 'user', NEW.user_name, 'user group');
+                -- if caller provides user_group_posix_gid then set it, otherwise don't
+                if NEW.user_group_posix_gid is not null then
+                    ugroup_posix_gid := NEW.user_group_posix_gid;
+                else
+                    ugroup_posix_gid := null;
+                end if;
+                insert into groups (group_name, group_class, group_type, group_primary_member, group_description, group_posix_gid)
+                    values (new_ugrp, 'primary', 'user', NEW.user_name, 'user group', ugroup_posix_gid);
                 select person_expiry_date from persons where person_id = NEW.person_id into person_exp;
                 if NEW.user_expiry_date is not null then
                     if NEW.user_expiry_date > person_exp then
