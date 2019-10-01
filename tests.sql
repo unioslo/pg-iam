@@ -607,10 +607,6 @@ create or replace function test_funcs()
         select person_groups(pid::text) into data;
         err := 'person_groups issue';
         assert data->>'person_id' = pid::text, err;
-        assert data->'person_groups'->1->>'member_group' = 'p11-surrealist-group', err;
-        assert data->'person_groups'->1->>'member_name' = pgrp, err;
-        assert data->'person_groups'->1->>'group_activated' = 'true', err;
-        assert data->'person_groups'->1->>'group_expiry_date' is null, err;
         -- person_capabilities
         insert into capabilities_http (
             capability_name, capability_default_claims,
