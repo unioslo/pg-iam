@@ -1107,7 +1107,8 @@ create or replace function group_members(group_name text)
             'activated', gm.group_activated,
             'expiry_date', gm.group_expiry_date))
             from grp_mems($1) gm where gm.group_name != $1 into transitive_data;
-        select json_build_object('direct_members', direct_data,
+        select json_build_object('group_name', group_name,
+                                 'direct_members', direct_data,
                                  'transitive_members', transitive_data,
                                  'ultimate_members', primary_data) into data;
         return data;
