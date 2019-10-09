@@ -288,6 +288,10 @@ create or replace function user_immutability()
             raise exception using message = 'user_group is immutable';
         elsif OLD.user_posix_uid != NEW.user_posix_uid then
             raise exception using message = 'user_posix_uid is immutable';
+        elsif NEW.user_posix_uid is null and NEW.user_posix_uid is not null then
+            raise exception using message = 'user_posix_uid cannot be set to null once set';
+        elsif NEW.user_group_posix_gid is null and OLD.user_group_posix_gid is not null then
+            raise exception using message = 'user_group_posix_gid cannot be set to null once set';
         end if;
     return new;
     end;
@@ -370,7 +374,7 @@ create table if not exists groups(
     group_expiry_date timestamptz,
     group_name text unique not null primary key,
     group_class text check (group_class in ('primary', 'secondary')),
-    group_type text check (group_type in ('person', 'user', 'generic')),
+    group_type text check (group_type in ('person', 'user', 'generic', 'web')),
     group_primary_member text,
     group_description text,
     group_posix_gid int unique -- person groups do not have gids
@@ -383,7 +387,7 @@ drop function if exists posix_gid() cascade;
 create or replace function posix_gid()
     returns trigger as $$
     begin
-        if NEW.group_type != 'person' then
+        if NEW.group_type not in ('person', 'web') then
             if NEW.group_posix_gid is null then
                 -- only auto select if nothing is provided
                 -- to enable the transition historical data
@@ -398,6 +402,21 @@ create or replace function posix_gid()
 $$ language plpgsql;
 create trigger set_posix_gid before insert on groups
     for each row execute procedure posix_gid();
+
+
+drop function if exists sync_posix_gid_to_users() cascade;
+create or replace function sync_posix_gid_to_users()
+    returns trigger as $$
+    begin
+        if NEW.group_type = 'user' then
+            update users set user_group_posix_gid = NEW.group_posix_gid
+                where user_group = NEW.group_name;
+        end if;
+        return new;
+    end;
+$$ language plpgsql;
+create trigger sync_user_group_posix_gid after insert on groups
+    for each row execute procedure sync_posix_gid_to_users();
 
 
 create trigger groups_audit after update or insert or delete on groups
@@ -447,6 +466,8 @@ create or replace function group_immutability()
             raise exception using message = 'group_primary_member is immutable';
         elsif OLD.group_posix_gid != NEW.group_posix_gid then
             raise exception using message = 'group_posix_gid is immutable';
+        elsif NEW.group_posix_gid is null and OLD.group_posix_gid is not null then
+            raise exception using message = 'group_posix_gid cannot be set to null once set';
         end if;
     return new;
     end;

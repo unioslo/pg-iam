@@ -41,7 +41,7 @@ create or replace function test_persons_users_groups()
             update users set user_posix_uid = '2000' where user_name = 'p11-sconne';
             assert false;
         exception when others then
-            raise info 'uid is immutable';
+            raise notice 'uid is immutable';
         end;
         -- posix gids
         select  group_posix_gid from groups where group_name = 'p66-sconne-group' into gid;
@@ -66,12 +66,14 @@ create or replace function test_persons_users_groups()
             update groups set group_posix_gid = '2000' where group_name = 'p11-sconne-group';
             assert false;
         exception when others then
-            raise info 'gid is immutable';
+            raise notice 'gid is immutable';
         end;
         insert into users (person_id, user_name, user_expiry_date, user_group_posix_gid)
             values (pid, 'p89-sconne', '2019-12-01', 9001);
         assert (select group_posix_gid from groups where group_name = 'p89-sconne-group') = 9001,
             'cannot explicitly set user gid';
+        assert (select user_group_posix_gid from users where user_group = 'p89-sconne-group') = 9001,
+            'user group gids are nor being synced to the users table';
         -- person identifiers uniqueness
         begin
             insert into persons (full_name, identifiers)
@@ -164,6 +166,20 @@ create or replace function test_persons_users_groups()
         exception when others then
             raise notice 'group_type immutable';
         end;
+        -- web groups, and their gid life-cycle
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-wonderful-group', 'secondary', 'web');
+        assert (select group_posix_gid from groups where group_name = 'p11-wonderful-group') is null,
+            'web groups are not allowed to not have gids - while they should be';
+        update groups set group_posix_gid = (select max(group_posix_gid) + 1 from groups)
+            where group_name = 'p11-wonderful-group';
+        begin
+            update groups set group_posix_gid = null where group_name = 'p11-wonderful-group';
+            assert false;
+        exception when others then
+            raise notice 'cannot remove gids for web groups - as expected';
+        end;
+        delete from groups where group_name = 'p11-wonderful-group';
         -- states; cascades, constraints
         set session "request.identity" = 'milen';
         update persons set person_activated = 'f';
