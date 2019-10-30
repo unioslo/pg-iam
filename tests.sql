@@ -539,6 +539,16 @@ create or replace function test_capabilities_http()
         exception when assert_failure then
             raise notice 'capabilities_http: group must exist to be referenced in new capability';
         end;
+        -- ability to override group references
+        insert into capabilities_http (capability_name, capability_default_claims,
+                                  capability_required_groups, capability_group_match_method,
+                                  capability_lifetime, capability_description, capability_expiry_date,
+                                  capability_group_existence_check)
+            values ('admin2', '{"role": "admin_user"}',
+                    '{"admin2-group", "very-special-group"}', 'wildcard',
+                    '123', 'bla', current_date, 'f');
+        delete from capabilities_http where capability_name = 'admin2';
+        raise info 'yay';
         select capability_id from capabilities_http where capability_name = 'p11import' into cid;
         insert into capabilities_http_grants (capability_id, capability_name, capability_http_method, capability_uri_pattern)
             values (cid, 'p11import', 'PUT', '/p11/files');

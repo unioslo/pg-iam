@@ -4,7 +4,7 @@ create table if not exists capabilities_http(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid unique not null default gen_random_uuid(),
     capability_name text unique not null,
-    capability_default_claims json,
+    capability_default_claims jsonb,
     capability_required_groups text[] not null,
     capability_group_match_method text not null check (capability_group_match_method in ('exact', 'wildcard')),
     capability_lifetime int not null check (capability_lifetime > 0), -- minutes
@@ -38,6 +38,9 @@ create or replace function capabilities_http_group_check()
     declare new_grp text;
     declare num int;
     begin
+        if NEW.capability_group_existence_check = 'f' then
+            return new;
+        end if;
         for new_grp in select unnest(NEW.capability_required_groups) loop
             select count(*) from groups where group_name like '%' || new_grp || '%' into num;
             assert num > 0, new_grp || ' does not exist';
