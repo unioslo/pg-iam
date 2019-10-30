@@ -548,7 +548,6 @@ create or replace function test_capabilities_http()
                     '{"admin2-group", "very-special-group"}', 'wildcard',
                     '123', 'bla', current_date, 'f');
         delete from capabilities_http where capability_name = 'admin2';
-        raise info 'yay';
         select capability_id from capabilities_http where capability_name = 'p11import' into cid;
         insert into capabilities_http_grants (capability_id, capability_name, capability_http_method, capability_uri_pattern)
             values (cid, 'p11import', 'PUT', '/p11/files');
@@ -588,6 +587,20 @@ create or replace function test_capabilities_http()
         exception when others then
             raise notice 'capabilities_http_grants: capability_name should refernce entry in capabilities_http';
         end;
+        begin
+            select capability_id from capabilities_http where capability_name = 'export' into cid;
+            insert into capabilities_http_grants (capability_id, capability_name, capability_http_method,
+                                                  capability_uri_pattern, capability_grant_required_groups)
+                values (cid, 'export', 'GET', '/(.*)/admin', '{"my-own-crazy-group"}');
+        exception when assert_failure then
+            raise notice 'capabilities_http_grants: required groups need to exist when referenced';
+        end;
+        -- ability to override group references
+        select capability_id from capabilities_http where capability_name = 'export' into cid;
+        insert into capabilities_http_grants (capability_id, capability_name, capability_http_method,
+                                              capability_uri_pattern, capability_grant_required_groups,
+                                              capability_grant_group_existence_check)
+            values (cid, 'export', 'GET', '/(.*)/admin', '{"my-own-crazy-group"}', 'f');
         return true;
     end;
 $$ language plpgsql;

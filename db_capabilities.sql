@@ -65,7 +65,7 @@ create table capabilities_http_grants(
     capability_grant_max_num_usages int,
     capability_grant_group_existence_check boolean default 't'
 );
--- TODO: need to add a check for group existence, with a flag
+
 
 create trigger capabilities_http_grants_audit after update or insert or delete on capabilities_http_grants
     for each row execute procedure update_audit_log_relations();
@@ -82,6 +82,27 @@ create or replace function capabilities_http_grants_immutability()
 $$ language plpgsql;
 create trigger ensure_capabilities_http_grants_immutability before update on capabilities_http_grants
     for each row execute procedure capabilities_http_grants_immutability();
+
+
+drop function if exists capabilities_http_grants_group_check() cascade;
+create or replace function capabilities_http_grants_group_check()
+    returns trigger as $$
+    declare new_grps text[];
+    declare new_grp text;
+    declare num int;
+    begin
+        if NEW.capability_grant_group_existence_check = 'f' then
+            return new;
+        end if;
+        for new_grp in select unnest(NEW.capability_grant_required_groups) loop
+            select count(*) from groups where group_name like '%' || new_grp || '%' into num;
+            assert num > 0, new_grp || ' does not exist';
+        end loop;
+        return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_capabilities_http_grants_group_check before insert or update on capabilities_http_grants
+    for each row execute procedure capabilities_http_grants_group_check();
 
 
 drop function if exists capability_grants(text) cascade;
