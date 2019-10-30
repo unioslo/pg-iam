@@ -9,7 +9,8 @@ create table if not exists capabilities_http(
     capability_group_match_method text not null check (capability_group_match_method in ('exact', 'wildcard')),
     capability_lifetime int not null check (capability_lifetime > 0), -- minutes
     capability_description text not null,
-    capability_expiry_date date
+    capability_expiry_date date,
+    capability_group_existence_check boolean default 't'
 );
 
 
@@ -29,9 +30,7 @@ $$ language plpgsql;
 create trigger ensure_capabilities_http_immutability before update on capabilities_http
     for each row execute procedure capabilities_http_immutability();
 
--- can only use this once we have all groups in iam
--- need a way to disable this temporarily
--- or have a flag in the capability definition
+
 drop function if exists capabilities_http_group_check() cascade;
 create or replace function capabilities_http_group_check()
     returns trigger as $$
@@ -60,12 +59,10 @@ create table capabilities_http_grants(
     capability_grant_required_groups text[],
     capability_grant_start_date timestamptz,
     capability_grant_end_date timestamptz,
-    capability_grant_max_num_usages int
+    capability_grant_max_num_usages int,
+    capability_grant_group_existence_check boolean default 't'
 );
--- need to add a check for group existence, with a flag
--- consider splitting capabilities code into own file
--- since that needs to evolve a bit
-
+-- TODO: need to add a check for group existence, with a flag
 
 create trigger capabilities_http_grants_audit after update or insert or delete on capabilities_http_grants
     for each row execute procedure update_audit_log_relations();
