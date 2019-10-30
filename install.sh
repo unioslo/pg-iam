@@ -27,6 +27,7 @@ _guide="\
 
     Options
     -------
+    --force                 Force reinstallation regardless of existing DB state.
     --del-existing-data     Delete any data found in the pg-iam tables before running tests.
     --keep-test-data        Do not delete test data.
     --setup                 Create the DB schema.
@@ -45,9 +46,29 @@ _guide="\
 
 setup() {
     psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "create extension pgcrypto"
-    psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_identities_groups.sql
-    psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_capabilities.sql
-    echo 'setup complete'
+    if [[ $FORCE == "true" ]]; then
+        psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_identities_groups.sql
+        psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_capabilities.sql
+        exit
+    fi
+    num_persons=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from persons" -At)
+    num_users=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from users" -At)
+    num_groups=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from groups" -At)
+    echo "Persons: $num_persons"
+    echo "Users: $num_users"
+    echo "Groups: $num_groups"
+    read -p 'Do you want to (re)install the persons, users, and groups functionality (thereby dropping existing data)? (y/n) > ' ANS
+    if [[ $ANS == "y" ]]; then
+        psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_identities_groups.sql
+    fi
+    num_caps=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from capabilities_http" -At)
+    num_grants=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from capabilities_http_grants" -At)
+    echo "Capabilities: $num_caps"
+    echo "Grants: $num_grants"
+    read -p 'Do you want to (re)install the capabilities functionality (thereby dropping existing data)? (y/n) > ' ANS
+    if [[ $ANS == "y" ]]; then
+        psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_capabilities.sql
+    fi
 }
 
 sqltest() {
@@ -56,9 +77,11 @@ sqltest() {
 
 DELETE_EXISTING_DATA=false
 KEEP_TEST_DATA=false
+FORCE=false
 
 while (( "$#" )); do
     case $1 in
+        --force)                shift; FORCE=true ;;
         --del-existing-data)    shift; DELETE_EXISTING_DATA=true ;;
         --keep-test-data)       shift; KEEP_TEST_DATA=true ;;
         --setup)                shift; setup; exit 0 ;;
