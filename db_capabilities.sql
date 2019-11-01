@@ -52,15 +52,15 @@ create trigger ensure_capabilities_http_group_check before insert or update on c
     for each row execute procedure capabilities_http_group_check();
 
 
-drop table if exists capabilities_http_grants;
+drop table if exists capabilities_http_grants cascade;
 create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid references capabilities_http (capability_id) on delete cascade,
     capability_name text references capabilities_http (capability_name),
     capability_grant_rank int, -- constraint, model???
     capability_grant_hostname text,
-    capability_http_method text not null check (capability_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
-    capability_uri_pattern text not null, -- string or regex referring to a set of resources
+    capability_grant_http_method text not null check (capability_grant_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
+    capability_grant_uri_pattern text not null, -- string or regex referring to a set of resources
     capability_grant_required_groups text[],
     capability_grant_start_date timestamptz,
     capability_grant_end_date timestamptz,
@@ -115,8 +115,8 @@ create or replace function capability_grants(capability_name text)
         assert (select exists(select 1 from capabilities_http where capabilities_http.capability_name = $1)) = 't',
             'capability_name does not exist';
         select json_agg(json_build_object(
-                    'http_method', capability_http_method,
-                    'uri_pattern', capability_uri_pattern))
+                    'http_method', capability_grant_http_method,
+                    'uri_pattern', capability_grant_uri_pattern))
             from capabilities_http_grants
             where capabilities_http_grants.capability_name = $1 into data;
         return json_build_object('capability_name', capability_name, 'capability_grants', data);

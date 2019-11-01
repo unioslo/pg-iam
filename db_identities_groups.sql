@@ -1,8 +1,29 @@
 
 create schema if not exists pgiam;
 
+\set drop_table_flag `echo "$DROP_TABLES"`
+create or replace function drop_tables(drop_table_flag boolean default 'true')
+    returns boolean as $$
+    declare ans boolean;
+    begin
+        if drop_table_flag = 'true' then
+            raise notice 'DROPPING TABLES';
+            drop table if exists audit_log_objects cascade;
+            drop table if exists audit_log_relations cascade;
+            drop table if exists persons cascade;
+            drop table if exists users cascade;
+            drop table if exists groups cascade;
+            drop table if exists group_memberships cascade;
+            drop table if exists group_moderators cascade;
+        else
+            raise notice 'NOT dropping tables - only functions will be replaced';
+        end if;
+    return true;
+    end;
+$$ language plpgsql;
+select drop_tables(:drop_table_flag);
 
-drop table if exists audit_log_objects;
+
 create table if not exists audit_log_objects(
     identity text default null,
     operation text not null,
@@ -13,17 +34,16 @@ create table if not exists audit_log_objects(
     old_data text,
     new_data text
 ) partition by list (table_name);
-create table audit_log_objects_persons
+create table if not exists audit_log_objects_persons
     partition of audit_log_objects for values in ('persons');
-create table audit_log_objects_users
+create table if not exists audit_log_objects_users
     partition of audit_log_objects for values in ('users');
-create table audit_log_objects_groups
+create table if not exists audit_log_objects_groups
     partition of audit_log_objects for values in ('groups');
-create table audit_log_objects_capabilities_http
+create table if not exists audit_log_objects_capabilities_http
     partition of audit_log_objects for values in ('capabilities_http');
 
 
-drop table if exists audit_log_relations;
 create table if not exists audit_log_relations(
     identity text default null,
     operation text not null,
@@ -32,11 +52,11 @@ create table if not exists audit_log_relations(
     parent text,
     child text
 ) partition by list (table_name);
-create table audit_log_relations_group_memberships
+create table if not exists audit_log_relations_group_memberships
     partition of audit_log_relations for values in ('group_memberships');
-create table audit_log_relations_group_moderators
+create table if not exists audit_log_relations_group_moderators
     partition of audit_log_relations for values in ('group_moderators');
-create table audit_log_relations_capabilities_http_grants
+create table if not exists audit_log_relations_capabilities_http_grants
     partition of audit_log_relations for values in ('capabilities_http_grants');
 
 
@@ -96,7 +116,7 @@ create or replace function update_audit_log_relations()
                 child := NEW.group_moderator_name;
             elsif table_name = 'capabilities_http_grants' then
                 parent := NEW.capability_name;
-                child := NEW.capability_http_method || ',' || NEW.capability_uri_pattern;
+                child := NEW.capability_grant_http_method || ',' || NEW.capability_grant_uri_pattern;
             end if;
         elsif TG_OP = 'DELETE' then
             if table_name = 'group_memberships' then
@@ -107,7 +127,7 @@ create or replace function update_audit_log_relations()
                 child := OLD.group_moderator_name;
             elsif table_name = 'capabilities_http_grants' then
                 parent := OLD.capability_name;
-                child := OLD.capability_http_method || ',' || OLD.capability_uri_pattern;
+                child := OLD.capability_grant_http_method || ',' || OLD.capability_grant_uri_pattern;
             end if;
         end if;
         insert into audit_log_relations(identity, operation, table_name, parent, child)
@@ -117,7 +137,6 @@ create or replace function update_audit_log_relations()
 $$ language plpgsql;
 
 
-drop table if exists persons cascade;
 create table if not exists persons(
     row_id uuid unique not null default gen_random_uuid(),
     person_id uuid unique not null primary key default gen_random_uuid(),
@@ -218,7 +237,9 @@ create trigger person_group_trigger after insert or delete or update on persons
     for each row execute procedure person_management();
 
 
-drop function if exists generate_new_posix_id(text, text) cascade;
+-- cannot drop this since default value of column depends on it
+-- so we always only replace it, unless all tables are dropped
+-- in which case we will recreate the default value anyways
 create or replace function generate_new_posix_id(table_name text, colum_name text)
     returns int as $$
     declare current_max_id int;
@@ -241,7 +262,9 @@ create or replace function generate_new_posix_id(table_name text, colum_name tex
 $$ language plpgsql;
 
 
-drop function if exists generate_new_posix_uid() cascade;
+-- cannot drop this since default value of column depends on it
+-- so we always only replace it, unless all tables are dropped
+-- in which case we will recreate the default value anyways
 create or replace function generate_new_posix_uid()
     returns int as $$
     declare new_uid int;
@@ -252,7 +275,6 @@ create or replace function generate_new_posix_uid()
 $$ language plpgsql;
 
 
-drop table if exists users cascade;
 create table if not exists users(
     row_id uuid unique not null default gen_random_uuid(),
     person_id uuid not null references persons (person_id) on delete cascade,
@@ -354,8 +376,9 @@ $$ language plpgsql;
 create trigger user_group_trigger after insert or delete or update on users
     for each row execute procedure user_management();
 
-
-drop function if exists generate_new_posix_gid() cascade;
+-- cannot drop this since default value of column depends on it
+-- so we always only replace it, unless all tables are dropped
+-- in which case we will recreate the default value anyways
 create or replace function generate_new_posix_gid()
     returns int as $$
     declare new_gid int;
@@ -366,7 +389,6 @@ create or replace function generate_new_posix_gid()
 $$ language plpgsql;
 
 
-drop table if exists groups cascade;
 create table if not exists groups(
     row_id uuid unique not null default gen_random_uuid(),
     group_id uuid unique not null default gen_random_uuid(),
@@ -507,7 +529,6 @@ create trigger group_management_trigger before update on groups
     for each row execute procedure group_management();
 
 
-drop table if exists group_memberships cascade;
 create table if not exists group_memberships(
     group_name text not null references groups (group_name) on delete cascade,
     group_member_name text not null references groups (group_name) on delete cascade,
@@ -541,7 +562,7 @@ create or replace view pgiam.first_order_members as
     where gm.group_member_name = g.group_name;
 
 
-drop table if exists pgiam.members cascade;
+drop table if exists pgiam.members cascade; -- accounting table for temp data
 create table if not exists pgiam.members(group_name text, group_member_name text, group_class text, group_primary_member text);
 drop function if exists group_get_children(text) cascade;
 create or replace function group_get_children(parent_group text)
@@ -614,7 +635,7 @@ create or replace function group_get_children(parent_group text)
 $$ language plpgsql;
 
 
-drop table if exists pgiam.memberships cascade;
+drop table if exists pgiam.memberships cascade; -- accounting table for temp data
 create table if not exists pgiam.memberships(member_name text, member_group_name text);
 drop function if exists group_get_parents(text) cascade;
 create or replace function group_get_parents(child_group text)
@@ -684,7 +705,6 @@ create trigger group_memberships_dag_requirements_trigger before insert on group
     for each row execute procedure group_memberships_check_dag_requirements();
 
 
-drop table if exists group_moderators cascade;
 create table if not exists group_moderators(
     group_name text not null references groups (group_name) on delete cascade,
     group_moderator_name text not null references groups (group_name) on delete cascade,

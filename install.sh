@@ -28,6 +28,7 @@ _guide="\
     Options
     -------
     --force                 Force reinstallation regardless of existing DB state.
+    --only-relace-functions Ensure tables are not dropped when installing new function definitions.
     --del-existing-data     Delete any data found in the pg-iam tables before running tests.
     --keep-test-data        Do not delete test data.
     --setup                 Create the DB schema.
@@ -78,15 +79,17 @@ sqltest() {
 DELETE_EXISTING_DATA=false
 KEEP_TEST_DATA=false
 FORCE=false
+DROP_TABLES=true
 
 while (( "$#" )); do
     case $1 in
-        --force)                shift; FORCE=true ;;
-        --del-existing-data)    shift; DELETE_EXISTING_DATA=true ;;
-        --keep-test-data)       shift; KEEP_TEST_DATA=true ;;
-        --setup)                shift; setup; exit 0 ;;
-        --test)                 shift; sqltest; exit 0 ;;
-        --guide)                printf "%s\n" "$_guide"; exit 0 ;;
+        --force)                    shift; FORCE=true ;;
+        --only-relace-functions)    shift; DROP_TABLES=false ;;
+        --del-existing-data)        shift; DELETE_EXISTING_DATA=true ;;
+        --keep-test-data)           shift; KEEP_TEST_DATA=true ;;
+        --setup)                    shift; setup; exit 0 ;;
+        --test)                     shift; sqltest; exit 0 ;;
+        --guide)                    printf "%s\n" "$_guide"; exit 0 ;;
         *) break ;;
     esac
 done
