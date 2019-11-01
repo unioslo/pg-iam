@@ -35,13 +35,19 @@ _guide="\
     --test                  Run SQL tests to ensure the DB schema works.
     --guide                 Print this guide
 
-    Example
-    -------
+    Examples
+    --------
 
-    ./install.sh --setup
+    # basic
+    ./install.sh --setup # and follow interactive steps
+    ./install.sh --test
+
+    # fine tune what happens to test data
     ./install.sh --keep-test-data --test
-    # do some interactive work in the DB, and then remove the data
     ./install.sh --del-existing-data --test
+
+    # only update function definitions
+    ./install.sh --only-relace-functions --setup
 
 "
 
