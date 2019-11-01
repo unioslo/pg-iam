@@ -27,13 +27,13 @@ _guide="\
 
     Options
     -------
-    --force                 Force reinstallation regardless of existing DB state.
-    --only-relace-functions Ensure tables are not dropped when installing new function definitions.
-    --del-existing-data     Delete any data found in the pg-iam tables before running tests.
-    --keep-test-data        Do not delete test data.
-    --setup                 Create the DB schema.
-    --test                  Run SQL tests to ensure the DB schema works.
-    --guide                 Print this guide
+    --force                     Force reinstallation regardless of existing DB state.
+    --only-replace-functions    Ensure tables are not dropped when installing new function definitions.
+    --del-existing-data         Delete any data found in the pg-iam tables before running tests.
+    --keep-test-data            Do not delete test data.
+    --setup                     Create the DB schema.
+    --test                      Run SQL tests to ensure the DB schema works.
+    --guide                     Print this guide
 
     Examples
     --------
@@ -47,7 +47,7 @@ _guide="\
     ./install.sh --del-existing-data --test
 
     # only update function definitions
-    ./install.sh --only-relace-functions --setup
+    ./install.sh --only-replace-functions --setup
 
 "
 
@@ -64,7 +64,11 @@ setup() {
     echo "Persons: $num_persons"
     echo "Users: $num_users"
     echo "Groups: $num_groups"
-    read -p 'Do you want to (re)install the persons, users, and groups functionality (thereby dropping existing data)? (y/n) > ' ANS
+    if [[ $DROP_TABLES == "true" ]]; then
+        read -p 'Do you want to (re)install the persons, users, and groups tables and functions (thereby dropping data)? (y/n) > ' ANS
+    else
+        read -p 'Do you want to (re)install the persons, users, and groups functions (no table data will be lost)? (y/n) > ' ANS
+    fi
     if [[ $ANS == "y" ]]; then
         psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_identities_groups.sql
     fi
@@ -90,7 +94,7 @@ DROP_TABLES=true
 while (( "$#" )); do
     case $1 in
         --force)                    shift; FORCE=true ;;
-        --only-relace-functions)    shift; DROP_TABLES=false ;;
+        --only-replace-functions)   shift; DROP_TABLES=false ;;
         --del-existing-data)        shift; DELETE_EXISTING_DATA=true ;;
         --keep-test-data)           shift; KEEP_TEST_DATA=true ;;
         --setup)                    shift; setup; exit 0 ;;
