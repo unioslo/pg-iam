@@ -57,7 +57,8 @@ create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid references capabilities_http (capability_id) on delete cascade,
     capability_name text references capabilities_http (capability_name),
-    capability_hostname text,
+    capability_grant_rank int, -- constraint, model???
+    capability_grant_hostname text,
     capability_http_method text not null check (capability_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
     capability_uri_pattern text not null, -- string or regex referring to a set of resources
     capability_grant_required_groups text[],
