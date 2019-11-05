@@ -3,7 +3,7 @@ drop table if exists capabilities_http cascade;
 create table if not exists capabilities_http(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid unique not null default gen_random_uuid(),
-    capability_name text unique not null,
+    capability_name text unique not null primary key,
     capability_default_claims jsonb,
     capability_required_groups text[] not null,
     capability_group_match_method text not null check (capability_group_match_method in ('exact', 'wildcard')),
@@ -55,13 +55,13 @@ create trigger ensure_capabilities_http_group_check before insert or update on c
 drop table if exists capabilities_http_grants cascade;
 create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
-    capability_id uuid references capabilities_http (capability_id) on delete cascade,
-    capability_name text references capabilities_http (capability_name),
-    capability_grant_id uuid not null default gen_random_uuid(),
+    capability_id uuid references capabilities_http (capability_id) on delete cascade, -- remove this
+    capability_name text references capabilities_http (capability_name), -- add on delete cascade here
+    capability_grant_id uuid not null default gen_random_uuid() primary key,
     capability_grant_hostname text not null,
     capability_grant_namespace text not null,
     capability_grant_http_method text not null check (capability_grant_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
-    capability_grant_rank int,
+    capability_grant_rank int check (capability_grant_rank > 0),
     capability_grant_uri_pattern text not null, -- string or regex referring to a set of resources
     capability_grant_required_groups text[],
     capability_grant_start_date timestamptz,
@@ -90,14 +90,15 @@ create or replace function generate_grant_rank()
             and capability_grant_namespace = NEW.capability_grant_namespace
             and capability_grant_http_method = NEW.capability_grant_http_method
             into current_max;
-        if NEW.capability_grant_rank is not null then
-            return new;
-        else
-            if num = 1 then -- because trigger runs after insert of first entry
+        if num = 1 then -- because trigger runs after insert of first entry
                 new_rank := 1;
             else
                 new_rank := current_max + 1;
-            end if;
+        end if;
+        if NEW.capability_grant_rank is not null then
+            assert NEW.capability_grant_rank = new_rank,
+                'grant rank values must be monotonically increasing';
+            return new;
         end if;
         update capabilities_http_grants set capability_grant_rank = new_rank
             where capability_grant_id = NEW.capability_grant_id;
@@ -170,6 +171,12 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
         select capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
             from capabilities_http_grants where capability_grant_id = target_id
             into target_hostname, target_namespace, target_http_method;
+        assert new_grant_rank - (select max(capability_grant_rank) from capabilities_http_grants
+                                where capability_grant_rank < target_curr_rank
+                                and capability_grant_hostname = target_hostname
+                                and capability_grant_namespace = target_namespace
+                                and capability_grant_http_method = target_http_method) <= 1,
+            'grant rank values must be monotonically increasing';
         update capabilities_http_grants set capability_grant_rank = null
             where capability_grant_id = target_id;
         if new_grant_rank < target_curr_rank then
@@ -207,9 +214,18 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
     end;
 $$ language plpgsql;
 
--- expose in pypg-iam
--- grant_add
--- grant_remove
+
+-- rather have a trigger on delete to clean up
+drop function if exists grant_delete(text) cascade;
+create or replace function grant_delete(grant_id text)
+    returns json as $$
+    begin
+        -- get last rank
+        -- set target to last in ranking
+        -- delete grant
+        return '{"message": "grant deleted"}';
+    end;
+$$ language plpgsql;
 
 
 drop function if exists capability_grants(text) cascade;
