@@ -588,6 +588,7 @@ create or replace function test_capabilities_http()
         exception when assert_failure then
             raise notice 'capabilities_http_grants: capability_id immutable';
         end;
+        -- todo test capability_grant_id immutability
         -- referential constraints
         begin
             insert into capabilities_http_grants (capability_id, capability_name,
@@ -635,6 +636,11 @@ create or replace function test_capabilities_http()
                                               'GET', '/(.*)/admin',
                                               '{"my-own-crazy-group"}', 'f');
         return true;
+
+        -- grant ranking
+        -- reject if graant id not found
+        -- correct reorder
+        -- irrelevant rankings not affected (within and between rank sets)
     end;
 $$ language plpgsql;
 
