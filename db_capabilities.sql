@@ -70,6 +70,25 @@ create table capabilities_http_grants(
     unique (capability_grant_hostname, capability_grant_namespace, capability_grant_http_method, capability_grant_rank)
 );
 
+drop function if exists check_grant_deletes() cascade;
+create or replace function check_grant_delete()
+    returns trigger as $$
+    declare current_max int;
+    begin
+        select max(capability_grant_rank) from capabilities_http_grants
+            where capability_grant_hostname = OLD.capability_grant_hostname
+            and capability_grant_namespace = OLD.capability_grant_namespace
+            and capability_grant_http_method = OLD.capability_grant_http_method
+            into current_max;
+        assert OLD.capability_grant_rank = current_max,
+            'use the capability_grant_delete(capability_grant_id) function to delete instead';
+        return old;
+    end;
+$$ language plpgsql;
+create trigger check_capabilities_http_grants_deletes before delete on capabilities_http_grants
+    for each row execute procedure check_grant_delete();
+
+
 
 drop function if exists generate_grant_rank() cascade;
 create or replace function generate_grant_rank()

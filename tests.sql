@@ -639,7 +639,7 @@ create or replace function test_capabilities_http()
         -- reject if grant id not found
         -- correct reorder
         -- irrelevant rankings not affected (within and between rank sets)
-        -- deletes
+        -- deletes (keep rank consistent, and prevent direct deletes unless last rank)
     end;
 $$ language plpgsql;
 
