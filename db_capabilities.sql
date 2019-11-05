@@ -57,17 +57,55 @@ create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid references capabilities_http (capability_id) on delete cascade,
     capability_name text references capabilities_http (capability_name),
-    -- grant_id ?
-    capability_grant_rank int, -- constraint, model???
-    capability_grant_hostname text,
+    capability_grant_id uuid not null default gen_random_uuid(),
+    capability_grant_hostname text not null,
+    capability_grant_namespace text not null,
     capability_grant_http_method text not null check (capability_grant_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
+    capability_grant_rank int,
     capability_grant_uri_pattern text not null, -- string or regex referring to a set of resources
     capability_grant_required_groups text[],
     capability_grant_start_date timestamptz,
     capability_grant_end_date timestamptz,
     capability_grant_max_num_usages int,
-    capability_grant_group_existence_check boolean default 't'
+    capability_grant_group_existence_check boolean default 't',
+    unique (capability_grant_hostname, capability_grant_namespace, capability_grant_http_method, capability_grant_rank)
 );
+
+
+drop function if exists generate_grant_rank() cascade;
+create or replace function generate_grant_rank()
+    returns trigger as $$
+    declare current_max int;
+    declare num int;
+    declare new_rank int;
+    begin
+        -- check if first grant for (host, namespace, method) combination
+        select count(*) from capabilities_http_grants
+            where capability_grant_hostname = NEW.capability_grant_hostname
+            and capability_grant_namespace = NEW.capability_grant_namespace
+            and capability_grant_http_method = NEW.capability_grant_http_method
+            into num;
+        select max(capability_grant_rank) from capabilities_http_grants
+            where capability_grant_hostname = NEW.capability_grant_hostname
+            and capability_grant_namespace = NEW.capability_grant_namespace
+            and capability_grant_http_method = NEW.capability_grant_http_method
+            into current_max;
+        if NEW.capability_grant_rank is not null then
+            return new;
+        else
+            if num = 1 then -- because trigger runs after insert of first entry
+                new_rank := 1;
+            else
+                new_rank := current_max + 1;
+            end if;
+        end if;
+        update capabilities_http_grants set capability_grant_rank = new_rank
+            where capability_grant_id = NEW.capability_grant_id;
+        return new;
+    end;
+$$ language plpgsql;
+create trigger capabilities_http_grants_grant_generation after insert on capabilities_http_grants
+    for each row execute procedure generate_grant_rank();
 
 
 create trigger capabilities_http_grants_audit after update or insert or delete on capabilities_http_grants
@@ -80,6 +118,7 @@ create or replace function capabilities_http_grants_immutability()
     begin
         assert OLD.row_id = NEW.row_id, 'row_id is immutable';
         assert OLD.capability_id = NEW.capability_id, 'capability_id is immutable';
+        -- add grant id
     return new;
     end;
 $$ language plpgsql;
@@ -106,6 +145,16 @@ create or replace function capabilities_http_grants_group_check()
 $$ language plpgsql;
 create trigger ensure_capabilities_http_grants_group_check before insert or update on capabilities_http_grants
     for each row execute procedure capabilities_http_grants_group_check();
+
+
+-- expose in pypg-iam
+drop function if exists capability_grants_rank_swap(text, text) cascade;
+drop function if exists capability_grants_rank_up(text) cascade;
+drop function if exists capability_grants_rank_down(text) cascade;
+
+
+-- grant_add
+-- grant_remove
 
 
 drop function if exists capability_grants(text) cascade;
