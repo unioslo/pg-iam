@@ -159,6 +159,7 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
     declare curr_rank int;
     declare curr_id uuid;
     declare new_val int;
+    declare current_max int;
     begin
         target_id := grant_id::uuid;
         assert target_id in (select capability_grant_id from capabilities_http_grants),
@@ -171,11 +172,12 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
         select capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
             from capabilities_http_grants where capability_grant_id = target_id
             into target_hostname, target_namespace, target_http_method;
-        assert new_grant_rank - (select max(capability_grant_rank) from capabilities_http_grants
-                                where capability_grant_rank < target_curr_rank
-                                and capability_grant_hostname = target_hostname
-                                and capability_grant_namespace = target_namespace
-                                and capability_grant_http_method = target_http_method) <= 1,
+        select max(capability_grant_rank) from capabilities_http_grants
+            where capability_grant_hostname = target_hostname
+            and capability_grant_namespace = target_namespace
+            and capability_grant_http_method = target_http_method
+            into current_max;
+        assert new_grant_rank - current_max <= 1,
             'grant rank values must be monotonically increasing';
         update capabilities_http_grants set capability_grant_rank = null
             where capability_grant_id = target_id;
@@ -215,15 +217,28 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
 $$ language plpgsql;
 
 
--- rather have a trigger on delete to clean up
-drop function if exists grant_delete(text) cascade;
-create or replace function grant_delete(grant_id text)
-    returns json as $$
+drop function if exists capability_grant_delete(text) cascade;
+create or replace function capability_grant_delete(grant_id text)
+    returns boolean as $$
+    declare target_id uuid;
+    declare target_rank int;
+    declare target_hostname text;
+    declare target_namespace text;
+    declare target_http_method text;
+    declare ans boolean;
     begin
-        -- get last rank
-        -- set target to last in ranking
-        -- delete grant
-        return '{"message": "grant deleted"}';
+        target_id := grant_id::uuid;
+        select capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
+            from capabilities_http_grants where capability_grant_id = target_id
+            into target_hostname, target_namespace, target_http_method;
+        select max(capability_grant_rank) from capabilities_http_grants
+            where capability_grant_hostname = target_hostname
+            and capability_grant_namespace = target_namespace
+            and capability_grant_http_method = target_http_method
+            into target_rank;
+        select capability_grant_rank_set(target_id::text, target_rank) into ans;
+        delete from capabilities_http_grants where capability_grant_id = target_id;
+        return true;
     end;
 $$ language plpgsql;
 
