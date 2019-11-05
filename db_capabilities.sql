@@ -152,16 +152,24 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
     returns boolean as $$
     declare target_id uuid;
     declare target_curr_rank int;
+    declare target_hostname text;
+    declare target_namespace text;
+    declare target_http_method text;
     declare curr_rank int;
     declare curr_id uuid;
     declare new_val int;
     begin
         target_id := grant_id::uuid;
+        assert target_id in (select capability_grant_id from capabilities_http_grants),
+            'grant_id not found';
         select capability_grant_rank from capabilities_http_grants
             where capability_grant_id = target_id into target_curr_rank;
         if new_grant_rank = target_curr_rank then
             return true;
         end if;
+        select capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
+            from capabilities_http_grants where capability_grant_id = target_id
+            into target_hostname, target_namespace, target_http_method;
         update capabilities_http_grants set capability_grant_rank = null
             where capability_grant_id = target_id;
         if new_grant_rank < target_curr_rank then
@@ -169,6 +177,9 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
                 select capability_grant_id, capability_grant_rank from capabilities_http_grants
                 where capability_grant_rank >= new_grant_rank
                 and capability_grant_rank < target_curr_rank
+                and capability_grant_hostname = target_hostname
+                and capability_grant_namespace = target_namespace
+                and capability_grant_http_method = target_http_method
                 order by capability_grant_rank desc
             loop
                 new_val := curr_rank + 1;
@@ -180,6 +191,9 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
                 select capability_grant_id, capability_grant_rank from capabilities_http_grants
                 where capability_grant_rank <= new_grant_rank
                 and capability_grant_rank > target_curr_rank
+                and capability_grant_hostname = target_hostname
+                and capability_grant_namespace = target_namespace
+                and capability_grant_http_method = target_http_method
                 order by capability_grant_rank asc
             loop
                 new_val := curr_rank - 1;
