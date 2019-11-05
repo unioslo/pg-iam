@@ -55,8 +55,7 @@ create trigger ensure_capabilities_http_group_check before insert or update on c
 drop table if exists capabilities_http_grants cascade;
 create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
-    capability_id uuid references capabilities_http (capability_id) on delete cascade, -- remove this
-    capability_name text references capabilities_http (capability_name), -- add on delete cascade here
+    capability_name text references capabilities_http (capability_name)on delete cascade,
     capability_grant_id uuid not null default gen_random_uuid() primary key,
     capability_grant_hostname text not null,
     capability_grant_namespace text not null,
@@ -118,7 +117,6 @@ create or replace function capabilities_http_grants_immutability()
     returns trigger as $$
     begin
         assert OLD.row_id = NEW.row_id, 'row_id is immutable';
-        assert OLD.capability_id = NEW.capability_id, 'capability_id is immutable';
         assert OLD.capability_grant_id = NEW.capability_grant_id, 'capability_grant_id is immutable'; -- todo test
     return new;
     end;

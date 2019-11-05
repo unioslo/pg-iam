@@ -548,31 +548,28 @@ create or replace function test_capabilities_http()
                     '{"admin2-group", "very-special-group"}', 'wildcard',
                     '123', 'bla', current_date, 'f');
         delete from capabilities_http where capability_name = 'admin2';
-        select capability_id from capabilities_http where capability_name = 'p11import' into cid;
-        insert into capabilities_http_grants (capability_id, capability_name,
+        insert into capabilities_http_grants (capability_name,
                                               capability_grant_hostname, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
-                                      values (cid, 'p11import',
+                                      values ('p11import',
                                               'api.com', 'files',
                                               'PUT', '/p11/files');
-        select capability_id from capabilities_http where capability_name = 'export' into cid;
-        insert into capabilities_http_grants (capability_id, capability_name,
+        insert into capabilities_http_grants (capability_name,
                                               capability_grant_hostname, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
-                                      values (cid, 'export',
+                                      values ('export',
                                               'api.com', 'files',
                                               'GET', '/(.*)/export');
-        select capability_id from capabilities_http where capability_name = 'admin' into cid;
-        insert into capabilities_http_grants (capability_id, capability_name,
+        insert into capabilities_http_grants (capability_name,
                                               capability_grant_hostname, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
-                                      values (cid, 'admin',
+                                      values ('admin',
                                               'api.com', 'files',
                                               'DELETE', '/(.*)/files');
-        insert into capabilities_http_grants (capability_id, capability_name,
+        insert into capabilities_http_grants (capability_name,
                                               capability_grant_hostname, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
-                                      values (cid, 'admin',
+                                      values ('admin',
                                               'api.com', 'files',
                                               'GET', '/(.*)/admin');
         -- immutability
@@ -582,16 +579,10 @@ create or replace function test_capabilities_http()
         exception when assert_failure then
             raise notice 'capabilities_http_grants: row_id immutable';
         end;
-        begin
-            update capabilities_http_grants set capability_id = '35b77cf9-0a6f-49d7-83df-e388d75c4b0b';
-            assert false;
-        exception when assert_failure then
-            raise notice 'capabilities_http_grants: capability_id immutable';
-        end;
         -- todo test capability_grant_id immutability
         -- referential constraints
         begin
-            insert into capabilities_http_grants (capability_id, capability_name,
+            insert into capabilities_http_grants (capability_name,
                                                   capability_grant_hostname, capability_grant_namespace,
                                                   capability_grant_http_method, capability_grant_uri_pattern)
                                           values ('35b77cf9-0a6f-49d7-83df-e388d75c4b0b', 'admin',
@@ -602,10 +593,10 @@ create or replace function test_capabilities_http()
             raise notice 'capabilities_http_grants: capability_id should reference entry in capabilities_http';
         end;
         begin
-            insert into capabilities_http_grants (capability_id, capability_name,
+            insert into capabilities_http_grants (capability_name,
                                                   capability_grant_hostname, capability_grant_namespace,
                                                   capability_grant_http_method, capability_grant_uri_pattern)
-                                          values (cid, 'admin2',
+                                          values ('admin2',
                                                   'api.com', 'files',
                                                   'GET', '/(.*)/admin');
             assert false;
@@ -614,11 +605,11 @@ create or replace function test_capabilities_http()
         end;
         begin
             select capability_id from capabilities_http where capability_name = 'export' into cid;
-            insert into capabilities_http_grants (capability_id, capability_name,
+            insert into capabilities_http_grants (capability_name,
                                                   capability_grant_hostname, capability_grant_namespace,
                                                   capability_grant_http_method, capability_grant_uri_pattern,
                                                   capability_grant_required_groups)
-                                          values (cid, 'export',
+                                          values ('export',
                                                   'api.com', 'files',
                                                   'GET', '/(.*)/admin',
                                                   '{"my-own-crazy-group"}');
@@ -626,21 +617,24 @@ create or replace function test_capabilities_http()
             raise notice 'capabilities_http_grants: required groups need to exist when referenced';
         end;
         -- ability to override group references
-        select capability_id from capabilities_http where capability_name = 'export' into cid;
-        insert into capabilities_http_grants (capability_id, capability_name,
+        insert into capabilities_http_grants (capability_name,
                                               capability_grant_hostname, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern,
                                               capability_grant_required_groups, capability_grant_group_existence_check)
-                                      values (cid, 'export',
+                                      values ('export',
                                               'api.com', 'files',
                                               'GET', '/(.*)/admin',
                                               '{"my-own-crazy-group"}', 'f');
         return true;
 
         -- grant ranking
-        -- reject if graant id not found
+        -- uniqueness
+        -- natural numbers
+        -- monotonicity
+        -- reject if grant id not found
         -- correct reorder
         -- irrelevant rankings not affected (within and between rank sets)
+        -- deletes
     end;
 $$ language plpgsql;
 
@@ -693,11 +687,10 @@ create or replace function test_funcs()
             values ('p11-art', '{"role": "p11_art_user"}',
                     '{"p11-surrealist-group", "p11-admin-group"}', 'exact',
                     '123', 'bla', current_date);
-        select capability_id from capabilities_http where capability_name = 'p11-art' into cid;
-        insert into capabilities_http_grants (capability_id, capability_name,
+        insert into capabilities_http_grants (capability_name,
                                               capability_grant_hostname, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
-                                      values (cid, 'p11-art',
+                                      values ('p11-art',
                                               'api.com', 'files',
                                              'GET', '/(.*)/art');
         select person_capabilities(pid::text, 't') into data;
