@@ -118,7 +118,7 @@ create or replace function capabilities_http_grants_immutability()
     begin
         assert OLD.row_id = NEW.row_id, 'row_id is immutable';
         assert OLD.capability_id = NEW.capability_id, 'capability_id is immutable';
-        -- add grant id
+        assert OLD.capability_grant_id = NEW.capability_grant_id, 'capability_grant_id is immutable'; -- todo test
     return new;
     end;
 $$ language plpgsql;
@@ -147,12 +147,53 @@ create trigger ensure_capabilities_http_grants_group_check before insert or upda
     for each row execute procedure capabilities_http_grants_group_check();
 
 
+drop function if exists capability_grant_rank_set(text, int) cascade;
+create or replace function capability_grant_rank_set(grant_id text, new_grant_rank int)
+    returns boolean as $$
+    declare target_id uuid;
+    declare target_curr_rank int;
+    declare curr_rank int;
+    declare curr_id uuid;
+    declare new_val int;
+    begin
+        target_id := grant_id::uuid;
+        select capability_grant_rank from capabilities_http_grants
+            where capability_grant_id = target_id into target_curr_rank;
+        if new_grant_rank = target_curr_rank then
+            return true;
+        end if;
+        update capabilities_http_grants set capability_grant_rank = null
+            where capability_grant_id = target_id;
+        if new_grant_rank < target_curr_rank then
+            for curr_id, curr_rank in
+                select capability_grant_id, capability_grant_rank from capabilities_http_grants
+                where capability_grant_rank >= new_grant_rank
+                and capability_grant_rank < target_curr_rank
+                order by capability_grant_rank desc
+            loop
+                new_val := curr_rank + 1;
+                update capabilities_http_grants set capability_grant_rank = new_val
+                    where capability_grant_id = curr_id;
+            end loop;
+        elsif new_grant_rank > target_curr_rank then
+            for curr_id, curr_rank in
+                select capability_grant_id, capability_grant_rank from capabilities_http_grants
+                where capability_grant_rank <= new_grant_rank
+                and capability_grant_rank > target_curr_rank
+                order by capability_grant_rank asc
+            loop
+                new_val := curr_rank - 1;
+                update capabilities_http_grants set capability_grant_rank = new_val
+                    where capability_grant_id = curr_id;
+            end loop;
+        end if;
+        update capabilities_http_grants set capability_grant_rank = new_grant_rank
+            where capability_grant_id = target_id;
+        return true;
+    end;
+$$ language plpgsql;
+
 -- expose in pypg-iam
-drop function if exists capability_grants_rank_swap(text, text) cascade;
-drop function if exists capability_grants_rank_up(text) cascade;
-drop function if exists capability_grants_rank_down(text) cascade;
-
-
 -- grant_add
 -- grant_remove
 
