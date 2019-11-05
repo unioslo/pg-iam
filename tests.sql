@@ -579,7 +579,12 @@ create or replace function test_capabilities_http()
         exception when assert_failure then
             raise notice 'capabilities_http_grants: row_id immutable';
         end;
-        -- todo test capability_grant_id immutability
+        begin
+            update capabilities_http_grants set capability_grant_id = '35b77cf9-0a6f-49d7-83df-e388d75c4b0b';
+            assert false;
+        exception when assert_failure then
+            raise notice 'capabilities_http_grants: capability_grant_id immutable';
+        end;
         -- referential constraints
         begin
             insert into capabilities_http_grants (capability_name,
