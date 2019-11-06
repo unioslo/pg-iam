@@ -4,13 +4,19 @@
 ```txt
 Persons -----> Users ----> Groups (class:primary,   type:user)
   -----------------------> Groups (class:primary,   type:person)
-                        -> Groups (class:secondary, type:generic)
-                            -> Groups (class:primary or secondary, relations: members, moderators)
+                        -> Groups (class:secondary type:generic,web)
+                            -> Groups (class:primary,secondary,web
+                                       relations: members, moderators)
 
-Capabilities -> Required Groups
+Capabilities -> Name
+             -> Required Groups
              -> Grants (HTTP)
 
-Grants -> HTTP method
+Grants -> Capability Name
+       ->
+       ->
+       ->
+       -> HTTP method
        -> URI pattern
 ```
 
@@ -20,6 +26,7 @@ Grants -> HTTP method
     - `person` groups, class: `primary`, type: `person` and
     - `user` groups, class: `primary`, type: `user` , automatically created, updated, deleted
     - `generic` groups, class: `secondary`, type: `generic`
+    - `generic` groups, class: `secondary`, type: `web`, no posix ids
 - Group-to-group relations:
     - member
         - groups can be members of other groups
@@ -49,7 +56,21 @@ Grants -> HTTP method
     - capabilities are linked to grants on resources
     - access control is therefore managed through group membership
 - Grants
-    - HTTP grants associate an HTTP method and URI pattern with a named capability
+    - HTTP grants are linked to specific capabilities by their names
+    - grant are grouped into sets
+    - grant sets are defined by:
+        - capability name
+        - api hostname
+        - api namespace
+        - http method
+    - grants are uniquely ranked within sets
+    - rankings are monotonically incresing natural numbers
+    - grants enable requests on URI patterns, given a specific capability
+    - grants have optional parameters
+        - required groups
+        - start date
+        - end date
+        - maximum number of usages
 
 # Group membership graphs
 
