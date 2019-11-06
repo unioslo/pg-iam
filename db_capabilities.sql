@@ -55,11 +55,12 @@ create trigger ensure_capabilities_http_group_check before insert or update on c
 drop table if exists capabilities_http_grants cascade;
 create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
-    capability_name text references capabilities_http (capability_name)on delete cascade,
+    capability_name text references capabilities_http (capability_name) on delete cascade,
     capability_grant_id uuid not null default gen_random_uuid() primary key,
     capability_grant_hostname text not null,
     capability_grant_namespace text not null,
-    capability_grant_http_method text not null check (capability_grant_http_method in ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
+    capability_grant_http_method text not null check (capability_grant_http_method in
+                                 ('OPTIONS', 'HEAD', 'GET', 'PUT', 'POST', 'PATCH', 'DELETE')),
     capability_grant_rank int check (capability_grant_rank > 0),
     capability_grant_uri_pattern text not null, -- string or regex referring to a set of resources
     capability_grant_required_groups text[],
@@ -67,7 +68,9 @@ create table capabilities_http_grants(
     capability_grant_end_date timestamptz,
     capability_grant_max_num_usages int,
     capability_grant_group_existence_check boolean default 't',
-    unique (capability_grant_hostname, capability_grant_namespace, capability_grant_http_method, capability_grant_rank)
+    unique (capability_name, capability_grant_hostname,
+            capability_grant_namespace, capability_grant_http_method,
+            capability_grant_rank)
 );
 
 
@@ -78,14 +81,16 @@ create or replace function generate_grant_rank()
     declare num int;
     declare new_rank int;
     begin
-        -- check if first grant for (host, namespace, method) combination
+        -- check if first grant for (capability_name, host, namespace, method) combination
         select count(*) from capabilities_http_grants
-            where capability_grant_hostname = NEW.capability_grant_hostname
+            where capability_name = NEW.capability_name
+            and capability_grant_hostname = NEW.capability_grant_hostname
             and capability_grant_namespace = NEW.capability_grant_namespace
             and capability_grant_http_method = NEW.capability_grant_http_method
             into num;
         select max(capability_grant_rank) from capabilities_http_grants
-            where capability_grant_hostname = NEW.capability_grant_hostname
+            where capability_name = NEW.capability_name
+            and capability_grant_hostname = NEW.capability_grant_hostname
             and capability_grant_namespace = NEW.capability_grant_namespace
             and capability_grant_http_method = NEW.capability_grant_http_method
             into current_max;
@@ -135,6 +140,7 @@ create or replace function capabilities_http_grants_group_check()
         if NEW.capability_grant_group_existence_check = 'f' then
             return new;
         end if;
+        -- allow self, and moderator keywords
         for new_grp in select unnest(NEW.capability_grant_required_groups) loop
             select count(*) from groups where group_name like '%' || new_grp || '%' into num;
             assert num > 0, new_grp || ' does not exist';
@@ -151,6 +157,7 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
     returns boolean as $$
     declare target_id uuid;
     declare target_curr_rank int;
+    declare target_cap_name text;
     declare target_hostname text;
     declare target_namespace text;
     declare target_http_method text;
@@ -167,11 +174,12 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
         if new_grant_rank = target_curr_rank then
             return true;
         end if;
-        select capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
+        select capability_name, capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
             from capabilities_http_grants where capability_grant_id = target_id
-            into target_hostname, target_namespace, target_http_method;
+            into target_cap_name, target_hostname, target_namespace, target_http_method;
         select max(capability_grant_rank) from capabilities_http_grants
-            where capability_grant_hostname = target_hostname
+            where capability_name = target_cap_name
+            and capability_grant_hostname = target_hostname
             and capability_grant_namespace = target_namespace
             and capability_grant_http_method = target_http_method
             into current_max;
@@ -184,6 +192,7 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
                 select capability_grant_id, capability_grant_rank from capabilities_http_grants
                 where capability_grant_rank >= new_grant_rank
                 and capability_grant_rank < target_curr_rank
+                and capability_name = target_cap_name
                 and capability_grant_hostname = target_hostname
                 and capability_grant_namespace = target_namespace
                 and capability_grant_http_method = target_http_method
@@ -198,6 +207,7 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
                 select capability_grant_id, capability_grant_rank from capabilities_http_grants
                 where capability_grant_rank <= new_grant_rank
                 and capability_grant_rank > target_curr_rank
+                and capability_name = target_cap_name
                 and capability_grant_hostname = target_hostname
                 and capability_grant_namespace = target_namespace
                 and capability_grant_http_method = target_http_method
@@ -220,17 +230,19 @@ create or replace function capability_grant_delete(grant_id text)
     returns boolean as $$
     declare target_id uuid;
     declare target_rank int;
+    declare target_cap_name text;
     declare target_hostname text;
     declare target_namespace text;
     declare target_http_method text;
     declare ans boolean;
     begin
         target_id := grant_id::uuid;
-        select capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
+        select capability_name, capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
             from capabilities_http_grants where capability_grant_id = target_id
-            into target_hostname, target_namespace, target_http_method;
+            into target_cap_name, target_hostname, target_namespace, target_http_method;
         select max(capability_grant_rank) from capabilities_http_grants
-            where capability_grant_hostname = target_hostname
+            where capability_name = target_cap_name
+            and capability_grant_hostname = target_hostname
             and capability_grant_namespace = target_namespace
             and capability_grant_http_method = target_http_method
             into target_rank;
