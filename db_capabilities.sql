@@ -142,8 +142,9 @@ create or replace function capabilities_http_grants_group_check()
         end if;
         for new_grp in select unnest(NEW.capability_grant_required_groups) loop
             select count(*) from groups where group_name like '%' || new_grp || '%' into num;
-            -- allow self, and moderator keywords
-            assert num > 0, new_grp || ' does not exist';
+            if new_grp not in ('self', 'moderator') then
+                assert num > 0, new_grp || ' does not exist';
+            end if;
         end loop;
         return new;
     end;

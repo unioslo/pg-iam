@@ -759,6 +759,14 @@ create or replace function test_capabilities_http()
         assert (select capability_grant_rank from capabilities_http_grants
                 where capability_grant_id = grid4) = 3, 'rank delete issue - id4';
         -- test self and moderator keywords
+        insert into capabilities_http_grants (capability_name,
+                                                  capability_grant_hostname, capability_grant_namespace,
+                                                  capability_grant_http_method, capability_grant_uri_pattern,
+                                                  capability_grant_required_groups)
+                                          values ('export',
+                                                  'api.com', 'files',
+                                                  'GET', '/(.*)/admin/profile/([a-zA-Z0-9])',
+                                                  '{"self","moderator"}');
         return true;
     end;
 $$ language plpgsql;
@@ -910,7 +918,7 @@ create or replace function test_cascading_deletes(keep_data boolean default 'fal
     begin
         if keep_data = 'true' then
             -- if KEEP_TEST_DATA is set to true this will not run
-            -- this can be handlt for keeping test data in the DB
+            -- this can be handy for keeping test data in the DB
             -- for interactive test and dev purposes
             raise info 'Keeping test data';
             return true;
