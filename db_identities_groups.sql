@@ -116,9 +116,12 @@ create or replace function update_audit_log_relations()
                 child := NEW.group_moderator_name;
             elsif table_name = 'capabilities_http_grants' then
                 parent := NEW.capability_name;
-                -- todo: revisit these values
-                child := NEW.capability_grant_http_method || ',' || NEW.capability_grant_uri_pattern
-                    || ',' || quote_nullable(NEW.capability_grant_required_groups);
+                child := NEW.capability_grant_hostname || ','
+                      || NEW.capability_grant_namespace || ','
+                      || NEW.capability_grant_http_method || ','
+                      || NEW.capability_grant_uri_pattern || ','
+                      || quote_nullable(NEW.capability_grant_rank) || ','
+                      || quote_nullable(NEW.capability_grant_required_groups);
             end if;
         elsif TG_OP = 'DELETE' then
             if table_name = 'group_memberships' then
