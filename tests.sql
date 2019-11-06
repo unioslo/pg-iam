@@ -483,6 +483,12 @@ $$ language plpgsql;
 create or replace function test_capabilities_http()
     returns boolean as $$
     declare cid uuid;
+    declare grid uuid;
+    declare ans boolean;
+    declare grid1 uuid;
+    declare grid2 uuid;
+    declare grid3 uuid;
+    declare grid4 uuid;
     begin
         insert into capabilities_http (capability_name, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
@@ -630,16 +636,130 @@ create or replace function test_capabilities_http()
                                               'api.com', 'files',
                                               'GET', '/(.*)/admin',
                                               '{"my-own-crazy-group"}', 'f');
-        return true;
-
+        -- add some more test data
+        insert into capabilities_http_grants (capability_name,
+                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_http_method, capability_grant_uri_pattern,
+                                              capability_grant_required_groups, capability_grant_group_existence_check)
+                                      values ('export',
+                                              'api.com', 'files',
+                                              'GET', '/(.*)/export',
+                                              '{"my-own-custom-export-group"}', 'f');
+        insert into capabilities_http_grants (capability_name,
+                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_http_method, capability_grant_uri_pattern,
+                                              capability_grant_required_groups, capability_grant_group_existence_check)
+                                      values ('export',
+                                              'api.com', 'files',
+                                              'HEAD', '/(.*)/export',
+                                              '{"my-own-custom-export-group"}', 'f');
+        insert into capabilities_http_grants (capability_name,
+                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_http_method, capability_grant_uri_pattern,
+                                              capability_grant_required_groups, capability_grant_group_existence_check)
+                                      values ('export',
+                                              'api.com', 'files',
+                                              'GET', '/something',
+                                              '{"my-own-custom-export-group"}', 'f');
         -- grant ranking
-        -- uniqueness
+        -- generation
+        assert 1 in (select capability_grant_rank from capabilities_http_grants
+             where capability_name = 'export' and capability_grant_http_method = 'GET'),
+             'rank generation issue';
+        assert 2 in (select capability_grant_rank from capabilities_http_grants
+             where capability_name = 'export' and capability_grant_http_method = 'GET'),
+             'rank generation issue';
+        assert 3 in (select capability_grant_rank from capabilities_http_grants
+             where capability_name = 'export' and capability_grant_http_method = 'GET'),
+             'rank generation issue';
+        assert 5 not in (select capability_grant_rank from capabilities_http_grants
+             where capability_name = 'export' and capability_grant_http_method = 'GET'),
+             'rank generation issue';
         -- natural numbers
+        select capability_grant_id from capabilities_http_grants
+            where capability_name = 'export' and capability_grant_http_method = 'GET'
+            and capability_grant_rank = 1 into grid;
+        begin
+            select capability_grant_rank_set(grid::text, -9) into ans;
+            assert false;
+        exception when others then
+            raise notice 'capabilities_http_grants: cannot set rank to negative - as expected';
+        end;
         -- monotonicity
+        begin
+            select capability_grant_rank_set(grid::text, 9) into ans;
+            assert false;
+        exception when assert_failure then
+            raise notice 'capabilities_http_grants: rank is monotonically increasing - as expected';
+        end;
+        -- uniqueness
+        begin
+            insert into capabilities_http_grants (capability_name,
+                                                  capability_grant_hostname, capability_grant_namespace,
+                                                  capability_grant_http_method, capability_grant_uri_pattern,
+                                                  capability_grant_required_groups, capability_grant_group_existence_check,
+                                                  capability_grant_rank)
+                                          values ('export',
+                                                  'api.com', 'files',
+                                                  'HEAD', '/(.*)/export',
+                                                  '{"my-own-custom-export-group"}', 'f',
+                                                  1);
+            assert false;
+        exception when others then
+            raise notice 'capabilities_http_grants: rank values must be unique within their grant sets - as expected';
+        end;
         -- reject if grant id not found
+        begin
+            select capability_grant_rank_set(grid::text, 9) into ans;
+            assert false;
+        exception when assert_failure then
+            raise notice 'capabilities_http_grants: rank is monotonically increasing - as expected';
+        end;
         -- correct reorder
+        select capability_grant_id from capabilities_http_grants
+            where capability_name = 'export' and capability_grant_http_method = 'GET'
+            and capability_grant_rank = 1 into grid1;
+        select capability_grant_id from capabilities_http_grants
+            where capability_name = 'export' and capability_grant_http_method = 'GET'
+            and capability_grant_rank = 2 into grid2;
+        select capability_grant_id from capabilities_http_grants
+            where capability_name = 'export' and capability_grant_http_method = 'GET'
+            and capability_grant_rank = 3 into grid3;
+        select capability_grant_id from capabilities_http_grants
+            where capability_name = 'export' and capability_grant_http_method = 'GET'
+            and capability_grant_rank = 4 into grid4;
+        /*
+        id , rank_before, rank_after
+        id1, 1          , 2
+        id2, 2          , 3
+        id3, 3          , 1
+        id4, 4          , 4
+        */
+        select capability_grant_rank_set(grid3::text, 1) into ans;
+        assert (select capability_grant_rank from capabilities_http_grants
+                where capability_grant_id = grid3) = 1, 'rank set issue - id3';
+        assert (select capability_grant_rank from capabilities_http_grants
+                where capability_grant_id = grid1) = 2, 'rank set issue - id1';
+        assert (select capability_grant_rank from capabilities_http_grants
+                where capability_grant_id = grid2) = 3, 'rank set issue - id2';
+        assert (select capability_grant_rank from capabilities_http_grants
+                where capability_grant_id = grid4) = 4, 'rank set issue - id4';
+        raise notice 'capability_grant_rank_set works';
+        -- per capability rankings
+        assert (select max(capability_grant_rank) from capabilities_http_grants
+                where capability_name = 'p11import') = 1,
+            'per capability ranking broken';
         -- irrelevant rankings not affected (within and between rank sets)
-        -- deletes (keep rank consistent, and prevent direct deletes unless last rank)
+        assert (select max(capability_grant_rank) from capabilities_http_grants
+                where capability_name = 'export'
+                and capability_grant_http_method = 'HEAD') = 1,
+            'per capability, per http_method ranking broken';
+        -- deletes (keep rank consistent)
+        select capability_grant_delete(grid2::text) into ans;
+        assert (select capability_grant_rank from capabilities_http_grants
+                where capability_grant_id = grid4) = 3, 'rank delete issue - id4';
+        -- test self and moderator keywords
+        return true;
     end;
 $$ language plpgsql;
 

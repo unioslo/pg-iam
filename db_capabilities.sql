@@ -122,7 +122,7 @@ create or replace function capabilities_http_grants_immutability()
     returns trigger as $$
     begin
         assert OLD.row_id = NEW.row_id, 'row_id is immutable';
-        assert OLD.capability_grant_id = NEW.capability_grant_id, 'capability_grant_id is immutable'; -- todo test
+        assert OLD.capability_grant_id = NEW.capability_grant_id, 'capability_grant_id is immutable';
     return new;
     end;
 $$ language plpgsql;
@@ -140,9 +140,9 @@ create or replace function capabilities_http_grants_group_check()
         if NEW.capability_grant_group_existence_check = 'f' then
             return new;
         end if;
-        -- allow self, and moderator keywords
         for new_grp in select unnest(NEW.capability_grant_required_groups) loop
             select count(*) from groups where group_name like '%' || new_grp || '%' into num;
+            -- allow self, and moderator keywords
             assert num > 0, new_grp || ' does not exist';
         end loop;
         return new;

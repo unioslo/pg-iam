@@ -107,7 +107,7 @@ create or replace function update_audit_log_relations()
     begin
         session_identity := current_setting('session.identity', 't');
         table_name := TG_TABLE_NAME::text;
-        if TG_OP = 'INSERT' then
+        if TG_OP in ('INSERT', 'UPDATE') then
             if table_name = 'group_memberships' then
                 parent := NEW.group_name;
                 child := NEW.group_member_name;
@@ -116,7 +116,9 @@ create or replace function update_audit_log_relations()
                 child := NEW.group_moderator_name;
             elsif table_name = 'capabilities_http_grants' then
                 parent := NEW.capability_name;
-                child := NEW.capability_grant_http_method || ',' || NEW.capability_grant_uri_pattern;
+                -- todo: revisit these values
+                child := NEW.capability_grant_http_method || ',' || NEW.capability_grant_uri_pattern
+                    || ',' || quote_nullable(NEW.capability_grant_required_groups);
             end if;
         elsif TG_OP = 'DELETE' then
             if table_name = 'group_memberships' then
