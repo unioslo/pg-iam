@@ -96,7 +96,7 @@ capability_grants(capability_name text)
     {capability_name: '', capability_grants: []}
 */
 
-capability_grant_rank_set(grant_id text, new_rank_rank int)
+capability_grant_rank_set(grant_id text, new_grant_rank int)
 /*
     Returns:
     boolean

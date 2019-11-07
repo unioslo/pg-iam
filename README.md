@@ -12,8 +12,8 @@ A generic database backend for use in IAM APIs.
 - create capabilities, criteria for obtaining them, use them in access tokens
 - specify the scope of the capabilities
 - data integrity and consistency, immutable columns wherever possible
-- audit log on all updates
-- use SQL functions to get authorization related information for simplified application development
+- audit log on all inserts, updates, and deletes
+- SQL functions for simplified application development
 
 # Usage
 
