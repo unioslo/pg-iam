@@ -10,7 +10,8 @@ create table if not exists capabilities_http(
     capability_lifetime int not null check (capability_lifetime > 0), -- minutes
     capability_description text not null,
     capability_expiry_date date,
-    capability_group_existence_check boolean default 't'
+    capability_group_existence_check boolean default 't',
+    capability_metadata jsonb
 );
 
 
@@ -68,6 +69,7 @@ create table capabilities_http_grants(
     capability_grant_end_date timestamptz,
     capability_grant_max_num_usages int,
     capability_grant_group_existence_check boolean default 't',
+    capability_grant_metadata jsonb,
     unique (capability_name, capability_grant_hostname,
             capability_grant_namespace, capability_grant_http_method,
             capability_grant_rank)
