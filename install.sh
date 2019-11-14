@@ -86,17 +86,19 @@ sqltest() {
     psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./tests.sql
 }
 
-DELETE_EXISTING_DATA=false
-KEEP_TEST_DATA=false
+export DELETE_EXISTING_DATA=false
+export KEEP_TEST_DATA=false
+export DROP_TABLES=true
+
 FORCE=false
-DROP_TABLES=true
+
 
 while (( "$#" )); do
     case $1 in
         --force)                    shift; FORCE=true ;;
-        --only-replace-functions)   shift; DROP_TABLES=false ;;
-        --del-existing-data)        shift; DELETE_EXISTING_DATA=true ;;
-        --keep-test-data)           shift; KEEP_TEST_DATA=true ;;
+        --only-replace-functions)   shift; export DROP_TABLES=false ;;
+        --del-existing-data)        shift; export DELETE_EXISTING_DATA=true ;;
+        --keep-test-data)           shift; export KEEP_TEST_DATA=true ;;
         --setup)                    shift; setup; exit 0 ;;
         --test)                     shift; sqltest; exit 0 ;;
         --guide)                    printf "%s\n" "$_guide"; exit 0 ;;
