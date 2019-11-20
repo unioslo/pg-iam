@@ -7,7 +7,7 @@ create or replace function drop_tables(drop_table_flag boolean default 'true')
     declare ans boolean;
     begin
         if drop_table_flag = 'true' then
-            raise notice 'DROPPING TABLES';
+            raise notice 'DROPPING IDENTITIES AND GROUPS TABLES';
             drop table if exists audit_log_objects cascade;
             drop table if exists audit_log_relations cascade;
             drop table if exists persons cascade;
