@@ -77,7 +77,7 @@ create table if not exists capabilities_http_instances(
     instance_id uuid unique not null default gen_random_uuid(),
     instance_start_date timestamptz default current_timestamp,
     instance_end_date timestamptz not null,
-    instance_max_number_usages int,
+    instance_max_number_usages int, -- deleted when 0
     instance_metadata jsonb
 );
 -- add audit
@@ -86,14 +86,37 @@ create table if not exists capabilities_http_instances(
 drop function if exists capability_instance_get(text);
 create or replace function capability_instance_get(id text)
     returns json as $$
+    declare sd timestamptz;
+    declare ed timestamptz;
+    declare max int;
+    declare meta json;
+    declare msg text;
+    declare new_max int;
     begin
-        -- if id not in table, exception
-        -- if current_timestamp < instance_start_date, refuse
-        -- if current_timestamp > instance_end_date, refuse, delete it
-        -- if instance_max_number_usages not null, decrement
-        -- if 0 after decrement delete it
-        -- return instance with associated info
-        return json_build_object('instance_id', id); -- and more
+        assert id in (select instance_id from capabilities_http_instances),
+            'instance not found';
+        select instance_start_date, instance_end_date,
+               instance_max_number_usages, instance_metadata
+        from capabilities_http_instances where instance_id = id
+            into sd, ed, max, meta;
+        msg := 'instance not active yet - instance_start_date: ' || sd::text;
+        assert current_timestamp > sd, msg;
+        msg := 'instance expired - instance_end_date: ' || ed::text;
+        assert current_timestamp < ed, msg;
+        if max is not null then
+            new_max := max - 1;
+            if new_max = 0 then
+                delete from capabilities_http_instances where instance_id = id;
+            else
+                update capabilities_http_instances set instance_max_number_usages = new_max
+                    where instance_id = id;
+            end if;
+        end if;
+        return json_build_object('instance_id', id,
+                                 'instance_start_date', sd,
+                                 'instance_end_date', instance_end_date,
+                                 'instance_max_number_usages', instance_max_number_usages,
+                                 'instance_metadata', instance_metadata);
     end;
 $$ language plpgsql;
 
