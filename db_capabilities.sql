@@ -77,47 +77,51 @@ create table if not exists capabilities_http_instances(
     instance_id uuid unique not null default gen_random_uuid() primary key,
     instance_start_date timestamptz default current_timestamp,
     instance_end_date timestamptz not null,
-    instance_max_number_usages int, -- deleted when 0
+    instance_max_number_usages int,
     instance_metadata jsonb
 );
 -- add audit
 -- instance_id immutable
 
-drop function if exists capability_instance_get(text);
-create or replace function capability_instance_get(id text)
+drop function if exists capability_instance_create(text);
+create or replace function capability_instance_create(id text)
     returns json as $$
-    declare sd timestamptz;
-    declare ed timestamptz;
+    declare iid uuid;
+    declare cname text;
+    declare start_date timestamptz;
+    declare end_date timestamptz;
     declare max int;
     declare meta json;
     declare msg text;
     declare new_max int;
     begin
-        assert id in (select instance_id from capabilities_http_instances),
+        iid := id::uuid;
+        assert iid in (select instance_id from capabilities_http_instances),
             'instance not found';
-        select instance_start_date, instance_end_date,
+        select capability_name, instance_start_date, instance_end_date,
                instance_max_number_usages, instance_metadata
-        from capabilities_http_instances where instance_id = id
-            into sd, ed, max, meta;
-        msg := 'instance not active yet - instance_start_date: ' || sd::text;
-        assert current_timestamp > sd, msg;
-        msg := 'instance expired - instance_end_date: ' || ed::text;
-        if current_timestamp > ed then
-            delete from capabilities_http_instances where instance_id = id;
+        from capabilities_http_instances where instance_id = iid
+            into cname, start_date, end_date, max, meta;
+        msg := 'instance not active yet - instance_start_date: ' || start_date::text;
+        assert current_timestamp > start_date, msg;
+        msg := 'instance expirend_date - instance_end_date: ' || end_date::text;
+        if current_timestamp > end_date then
+            delete from capabilities_http_instances where instance_id = iid;
             assert false, msg;
         end if;
         new_max := null;
         if max is not null then
             new_max := max - 1;
             if new_max = 0 then
-                delete from capabilities_http_instances where instance_id = id;
+                delete from capabilities_http_instances where instance_id = iid;
             else
                 update capabilities_http_instances set instance_max_number_usages = new_max
-                    where instance_id = id;
+                    where instance_id = iid;
             end if;
         end if;
-        return json_build_object('instance_id', id,
-                                 'instance_start_date', sd,
+        return json_build_object('capability_name', cname,
+                                 'instance_id', id,
+                                 'instance_start_date', start_date,
                                  'instance_end_date', instance_end_date,
                                  'instance_usages_remaining', new_max,
                                  'instance_metadata', instance_metadata);
