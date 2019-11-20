@@ -82,7 +82,7 @@ create table if not exists capabilities_http_instances(
 
 
 drop function if exists capability_instance_get(text);
-create or replace funtion capability_instance_get(id text)
+create or replace function capability_instance_get(id text)
     returns json as $$
     begin
         return '{}'::json;
@@ -90,7 +90,7 @@ create or replace funtion capability_instance_get(id text)
 $$ language plpgsql;
 
 
-create table capabilities_http_grants(
+create table if not exists capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
     capability_name text references capabilities_http (capability_name) on delete cascade,
     capability_grant_id uuid not null default gen_random_uuid() primary key,
