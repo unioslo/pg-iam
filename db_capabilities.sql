@@ -53,6 +53,17 @@ create trigger ensure_capabilities_http_group_check before insert or update on c
     for each row execute procedure capabilities_http_group_check();
 
 
+drop table if exists capabilities_http_instances;
+create table if not exists capabilities_http_instances(
+    capability_name text references capabilities_http (capability_name) on delete cascade,
+    instance_id uuid unique not null default gen_random_uuid(),
+    instance_start_date timestamptz,
+    instance_end_date timestamptz not null,
+    instance_max_number_usages int,
+    instance_metadata jsonb
+);
+
+
 drop table if exists capabilities_http_grants cascade;
 create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
