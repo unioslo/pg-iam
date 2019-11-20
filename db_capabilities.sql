@@ -72,20 +72,28 @@ create trigger ensure_capabilities_http_group_check before insert or update on c
 
 
 create table if not exists capabilities_http_instances(
+    row_id uuid unique not null default gen_random_uuid(),
     capability_name text references capabilities_http (capability_name) on delete cascade,
     instance_id uuid unique not null default gen_random_uuid(),
-    instance_start_date timestamptz,
+    instance_start_date timestamptz default current_timestamp,
     instance_end_date timestamptz not null,
     instance_max_number_usages int,
     instance_metadata jsonb
 );
-
+-- add audit
+-- instance_id immutable
 
 drop function if exists capability_instance_get(text);
 create or replace function capability_instance_get(id text)
     returns json as $$
     begin
-        return '{}'::json;
+        -- if id not in table, exception
+        -- if current_timestamp < instance_start_date, refuse
+        -- if current_timestamp > instance_end_date, refuse, delete it
+        -- if instance_max_number_usages not null, decrement
+        -- if 0 after decrement delete it
+        -- return instance with associated info
+        return json_build_object('instance_id', id); -- and more
     end;
 $$ language plpgsql;
 
