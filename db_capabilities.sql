@@ -64,6 +64,15 @@ create table if not exists capabilities_http_instances(
 );
 
 
+drop function if exists capability_instance_get(text);
+create or replace funtion capability_instance_get(id text)
+    returns json as $$
+    begin
+        return '{}'::json;
+    end;
+$$ language plpgsql;
+
+
 drop table if exists capabilities_http_grants cascade;
 create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
