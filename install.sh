@@ -76,7 +76,11 @@ setup() {
     num_grants=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from capabilities_http_grants" -At)
     echo "Capabilities: $num_caps"
     echo "Grants: $num_grants"
-    read -p 'Do you want to (re)install the capabilities functionality (thereby dropping existing data)? (y/n) > ' ANS
+    if [[ $DROP_TABLES == "true" ]]; then
+        read -p 'Do you want to (re)install the capabilities functionality (thereby dropping existing data)? (y/n) > ' ANS
+    else
+        read -p 'Do you want to (re)install the capabilities functions (no table data will be lost)? (y/n) > ' ANS
+    fi
     if [[ $ANS == "y" ]]; then
         psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_capabilities.sql
     fi
