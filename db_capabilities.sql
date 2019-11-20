@@ -74,7 +74,7 @@ create trigger ensure_capabilities_http_group_check before insert or update on c
 create table if not exists capabilities_http_instances(
     row_id uuid unique not null default gen_random_uuid(),
     capability_name text references capabilities_http (capability_name) on delete cascade,
-    instance_id uuid unique not null default gen_random_uuid(),
+    instance_id uuid unique not null default gen_random_uuid() primary key,
     instance_start_date timestamptz default current_timestamp,
     instance_end_date timestamptz not null,
     instance_max_number_usages int, -- deleted when 0
@@ -102,7 +102,11 @@ create or replace function capability_instance_get(id text)
         msg := 'instance not active yet - instance_start_date: ' || sd::text;
         assert current_timestamp > sd, msg;
         msg := 'instance expired - instance_end_date: ' || ed::text;
-        assert current_timestamp < ed, msg;
+        if current_timestamp > ed then
+            delete from capabilities_http_instances where instance_id = id;
+            assert false, msg;
+        end if;
+        new_max := null;
         if max is not null then
             new_max := max - 1;
             if new_max = 0 then
@@ -115,7 +119,7 @@ create or replace function capability_instance_get(id text)
         return json_build_object('instance_id', id,
                                  'instance_start_date', sd,
                                  'instance_end_date', instance_end_date,
-                                 'instance_max_number_usages', instance_max_number_usages,
+                                 'instance_usages_remaining', new_max,
                                  'instance_metadata', instance_metadata);
     end;
 $$ language plpgsql;
