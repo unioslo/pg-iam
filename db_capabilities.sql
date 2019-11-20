@@ -1,5 +1,23 @@
 
-drop table if exists capabilities_http cascade;
+\set drop_table_flag `echo "$DROP_TABLES"`
+create or replace function drop_tables(drop_table_flag boolean default 'true')
+    returns boolean as $$
+    declare ans boolean;
+    begin
+        if drop_table_flag = 'true' then
+            raise notice 'DROPPING CAPABILITIES TABLES';
+            drop table if exists capabilities_http cascade;
+            drop table if exists capabilities_http_instances;
+            drop table if exists capabilities_http_grants cascade;
+        else
+            raise notice 'NOT dropping tables - only functions will be replaced';
+        end if;
+    return true;
+    end;
+$$ language plpgsql;
+select drop_tables(:drop_table_flag);
+
+
 create table if not exists capabilities_http(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid unique not null default gen_random_uuid(),
@@ -53,7 +71,6 @@ create trigger ensure_capabilities_http_group_check before insert or update on c
     for each row execute procedure capabilities_http_group_check();
 
 
-drop table if exists capabilities_http_instances;
 create table if not exists capabilities_http_instances(
     capability_name text references capabilities_http (capability_name) on delete cascade,
     instance_id uuid unique not null default gen_random_uuid(),
@@ -73,7 +90,6 @@ create or replace funtion capability_instance_get(id text)
 $$ language plpgsql;
 
 
-drop table if exists capabilities_http_grants cascade;
 create table capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
     capability_name text references capabilities_http (capability_name) on delete cascade,
