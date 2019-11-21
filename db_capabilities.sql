@@ -77,7 +77,7 @@ create table if not exists capabilities_http_instances(
     instance_id uuid unique not null default gen_random_uuid() primary key,
     instance_start_date timestamptz default current_timestamp,
     instance_end_date timestamptz not null,
-    instance_max_number_usages int,
+    instance_number_usages int,
     instance_metadata jsonb
 );
 -- add audit
@@ -99,7 +99,7 @@ create or replace function capability_instance_create(id text)
         assert iid in (select instance_id from capabilities_http_instances),
             'instance not found';
         select capability_name, instance_start_date, instance_end_date,
-               instance_max_number_usages, instance_metadata
+               instance_number_usages, instance_metadata
         from capabilities_http_instances where instance_id = iid
             into cname, start_date, end_date, max, meta;
         msg := 'instance not active yet - instance_start_date: ' || start_date::text;
@@ -115,16 +115,16 @@ create or replace function capability_instance_create(id text)
             if new_max = 0 then
                 delete from capabilities_http_instances where instance_id = iid;
             else
-                update capabilities_http_instances set instance_max_number_usages = new_max
+                update capabilities_http_instances set instance_number_usages = new_max
                     where instance_id = iid;
             end if;
         end if;
         return json_build_object('capability_name', cname,
                                  'instance_id', id,
                                  'instance_start_date', start_date,
-                                 'instance_end_date', instance_end_date,
+                                 'instance_end_date', end_date,
                                  'instance_usages_remaining', new_max,
-                                 'instance_metadata', instance_metadata);
+                                 'instance_metadata', meta);
     end;
 $$ language plpgsql;
 
