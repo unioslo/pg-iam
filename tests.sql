@@ -783,7 +783,7 @@ create or replace function test_capability_instances()
         values ('export', now() - interval '1 hour', current_timestamp + '2 hours',
                 3, '{"claims": {"proj": "p11", "user": "p11-anonymous"}}');
         select instance_id from capabilities_http_instances into iid;
-        select capability_instance_create(iid::text) into instance;
+        select capability_instance_get(iid::text) into instance;
         -- decrementing instance_usages_remaining
         assert (select instance_usages_remaining from capabilities_http_instances
                 where instance_id = iid) = 2,
@@ -791,10 +791,10 @@ create or replace function test_capability_instances()
         assert instance->>'instance_usages_remaining' = 2::text,
             'instance_usages_remaining incorrectly reported by instance creation function';
         -- auto deletion
-        select capability_instance_create(iid::text) into instance;
-        select capability_instance_create(iid::text) into instance;
+        select capability_instance_get(iid::text) into instance;
+        select capability_instance_get(iid::text) into instance;
         begin
-            select capability_instance_create(iid::text) into instance;
+            select capability_instance_get(iid::text) into instance;
         exception when assert_failure then
             raise notice 'automatic deletion of capability instances works';
         end;
@@ -806,7 +806,7 @@ create or replace function test_capability_instances()
                 3, '{"claims": {"proj": "p11", "user": "p11-anonymous"}}');
         select instance_id from capabilities_http_instances into iid;
         begin
-            select capability_instance_create(iid::text) into instance;
+            select capability_instance_get(iid::text) into instance;
         exception when assert_failure then
             raise notice 'cannot use expired capability instance - as expected';
         end;
@@ -819,7 +819,7 @@ create or replace function test_capability_instances()
                 3, '{"claims": {"proj": "p11", "user": "p11-anonymous"}}');
         select instance_id from capabilities_http_instances into iid;
         begin
-            select capability_instance_create(iid::text) into instance;
+            select capability_instance_get(iid::text) into instance;
         exception when assert_failure then
             raise notice 'cannot use capability instance before start time - as expected';
         end;

@@ -100,8 +100,8 @@ create trigger ensure_capabilities_http_instances_immutability before update on 
     for each row execute procedure capabilities_http_instances_immutability();
 
 
-drop function if exists capability_instance_create(text);
-create or replace function capability_instance_create(id text)
+drop function if exists capability_instance_get(text);
+create or replace function capability_instance_get(id text)
     returns json as $$
     declare iid uuid;
     declare cname text;
