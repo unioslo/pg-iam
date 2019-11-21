@@ -12,6 +12,7 @@ groups
 group_memberships
 group_moderators
 capabilities_http
+capabilities_http_instances
 capabilities_http_grants
 audit_log_objects
 audit_log_relations
@@ -106,5 +107,11 @@ capability_grant_delete(grant_id text)
 /*
     Returns:
     boolean
+*/
+
+capability_instance_create(id text)
+/*
+    Returns:
+    {capablity_name, instance_id, instance_start_date, instance_end_date, instance_usages_remaining, instance_metadata}
 */
 ```
