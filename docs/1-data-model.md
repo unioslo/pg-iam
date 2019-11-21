@@ -8,16 +8,22 @@ Persons -----> Users ----> Groups (class:primary,   type:user)
                             -> Groups (class:primary,secondary,web
                                        relations: members, moderators)
 
-Capabilities -> Name
-             -> Required Groups
-             -> Grants (HTTP)
+Capabilities
+  -> Name
+  -> Required Groups
+  -> linked to
+    -> Instances (HTTP)
+    -> Grants (HTTP)
 
-Grants -> Capability Name
-       ->
-       ->
-       ->
-       -> HTTP method
-       -> URI pattern
+Capability Instances
+  -> a parameterised Capability
+
+Capability Grants
+ -> Capability Name
+ -> Host Name
+ -> Namespace identifier
+ -> HTTP method
+ -> URI pattern
 ```
 
 - `Persons`: root objects
@@ -55,7 +61,9 @@ Grants -> Capability Name
     - a capability can be obtained by a person or user who is a member of a set of specified requried groups
     - capabilities are linked to grants on resources
     - access control is therefore managed through group membership
-- Grants
+- Capability instances
+  - parameterised Capabilities, for use in generation of capability URLs
+- Capability grants
     - HTTP grants are linked to specific capabilities by their names
     - grant are grouped into sets
     - grant sets are defined by:
