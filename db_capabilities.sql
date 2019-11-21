@@ -80,8 +80,25 @@ create table if not exists capabilities_http_instances(
     instance_number_usages int,
     instance_metadata jsonb
 );
--- add audit
--- instance_id immutable
+
+
+create trigger capabilities_http_instances_audit after update or insert or delete on capabilities_http_instances
+    for each row execute procedure update_audit_log_objects();
+
+
+drop function if exists capabilities_http_instances_immutability() cascade;
+create or replace function capabilities_http_instances_immutability()
+    returns trigger as $$
+    begin
+        assert OLD.row_id = NEW.row_id, 'row_id is immutable';
+        assert OLD.capability_name = NEW.capability_name, 'capability_name is immutable';
+        assert OLD.instance_id = NEW.instance_id, 'instance_id is immutable';
+        return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_capabilities_http_instances_immutability before update on capabilities_http_instances
+    for each row execute procedure capabilities_http_instances_immutability();
+
 
 drop function if exists capability_instance_create(text);
 create or replace function capability_instance_create(id text)
