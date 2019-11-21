@@ -109,7 +109,7 @@ capability_grant_delete(grant_id text)
     boolean
 */
 
-capability_instance_create(id text)
+capability_instance_get(id text)
 /*
     Returns:
     {capablity_name, instance_id, instance_start_date, instance_end_date, instance_usages_remaining, instance_metadata}
