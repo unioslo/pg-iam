@@ -102,9 +102,9 @@ create or replace function capability_instance_create(id text)
                instance_number_usages, instance_metadata
         from capabilities_http_instances where instance_id = iid
             into cname, start_date, end_date, max, meta;
-        msg := 'instance not active yet - instance_start_date: ' || start_date::text;
+        msg := 'instance not active yet - start time: ' || start_date::text;
         assert current_timestamp > start_date, msg;
-        msg := 'instance expirend_date - instance_end_date: ' || end_date::text;
+        msg := 'instance expired - end time: ' || end_date::text;
         if current_timestamp > end_date then
             delete from capabilities_http_instances where instance_id = iid;
             assert false, msg;
