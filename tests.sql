@@ -779,15 +779,15 @@ create or replace function test_capability_instances()
     begin
         insert into capabilities_http_instances
             (capability_name, instance_start_date, instance_end_date,
-             instance_number_usages, instance_metadata)
+             instance_usages_remaining, instance_metadata)
         values ('export', now() - interval '1 hour', current_timestamp + '2 hours',
                 3, '{"claims": {"proj": "p11", "user": "p11-anonymous"}}');
         select instance_id from capabilities_http_instances into iid;
         select capability_instance_create(iid::text) into instance;
-        -- decrementing instance_number_usages
-        assert (select instance_number_usages from capabilities_http_instances
+        -- decrementing instance_usages_remaining
+        assert (select instance_usages_remaining from capabilities_http_instances
                 where instance_id = iid) = 2,
-            'instance_number_usages not being decremented after instance creation';
+            'instance_usages_remaining not being decremented after instance creation';
         assert instance->>'instance_usages_remaining' = 2::text,
             'instance_usages_remaining incorrectly reported by instance creation function';
         -- auto deletion
@@ -801,7 +801,7 @@ create or replace function test_capability_instances()
         -- cannot use if expired
         insert into capabilities_http_instances
             (capability_name, instance_start_date, instance_end_date,
-             instance_number_usages, instance_metadata)
+             instance_usages_remaining, instance_metadata)
         values ('export', now() - interval '3 hour', now() - interval '2 hour',
                 3, '{"claims": {"proj": "p11", "user": "p11-anonymous"}}');
         select instance_id from capabilities_http_instances into iid;
@@ -814,7 +814,7 @@ create or replace function test_capability_instances()
         -- cannot use if not active yet
         insert into capabilities_http_instances
             (capability_name, instance_start_date, instance_end_date,
-             instance_number_usages, instance_metadata)
+             instance_usages_remaining, instance_metadata)
         values ('export', now() + interval '3 hour', now() + interval '4 hour',
                 3, '{"claims": {"proj": "p11", "user": "p11-anonymous"}}');
         select instance_id from capabilities_http_instances into iid;
