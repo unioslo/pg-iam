@@ -42,6 +42,8 @@ create table if not exists audit_log_objects_groups
     partition of audit_log_objects for values in ('groups');
 create table if not exists audit_log_objects_capabilities_http
     partition of audit_log_objects for values in ('capabilities_http');
+create table if not exists audit_log_objects_capabilities_http_instances
+    partition of audit_log_objects for values in ('capabilities_http_instances');
 
 
 create table if not exists audit_log_relations(
