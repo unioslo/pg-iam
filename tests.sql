@@ -821,7 +821,26 @@ create or replace function test_capability_instances()
         begin
             select capability_instance_create(iid::text) into instance;
         exception when assert_failure then
-            raise notice 'cannot use expired capability instance - as expected';
+            raise notice 'cannot use capability instance before start time - as expected';
+        end;
+        -- immutable cols
+        begin
+            update capabilities_http_instances set row_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
+                where instance_id = iid;
+        exception when assert_failure then
+            raise notice 'capabilities_http_instances: row_id immutable';
+        end;
+        begin
+            update capabilities_http_instances set capability_name = 'parsley'
+                where instance_id = iid;
+        exception when assert_failure then
+            raise notice 'capabilities_http_instances: capability_name immutable';
+        end;
+        begin
+            update capabilities_http_instances set instance_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
+                where instance_id = iid;
+        exception when assert_failure then
+            raise notice 'capabilities_http_instances: instance_id immutable';
         end;
         return true;
     end;
