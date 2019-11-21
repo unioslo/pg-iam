@@ -772,6 +772,62 @@ create or replace function test_capabilities_http()
 $$ language plpgsql;
 
 
+create or replace function test_capability_instances()
+    returns boolean as $$
+    declare iid uuid;
+    declare instance json;
+    begin
+        insert into capabilities_http_instances
+            (capability_name, instance_start_date, instance_end_date,
+             instance_number_usages, instance_metadata)
+        values ('export', now() - interval '1 hour', current_timestamp + '2 hours',
+                3, '{"claims": {"proj": "p11", "user": "p11-anonymous"}}');
+        select instance_id from capabilities_http_instances into iid;
+        select capability_instance_create(iid::text) into instance;
+        -- decrementing instance_number_usages
+        assert (select instance_number_usages from capabilities_http_instances
+                where instance_id = iid) = 2,
+            'instance_number_usages not being decremented after instance creation';
+        assert instance->>'instance_usages_remaining' = 2::text,
+            'instance_usages_remaining incorrectly reported by instance creation function';
+        -- auto deletion
+        select capability_instance_create(iid::text) into instance;
+        select capability_instance_create(iid::text) into instance;
+        begin
+            select capability_instance_create(iid::text) into instance;
+        exception when assert_failure then
+            raise notice 'automatic deletion of capability instances works';
+        end;
+        -- cannot use if expired
+        insert into capabilities_http_instances
+            (capability_name, instance_start_date, instance_end_date,
+             instance_number_usages, instance_metadata)
+        values ('export', now() - interval '3 hour', now() - interval '2 hour',
+                3, '{"claims": {"proj": "p11", "user": "p11-anonymous"}}');
+        select instance_id from capabilities_http_instances into iid;
+        begin
+            select capability_instance_create(iid::text) into instance;
+        exception when assert_failure then
+            raise notice 'cannot use expired capability instance - as expected';
+        end;
+        delete from capabilities_http_instances where instance_id = iid;
+        -- cannot use if not active yet
+        insert into capabilities_http_instances
+            (capability_name, instance_start_date, instance_end_date,
+             instance_number_usages, instance_metadata)
+        values ('export', now() + interval '3 hour', now() + interval '4 hour',
+                3, '{"claims": {"proj": "p11", "user": "p11-anonymous"}}');
+        select instance_id from capabilities_http_instances into iid;
+        begin
+            select capability_instance_create(iid::text) into instance;
+        exception when assert_failure then
+            raise notice 'cannot use expired capability instance - as expected';
+        end;
+        return true;
+    end;
+$$ language plpgsql;
+
+
 create or replace function test_audit()
     returns boolean as $$
     declare pid uuid;
@@ -959,6 +1015,7 @@ select test_persons_users_groups();
 select test_group_memeberships_moderators();
 select test_capabilities_http();
 select test_audit();
+select test_capability_instances();
 select test_funcs();
 select test_cascading_deletes(:keep_test);
 
