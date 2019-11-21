@@ -7,7 +7,7 @@ create or replace function drop_tables(drop_table_flag boolean default 'true')
         if drop_table_flag = 'true' then
             raise notice 'DROPPING CAPABILITIES TABLES';
             drop table if exists capabilities_http cascade;
-            drop table if exists capabilities_http_instances;
+            drop table if exists capabilities_http_instances cascade;
             drop table if exists capabilities_http_grants cascade;
         else
             raise notice 'NOT dropping tables - only functions will be replaced';
