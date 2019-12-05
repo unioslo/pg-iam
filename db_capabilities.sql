@@ -188,7 +188,6 @@ create or replace function generate_grant_rank()
             and capability_grant_namespace = NEW.capability_grant_namespace
             and capability_grant_http_method = NEW.capability_grant_http_method
             into current_max;
-        -- if rank is set, and the rank is <= current_max call capability_grant_rank_set
         if num = 1 then -- because trigger runs after insert of first entry
                 new_rank := 1;
             else
