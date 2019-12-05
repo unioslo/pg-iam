@@ -23,8 +23,8 @@ create table if not exists capabilities_http(
     capability_id uuid unique not null default gen_random_uuid(),
     capability_name text unique not null primary key,
     capability_default_claims jsonb,
-    capability_required_groups text[] not null,
-    capability_group_match_method text not null check (capability_group_match_method in ('exact', 'wildcard')),
+    capability_required_groups text[],
+    capability_group_match_method text check (capability_group_match_method in ('exact', 'wildcard')),
     capability_lifetime int not null check (capability_lifetime > 0), -- minutes
     capability_description text not null,
     capability_expiry_date date,
@@ -129,7 +129,7 @@ create or replace function capability_instance_get(id text)
         new_max := null;
         if max is not null then
             new_max := max - 1;
-            if new_max = 0 then
+            if new_max < 1 then
                 delete from capabilities_http_instances where instance_id = iid;
             else
                 update capabilities_http_instances set instance_usages_remaining = new_max
@@ -188,6 +188,7 @@ create or replace function generate_grant_rank()
             and capability_grant_namespace = NEW.capability_grant_namespace
             and capability_grant_http_method = NEW.capability_grant_http_method
             into current_max;
+        -- if rank is set, and the rank is <= current_max call capability_grant_rank_set
         if num = 1 then -- because trigger runs after insert of first entry
                 new_rank := 1;
             else
