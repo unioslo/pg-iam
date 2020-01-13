@@ -24,6 +24,7 @@ create table if not exists capabilities_http(
     capability_name text unique not null primary key,
     capability_default_claims jsonb,
     capability_required_groups text[],
+    capability_required_attributes jsonb,
     capability_group_match_method text check (capability_group_match_method in ('exact', 'wildcard')),
     capability_lifetime int not null check (capability_lifetime > 0), -- minutes
     capability_description text not null,
@@ -157,6 +158,7 @@ create table if not exists capabilities_http_grants(
     capability_grant_rank int check (capability_grant_rank > 0),
     capability_grant_uri_pattern text not null, -- string or regex referring to a set of resources
     capability_grant_required_groups text[],
+    capability_grant_required_attributes jsonb,
     capability_grant_start_date timestamptz,
     capability_grant_end_date timestamptz,
     capability_grant_max_num_usages int,
