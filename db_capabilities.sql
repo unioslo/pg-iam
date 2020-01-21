@@ -25,7 +25,7 @@ create table if not exists capabilities_http(
     capability_default_claims jsonb,
     capability_required_groups text[],
     capability_required_attributes jsonb,
-    capability_group_match_method text check (capability_group_match_method in ('exact', 'wildcard')),
+    capability_group_match_method text default 'wildcard' check (capability_group_match_method in ('exact', 'wildcard')),
     capability_lifetime int not null check (capability_lifetime > 0), -- minutes
     capability_description text not null,
     capability_expiry_date date,
