@@ -91,12 +91,6 @@ group_capabilities(group_name text)
     {group_name: '', group_capabilities: []}
 */
 
-capability_grants(capability_name text)
-/*
-    Returns:
-    {capability_name: '', capability_grants: []}
-*/
-
 capability_grant_rank_set(grant_id text, new_grant_rank int)
 /*
     Returns:

@@ -19,7 +19,6 @@ Capability Instances
   -> a parameterised Capability
 
 Capability Grants
- -> Capability Name
  -> Host Name
  -> Namespace identifier
  -> HTTP method
@@ -64,10 +63,8 @@ Capability Grants
 - Capability instances
   - parameterised Capabilities, for use in generation of capability URLs
 - Capability grants
-    - HTTP grants are linked to specific capabilities by their names
     - grant are grouped into sets
     - grant sets are defined by:
-        - capability name
         - api hostname
         - api namespace
         - http method
