@@ -149,7 +149,6 @@ $$ language plpgsql;
 
 create table if not exists capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
-    capability_name text references capabilities_http (capability_name) on delete cascade,
     capability_grant_id uuid not null default gen_random_uuid() primary key,
     capability_grant_hostname text not null,
     capability_grant_namespace text not null,
@@ -164,8 +163,9 @@ create table if not exists capabilities_http_grants(
     capability_grant_max_num_usages int,
     capability_grant_group_existence_check boolean default 't',
     capability_grant_metadata jsonb,
-    unique (capability_name, capability_grant_hostname,
-            capability_grant_namespace, capability_grant_http_method,
+    unique (capability_grant_hostname,
+            capability_grant_namespace,
+            capability_grant_http_method,
             capability_grant_rank)
 );
 
@@ -177,16 +177,14 @@ create or replace function generate_grant_rank()
     declare num int;
     declare new_rank int;
     begin
-        -- check if first grant for (capability_name, host, namespace, method) combination
+        -- check if first grant for (host, namespace, method) combination
         select count(*) from capabilities_http_grants
-            where capability_name = NEW.capability_name
-            and capability_grant_hostname = NEW.capability_grant_hostname
+            where capability_grant_hostname = NEW.capability_grant_hostname
             and capability_grant_namespace = NEW.capability_grant_namespace
             and capability_grant_http_method = NEW.capability_grant_http_method
             into num;
         select max(capability_grant_rank) from capabilities_http_grants
-            where capability_name = NEW.capability_name
-            and capability_grant_hostname = NEW.capability_grant_hostname
+            where capability_grant_hostname = NEW.capability_grant_hostname
             and capability_grant_namespace = NEW.capability_grant_namespace
             and capability_grant_http_method = NEW.capability_grant_http_method
             into current_max;
@@ -254,7 +252,6 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
     returns boolean as $$
     declare target_id uuid;
     declare target_curr_rank int;
-    declare target_cap_name text;
     declare target_hostname text;
     declare target_namespace text;
     declare target_http_method text;
@@ -271,12 +268,11 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
         if new_grant_rank = target_curr_rank then
             return true;
         end if;
-        select capability_name, capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
+        select capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
             from capabilities_http_grants where capability_grant_id = target_id
-            into target_cap_name, target_hostname, target_namespace, target_http_method;
+            into target_hostname, target_namespace, target_http_method;
         select max(capability_grant_rank) from capabilities_http_grants
-            where capability_name = target_cap_name
-            and capability_grant_hostname = target_hostname
+            where capability_grant_hostname = target_hostname
             and capability_grant_namespace = target_namespace
             and capability_grant_http_method = target_http_method
             into current_max;
@@ -289,7 +285,6 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
                 select capability_grant_id, capability_grant_rank from capabilities_http_grants
                 where capability_grant_rank >= new_grant_rank
                 and capability_grant_rank < target_curr_rank
-                and capability_name = target_cap_name
                 and capability_grant_hostname = target_hostname
                 and capability_grant_namespace = target_namespace
                 and capability_grant_http_method = target_http_method
@@ -304,7 +299,6 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
                 select capability_grant_id, capability_grant_rank from capabilities_http_grants
                 where capability_grant_rank <= new_grant_rank
                 and capability_grant_rank > target_curr_rank
-                and capability_name = target_cap_name
                 and capability_grant_hostname = target_hostname
                 and capability_grant_namespace = target_namespace
                 and capability_grant_http_method = target_http_method
@@ -327,42 +321,23 @@ create or replace function capability_grant_delete(grant_id text)
     returns boolean as $$
     declare target_id uuid;
     declare target_rank int;
-    declare target_cap_name text;
     declare target_hostname text;
     declare target_namespace text;
     declare target_http_method text;
     declare ans boolean;
     begin
         target_id := grant_id::uuid;
-        select capability_name, capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
+        select capability_grant_hostname, capability_grant_namespace, capability_grant_http_method
             from capabilities_http_grants where capability_grant_id = target_id
-            into target_cap_name, target_hostname, target_namespace, target_http_method;
+            into target_hostname, target_namespace, target_http_method;
         select max(capability_grant_rank) from capabilities_http_grants
-            where capability_name = target_cap_name
-            and capability_grant_hostname = target_hostname
+            where capability_grant_hostname = target_hostname
             and capability_grant_namespace = target_namespace
             and capability_grant_http_method = target_http_method
             into target_rank;
         select capability_grant_rank_set(target_id::text, target_rank) into ans;
         delete from capabilities_http_grants where capability_grant_id = target_id;
         return true;
-    end;
-$$ language plpgsql;
-
-
-drop function if exists capability_grants(text) cascade;
-create or replace function capability_grants(capability_name text)
-    returns json as $$
-    declare data json;
-    begin
-        assert (select exists(select 1 from capabilities_http where capabilities_http.capability_name = $1)) = 't',
-            'capability_name does not exist';
-        select json_agg(json_build_object(
-                    'http_method', capability_grant_http_method,
-                    'uri_pattern', capability_grant_uri_pattern))
-            from capabilities_http_grants
-            where capabilities_http_grants.capability_name = $1 into data;
-        return json_build_object('capability_name', capability_name, 'capability_grants', data);
     end;
 $$ language plpgsql;
 
@@ -377,6 +352,9 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
     declare matches boolean;
     declare grant_data json;
     declare data json;
+    declare grnt_grp text[];
+    declare grnt_mthd text;
+    declare grnt_ptrn text;
     begin
         assert (select exists(select 1 from groups where group_name = grp)) = 't', 'group does not exist';
         create temporary table if not exists cpb(ct text unique not null) on commit drop;
@@ -405,8 +383,23 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
         if grants = 'f' then
             return json_build_object('group_name', grp, 'group_capabilities_http', data);
         else
-            select json_agg(json_build_object(capability_name, capability_grants(capability_name)))
-                from capabilities_http where capability_name in (select * from cpb) into grant_data;
+            create temporary table if not exists grnts(method text, pattern text,
+                unique (method, pattern)) on commit drop;
+            for grnt_grp, grnt_mthd, grnt_ptrn in
+                select capability_grant_required_groups, capability_grant_http_method, capability_grant_uri_pattern
+                from capabilities_http_grants loop
+                    for rgrp in select unnest(grnt_grp) loop
+                        reg := '.*' || rgrp || '.*';
+                        if grp ~ reg then
+                            begin
+                                insert into grnts values (grnt_mthd, grnt_ptrn);
+                            exception when unique_violation then
+                                null;
+                            end;
+                        end if;
+                    end loop;
+            end loop;
+            select json_agg(json_build_object('method', method, 'pattern', pattern)) from grnts into grant_data;
             return json_build_object('group_name', grp, 'group_capabilities_http', data, 'grants', grant_data);
         end if;
     end;

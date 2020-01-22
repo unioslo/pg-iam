@@ -117,7 +117,7 @@ create or replace function update_audit_log_relations()
                 parent := NEW.group_name;
                 child := NEW.group_moderator_name;
             elsif table_name = 'capabilities_http_grants' then
-                parent := NEW.capability_name;
+                parent := NEW.capability_grant_id;
                 child := NEW.capability_grant_hostname || ','
                       || NEW.capability_grant_namespace || ','
                       || NEW.capability_grant_http_method || ','
@@ -133,7 +133,7 @@ create or replace function update_audit_log_relations()
                 parent := OLD.group_name;
                 child := OLD.group_moderator_name;
             elsif table_name = 'capabilities_http_grants' then
-                parent := OLD.capability_name;
+                parent := OLD.capability_grant_id;
                 child := OLD.capability_grant_http_method || ',' || OLD.capability_grant_uri_pattern;
             end if;
         end if;
