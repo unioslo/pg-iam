@@ -259,6 +259,7 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
     declare curr_id uuid;
     declare new_val int;
     declare current_max int;
+    declare current_max_id uuid;
     begin
         target_id := grant_id::uuid;
         assert target_id in (select capability_grant_id from capabilities_http_grants),
@@ -278,6 +279,17 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
             into current_max;
         assert new_grant_rank - current_max <= 1,
             'grant rank values must be monotonically increasing';
+        if current_max = 1 then
+            select capability_grant_id from capabilities_http_grants
+                where capability_grant_hostname = target_hostname
+                and capability_grant_namespace = target_namespace
+                and capability_grant_http_method = target_http_method
+                and capability_grant_rank = current_max
+                into current_max_id;
+            if current_max_id = target_id then
+                assert new_grant_rank = 1, 'first entry must start at 1';
+            end if;
+        end if;
         update capabilities_http_grants set capability_grant_rank = null
             where capability_grant_id = target_id;
         if new_grant_rank < target_curr_rank then
