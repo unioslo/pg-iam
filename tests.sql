@@ -736,6 +736,7 @@ create or replace function test_capabilities_http()
         select capability_grant_group_add('allow_get', 'moderator') into ans;
         -- test group content
         -- test can use id
+        select capability_grant_group_remove('allow_get', 'moderator') into ans;
         -- test remove with both name and id
         return true;
     end;
