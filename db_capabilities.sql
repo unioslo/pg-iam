@@ -412,6 +412,47 @@ create or replace function capability_grant_delete(grant_id text)
 $$ language plpgsql;
 
 
+drop function if exists capability_grant_group_add(text, text);
+create or replace function capability_grant_group_add(grant_reference text, group_name text)
+    returns boolean as $$
+    declare current text[];
+    declare new text[];
+    declare num int;
+    begin
+        begin
+            perform grant_reference::uuid;
+            select count(*) from capabilities_http_grants
+                where capability_grant_id = grant_reference::uuid into num;
+            assert num = 1, 'grant not found';
+            select capability_grant_required_groups from capabilities_http_grants
+                where capability_grant_id = grant_reference::uuid into current;
+            select array_append(current, group_name) into new;
+            update capabilities_http_grants set capability_grant_required_groups = new
+                where capability_grant_id = grant_reference::uuid;
+        exception when invalid_text_representation then
+            select count(*) from capabilities_http_grants
+                where capability_grant_name = grant_reference into num;
+            assert num = 1, 'grant not found';
+            select capability_grant_required_groups from capabilities_http_grants
+                where capability_grant_name = grant_reference into current;
+            select array_append(current, group_name) into new;
+            update capabilities_http_grants set capability_grant_required_groups = new
+                where capability_grant_name = grant_reference;
+        end;
+        return true;
+    end;
+$$ language plpgsql;
+
+
+drop function if exists capability_grant_group_remove(text, text);
+create or replace function capability_grant_group_remove(grant_reference text, group_name text)
+    returns boolean as $$
+    begin
+        return true;
+    end;
+$$ language plpgsql;
+
+
 drop function if exists grp_cpbts(text, boolean) cascade;
 create or replace function grp_cpbts(grp text, grants boolean default 'f')
     returns json as $$
