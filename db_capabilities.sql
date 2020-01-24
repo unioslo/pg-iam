@@ -18,6 +18,19 @@ $$ language plpgsql;
 select drop_tables(:drop_table_flag);
 
 
+create or replace function assert_array_unique(arr text[], name text)
+    returns void as $$
+    declare err text;
+    begin
+        if arr is not null then
+            err := 'duplicate ' || name;
+            assert (select cardinality(array(select distinct unnest(arr)))) =
+                   (select cardinality(arr)), err;
+        end if;
+    end;
+$$ language plpgsql;
+
+
 create table if not exists capabilities_http(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid unique not null default gen_random_uuid(),
@@ -32,7 +45,19 @@ create table if not exists capabilities_http(
     capability_group_existence_check boolean default 't',
     capability_metadata jsonb
 );
--- todo: array_unique on groups
+
+
+drop function if exists ensure_unique_capability_groups() cascade;
+create or replace function ensure_unique_capability_groups()
+    returns trigger as $$
+    begin
+        perform assert_array_unique(NEW.capability_required_groups, 'capability_required_groups');
+        return new;
+    end;
+$$ language plpgsql;
+create trigger capabilities_http_unique_groups before update or insert on capabilities_http
+    for each row execute procedure ensure_unique_capability_groups();
+
 
 create trigger capabilities_http_audit after update or insert or delete on capabilities_http
     for each row execute procedure update_audit_log_objects();
