@@ -195,7 +195,18 @@ create table if not exists capabilities_http_grants(
             capability_grant_http_method,
             capability_grant_rank)
 );
--- todo: array_unique on groups
+
+drop function if exists ensure_unique_grant_groups() cascade;
+create or replace function ensure_unique_grant_groups()
+    returns trigger as $$
+    begin
+        perform assert_array_unique(NEW.capability_grant_required_groups, 'capability_grant_required_groups');
+        return new;
+    end;
+$$ language plpgsql;
+create trigger capabilities_http_grants_unique_groups before update or insert on capabilities_http_grants
+    for each row execute procedure ensure_unique_grant_groups();
+
 
 drop function if exists ensure_sensible_rank_update() cascade;
 create or replace function ensure_sensible_rank_update()
