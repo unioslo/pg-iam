@@ -734,10 +734,12 @@ create or replace function test_capabilities_http()
                                               'GET', '/(.*)/admin/profile/([a-zA-Z0-9])',
                                               '{"self"}');
         select capability_grant_group_add('allow_get', 'moderator') into ans;
-        -- test group content
-        -- test can use id
-        select capability_grant_group_remove('allow_get', 'moderator') into ans;
-        -- test remove with both name and id
+        assert array['moderator'] <@ (select capability_grant_required_groups from capabilities_http_grants
+                                      where capability_grant_name = 'allow_get'), 'capability_grant_group_add issue';
+        select capability_grant_id from capabilities_http_grants where capability_grant_name = 'allow_get' into grid1;
+        select capability_grant_group_remove(grid1::text, 'moderator') into ans;
+        assert array['self'] = (select capability_grant_required_groups from capabilities_http_grants
+                                where capability_grant_name = 'allow_get'), 'capability_grant_group_remove issue';
         return true;
     end;
 $$ language plpgsql;
