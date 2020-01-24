@@ -108,4 +108,16 @@ capability_instance_get(id text)
     Returns:
     {capablity_name, instance_id, instance_start_date, instance_end_date, instance_usages_remaining, instance_metadata}
 */
+
+capability_grant_group_add(grant_reference text, group_name text)
+/*
+    Returns
+    boolean
+*/
+
+capability_grant_group_remove(grant_reference text, group_name text)
+/*
+    Returns
+    boolean
+*/
 ```
