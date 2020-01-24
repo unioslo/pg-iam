@@ -32,7 +32,7 @@ create table if not exists capabilities_http(
     capability_group_existence_check boolean default 't',
     capability_metadata jsonb
 );
-
+-- todo: array_unique on groups
 
 create trigger capabilities_http_audit after update or insert or delete on capabilities_http
     for each row execute procedure update_audit_log_objects();
@@ -150,6 +150,7 @@ $$ language plpgsql;
 create table if not exists capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
     capability_grant_id uuid not null default gen_random_uuid() primary key,
+    capability_grant_name text unique,
     capability_grant_hostname text not null,
     capability_grant_namespace text not null,
     capability_grant_http_method text not null check (capability_grant_http_method in
@@ -158,6 +159,7 @@ create table if not exists capabilities_http_grants(
     capability_grant_uri_pattern text not null, -- string or regex referring to a set of resources
     capability_grant_required_groups text[],
     capability_grant_required_attributes jsonb,
+    capability_grant_quick boolean default 't',
     capability_grant_start_date timestamptz,
     capability_grant_end_date timestamptz,
     capability_grant_max_num_usages int,
@@ -168,6 +170,26 @@ create table if not exists capabilities_http_grants(
             capability_grant_http_method,
             capability_grant_rank)
 );
+-- todo: array_unique on groups
+
+drop function if exists ensure_sensible_rank_update() cascade;
+create or replace function ensure_sensible_rank_update()
+    returns trigger as $$
+    declare num int;
+    begin
+        select count(*) from capabilities_http_grants
+            where capability_grant_hostname = NEW.capability_grant_hostname
+            and capability_grant_namespace = NEW.capability_grant_namespace
+            and capability_grant_http_method = NEW.capability_grant_http_method
+            into num;
+        if NEW.capability_grant_rank > num then
+            assert false, 'Rank cannot be updated to a value higher than the number of entries per hostname, namespace, method';
+        end if;
+        return new;
+    end;
+$$ language plpgsql;
+create trigger capabilities_http_grants_rank_update before update on capabilities_http_grants
+    for each row execute procedure ensure_sensible_rank_update();
 
 
 drop function if exists generate_grant_rank() cascade;
