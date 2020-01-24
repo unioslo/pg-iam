@@ -533,6 +533,12 @@ create or replace function test_capabilities_http()
         exception when others then
             raise notice 'capabilities_http: name uniqueness guaranteed';
         end;
+        begin
+            update capabilities_http set capability_required_groups = '{self,self}'
+                where capability_name = 'admin';
+        exception when assert_failure then
+            raise notice 'capabilities_http: required groups are guaranteed unique';
+        end;
         -- referential constraints
         begin
             insert into capabilities_http (capability_name, capability_default_claims,
