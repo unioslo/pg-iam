@@ -672,6 +672,12 @@ create or replace function test_capabilities_http()
         exception when others then
             raise notice 'capabilities_http_grants: rank values must be unique within their grant sets - as expected';
         end;
+        begin
+            update capabilities_http_grants set capability_grant_required_groups = '{sefl,self}'
+                where capability_grant_id = grid;
+        exception when assert_failure then
+            raise notice 'capabilities_http_grants: groups are ensured to be unique';
+        end;
         -- reject if grant id not found
         begin
             select capability_grant_rank_set(grid::text, 9) into ans;
