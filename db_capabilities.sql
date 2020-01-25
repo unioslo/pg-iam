@@ -45,6 +45,7 @@ create table if not exists capabilities_http(
     capability_group_existence_check boolean default 't',
     capability_metadata jsonb
 );
+-- on delete remove from capability_names_allowed
 
 
 drop function if exists ensure_unique_capability_groups() cascade;
@@ -174,6 +175,7 @@ $$ language plpgsql;
 
 create table if not exists capabilities_http_grants(
     row_id uuid unique not null default gen_random_uuid(),
+    capability_names_allowed text[] not null,
     capability_grant_id uuid not null default gen_random_uuid() primary key,
     capability_grant_name text unique,
     capability_grant_hostname text not null,
@@ -195,6 +197,22 @@ create table if not exists capabilities_http_grants(
             capability_grant_http_method,
             capability_grant_rank)
 );
+
+
+drop function if exists ensure_correct_capability_names_allowed() cascade;
+create or replace function ensure_correct_capability_names_allowed()
+    returns trigger as $$
+    begin
+        perform assert_array_unique(NEW.capability_names_allowed, 'capability_names_allowed');
+        assert NEW.capability_names_allowed <@
+            (select array_append(array_agg(capability_name), 'all') from capabilities_http),
+            'trying to reference a capability name which does not exists';
+        return new;
+    end;
+$$ language plpgsql;
+create trigger apabilities_http_grants_correct_names_allowed before insert or update on capabilities_http_grants
+    for each row execute procedure ensure_correct_capability_names_allowed();
+
 
 drop function if exists ensure_unique_grant_groups() cascade;
 create or replace function ensure_unique_grant_groups()
