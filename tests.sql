@@ -734,7 +734,7 @@ create or replace function test_capabilities_http()
                 where capability_grant_id = grid2) = 3, 'rank set issue - id2';
         assert (select capability_grant_rank from capabilities_http_grants
                 where capability_grant_id = grid4) = 4, 'rank set issue - id4';
-        raise notice 'capability_grant_rank_set works';
+        raise notice 'capabilities_http_grants: capability_grant_rank_set works';
         -- irrelevant rankings not affected (within and between rank sets)
         assert (select max(capability_grant_rank) from capabilities_http_grants
                 where capability_grant_hostname = 'api.com'
@@ -763,6 +763,30 @@ create or replace function test_capabilities_http()
         assert array['self'] = (select capability_grant_required_groups from capabilities_http_grants
                                 where capability_grant_name = 'allow_get'), 'capability_grant_group_remove issue';
         -- test that deleting a capability_name automatically removes it from any references in capability_names_allowed
+        insert into capabilities_http (capability_name, capability_default_claims,
+                                       capability_required_groups, capability_group_match_method,
+                                       capability_lifetime, capability_description, capability_expiry_date)
+                               values ('edit', '{"role": "editor"}',
+                                      '{"p11-export-group", "p11-special-group"}', 'exact',
+                                      '123', 'bla', current_date);
+        insert into capabilities_http_grants (capability_names_allowed,
+                                              capability_grant_name,
+                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_http_method, capability_grant_uri_pattern,
+                                              capability_grant_required_groups)
+                                      values ('{admin,edit}',
+                                              'allow_edit',
+                                              'api.com', 'files',
+                                              'PATCH', '/(.*)/admin/profile/([a-zA-Z0-9])',
+                                              '{self}');
+        delete from capabilities_http where capability_name = 'edit';
+        assert (select capability_names_allowed from capabilities_http_grants where capability_grant_name = 'allow_edit')
+            = array['admin'], 'capabilities_http_grants: automatic deletion of references to capability_name in grants does not work';
+        begin
+            delete from capabilities_http where capability_name = 'export';
+        exception when assert_failure then
+            raise notice 'capabilities_http_grants: protection against removing a capability_name, when grants refer only to that name works';
+        end;
         return true;
     end;
 $$ language plpgsql;
