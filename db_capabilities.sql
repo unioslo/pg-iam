@@ -45,7 +45,6 @@ create table if not exists capabilities_http(
     capability_group_existence_check boolean default 't',
     capability_metadata jsonb
 );
--- on delete remove from capability_names_allowed
 
 
 drop function if exists ensure_unique_capability_groups() cascade;
@@ -70,6 +69,7 @@ create or replace function capabilities_http_immutability()
     begin
         assert OLD.row_id = NEW.row_id, 'row_id is immutable';
         assert OLD.capability_id = NEW.capability_id, 'capability_id is immutable';
+        assert OLD.capability_name = NEW.capability_name, 'capability_name is immutable';
         return new;
     end;
 $$ language plpgsql;
@@ -199,6 +199,31 @@ create table if not exists capabilities_http_grants(
 );
 
 
+drop function if exists ensure_capability_name_references_consistent() cascade;
+create or replace function ensure_capability_name_references_consistent()
+    returns trigger as $$
+    declare name_references text[];
+    declare grant_id uuid;
+    declare new text[];
+    begin
+        for name_references, grant_id in
+            select capability_names_allowed, capability_grant_id from capabilities_http_grants
+            where array[OLD.capability_name] <@ capability_names_allowed loop
+            select array_remove(name_references, OLD.capability_name) into new;
+            assert cardinality(new) > 0,
+                'deleting the capability would leave one or more grants ' ||
+                'without a reference to any capability which is not allowed ' ||
+                'delete the grant before deleting the capability, or change the reference';
+            update capabilities_http_grants set capability_names_allowed = new
+                where capability_grant_id = grant_id;
+        end loop;
+        return old;
+    end;
+$$ language plpgsql;
+create trigger capabilities_http_consistent_name_references after delete on capabilities_http
+    for each row execute procedure ensure_capability_name_references_consistent();
+
+
 drop function if exists ensure_correct_capability_names_allowed() cascade;
 create or replace function ensure_correct_capability_names_allowed()
     returns trigger as $$
@@ -206,7 +231,7 @@ create or replace function ensure_correct_capability_names_allowed()
         perform assert_array_unique(NEW.capability_names_allowed, 'capability_names_allowed');
         assert NEW.capability_names_allowed <@
             (select array_append(array_agg(capability_name), 'all') from capabilities_http),
-            'trying to reference a capability name which does not exists';
+            'trying to reference a capability name which does not exists: ' || NEW.capability_names_allowed::text;
         return new;
     end;
 $$ language plpgsql;
