@@ -750,7 +750,7 @@ create or replace function test_capabilities_http()
                                               capability_grant_hostname, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern,
                                               capability_grant_required_groups)
-                                      values ('{export}',
+                                      values ('{export,admin}',
                                               'allow_get',
                                               'api.com', 'files',
                                               'GET', '/(.*)/admin/profile/([a-zA-Z0-9])',
@@ -762,6 +762,7 @@ create or replace function test_capabilities_http()
         select capability_grant_group_remove(grid1::text, 'moderator') into ans;
         assert array['self'] = (select capability_grant_required_groups from capabilities_http_grants
                                 where capability_grant_name = 'allow_get'), 'capability_grant_group_remove issue';
+        -- test that deleting a capability_name automatically removes it from any references in capability_names_allowed
         return true;
     end;
 $$ language plpgsql;
