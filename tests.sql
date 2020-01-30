@@ -561,28 +561,28 @@ create or replace function test_capabilities_http()
                     '123', 'bla', current_date, 'f');
         delete from capabilities_http where capability_name = 'admin2';
         insert into capabilities_http_grants (capability_names_allowed,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
                                       values ('{export}',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'PUT', '/p11/files');
         insert into capabilities_http_grants (capability_names_allowed,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
                                       values ('{export}',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'GET', '/(.*)/export');
         insert into capabilities_http_grants (capability_names_allowed,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
                                       values ('{export}',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'DELETE', '/(.*)/files');
         insert into capabilities_http_grants (capability_names_allowed,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
                                       values ('{export,admin}',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'GET', '/(.*)/admin');
         -- immutability
         begin
@@ -601,11 +601,11 @@ create or replace function test_capabilities_http()
         begin
             select capability_id from capabilities_http where capability_name = 'export' into cid;
             insert into capabilities_http_grants (capability_names_allowed,
-                                                  capability_grant_hostname, capability_grant_namespace,
+                                                  capability_grant_hostnames, capability_grant_namespace,
                                                   capability_grant_http_method, capability_grant_uri_pattern,
                                                   capability_grant_required_groups)
                                           values ('{export}',
-                                                  'api.com', 'files',
+                                                  '{api.com}', 'files',
                                                   'GET', '/(.*)/admin',
                                                   '{"my-own-crazy-group"}');
         exception when assert_failure then
@@ -613,55 +613,55 @@ create or replace function test_capabilities_http()
         end;
         -- ability to override group references
         insert into capabilities_http_grants (capability_names_allowed,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern,
                                               capability_grant_required_groups, capability_grant_group_existence_check)
                                       values ('{export}',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'GET', '/(.*)/admin',
                                               '{"my-own-crazy-group"}', 'f');
         -- add some more test data
         insert into capabilities_http_grants (capability_names_allowed,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern,
                                               capability_grant_required_groups, capability_grant_group_existence_check)
                                       values ('{export}',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'GET', '/(.*)/export',
                                               '{"my-own-custom-export-group"}', 'f');
         insert into capabilities_http_grants (capability_names_allowed,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern,
                                               capability_grant_required_groups, capability_grant_group_existence_check)
                                       values ('{export}',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'HEAD', '/(.*)/export',
                                               '{"my-own-custom-export-group"}', 'f');
         insert into capabilities_http_grants (capability_names_allowed,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern,
                                               capability_grant_required_groups, capability_grant_group_existence_check)
                                       values ('{export}',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'GET', '/something',
                                               '{"my-own-custom-export-group"}', 'f');
         -- grant ranking
         -- generation
         assert 1 in (select capability_grant_rank from capabilities_http_grants
-             where capability_grant_hostname = 'api.com' and capability_grant_http_method = 'GET'),
+             where capability_grant_hostnames = array['api.com'] and capability_grant_http_method = 'GET'),
              'rank generation issue: 1';
         assert 2 in (select capability_grant_rank from capabilities_http_grants
-             where capability_grant_hostname = 'api.com' and capability_grant_http_method = 'GET'),
+             where capability_grant_hostnames = array['api.com'] and capability_grant_http_method = 'GET'),
              'rank generation issue: 2';
         assert 3 in (select capability_grant_rank from capabilities_http_grants
-             where capability_grant_hostname = 'api.com' and capability_grant_http_method = 'GET'),
+             where capability_grant_hostnames = array['api.com'] and capability_grant_http_method = 'GET'),
              'rank generation issue: 3';
         assert 6 not in (select capability_grant_rank from capabilities_http_grants
-             where capability_grant_hostname = 'api.com' and capability_grant_http_method = 'GET'),
+             where capability_grant_hostnames = array['api.com'] and capability_grant_http_method = 'GET'),
              'rank generation issue: 6';
         -- natural numbers
         select capability_grant_id from capabilities_http_grants
-            where capability_grant_hostname = 'api.com' and capability_grant_http_method = 'GET'
+            where capability_grant_hostnames = array['api.com'] and capability_grant_http_method = 'GET'
             and capability_grant_rank = 1 into grid;
         begin
             select capability_grant_rank_set(grid::text, -9) into ans;
@@ -679,12 +679,12 @@ create or replace function test_capabilities_http()
         -- uniqueness
         begin
             insert into capabilities_http_grants (capability_names_allowed,
-                                                  capability_grant_hostname, capability_grant_namespace,
+                                                  capability_grant_hostnames, capability_grant_namespace,
                                                   capability_grant_http_method, capability_grant_uri_pattern,
                                                   capability_grant_required_groups, capability_grant_group_existence_check,
                                                   capability_grant_rank)
                                           values ('{export}'
-                                                  'api.com', 'files',
+                                                  '{api.com}', 'files',
                                                   'HEAD', '/(.*)/export',
                                                   '{"my-own-custom-export-group"}', 'f',
                                                   1);
@@ -707,16 +707,16 @@ create or replace function test_capabilities_http()
         end;
         -- correct reorder
         select capability_grant_id from capabilities_http_grants
-            where capability_grant_hostname = 'api.com' and capability_grant_http_method = 'GET'
+            where capability_grant_hostnames = array['api.com'] and capability_grant_http_method = 'GET'
             and capability_grant_rank = 1 into grid1;
         select capability_grant_id from capabilities_http_grants
-            where capability_grant_hostname = 'api.com' and capability_grant_http_method = 'GET'
+            where capability_grant_hostnames = array['api.com'] and capability_grant_http_method = 'GET'
             and capability_grant_rank = 2 into grid2;
         select capability_grant_id from capabilities_http_grants
-            where capability_grant_hostname = 'api.com' and capability_grant_http_method = 'GET'
+            where capability_grant_hostnames = array['api.com'] and capability_grant_http_method = 'GET'
             and capability_grant_rank = 3 into grid3;
         select capability_grant_id from capabilities_http_grants
-            where capability_grant_hostname = 'api.com' and capability_grant_http_method = 'GET'
+            where capability_grant_hostnames = array['api.com'] and capability_grant_http_method = 'GET'
             and capability_grant_rank = 4 into grid4;
         /*
         id , rank_before, rank_after
@@ -737,7 +737,7 @@ create or replace function test_capabilities_http()
         raise notice 'capabilities_http_grants: capability_grant_rank_set works';
         -- irrelevant rankings not affected (within and between rank sets)
         assert (select max(capability_grant_rank) from capabilities_http_grants
-                where capability_grant_hostname = 'api.com'
+                where capability_grant_hostnames = array['api.com']
                 and capability_grant_http_method = 'HEAD') = 1,
             'per capability, per http_method ranking broken';
         -- deletes (keep rank consistent)
@@ -747,12 +747,12 @@ create or replace function test_capabilities_http()
         -- test self and moderator keywords
         insert into capabilities_http_grants (capability_names_allowed,
                                               capability_grant_name,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern,
                                               capability_grant_required_groups)
                                       values ('{export,admin}',
                                               'allow_get',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'GET', '/(.*)/admin/profile/([a-zA-Z0-9])',
                                               '{"self"}');
         select capability_grant_group_add('allow_get', 'moderator') into ans;
@@ -771,12 +771,12 @@ create or replace function test_capabilities_http()
                                       '123', 'bla', current_date);
         insert into capabilities_http_grants (capability_names_allowed,
                                               capability_grant_name,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern,
                                               capability_grant_required_groups)
                                       values ('{admin,edit}',
                                               'allow_edit',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'PATCH', '/(.*)/admin/profile/([a-zA-Z0-9])',
                                               '{self}');
         delete from capabilities_http where capability_name = 'edit';
@@ -916,11 +916,11 @@ create or replace function test_funcs()
                     '{"p11-surrealist-group", "p11-admin-group"}', 'exact',
                     '123', 'bla', current_date);
         insert into capabilities_http_grants (capability_names_allowed,
-                                              capability_grant_hostname, capability_grant_namespace,
+                                              capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern,
                                               capability_grant_required_groups)
                                       values ('{export}',
-                                              'api.com', 'files',
+                                              '{api.com}', 'files',
                                               'GET', '/(.*)/art',
                                               '{surrealist-group}');
         select person_capabilities(pid::text, 't') into data;
@@ -1019,6 +1019,7 @@ create or replace function test_cascading_deletes(keep_data boolean default 'fal
         delete from groups;
         delete from audit_log_objects;
         delete from audit_log_relations;
+        delete from capabilities_http_grants;
         delete from capabilities_http;
         return true;
     end;

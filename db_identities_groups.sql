@@ -118,7 +118,7 @@ create or replace function update_audit_log_relations()
                 child := NEW.group_moderator_name;
             elsif table_name = 'capabilities_http_grants' then
                 parent := NEW.capability_grant_id;
-                child := NEW.capability_grant_hostname || ','
+                child := NEW.capability_grant_hostnames::text || ','
                       || NEW.capability_grant_namespace || ','
                       || NEW.capability_grant_http_method || ','
                       || NEW.capability_grant_uri_pattern || ','
