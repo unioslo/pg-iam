@@ -196,7 +196,7 @@ create table if not exists capabilities_http_grants(
             capability_grant_http_method,
             capability_grant_rank)
 );
--- need array unique on hosts
+
 
 drop function if exists ensure_capability_name_references_consistent() cascade;
 create or replace function ensure_capability_name_references_consistent()
