@@ -238,16 +238,17 @@ create trigger apabilities_http_grants_correct_names_allowed before insert or up
     for each row execute procedure ensure_correct_capability_names_allowed();
 
 
-drop function if exists ensure_unique_grant_groups() cascade;
-create or replace function ensure_unique_grant_groups()
+drop function if exists ensure_unique_grant_arrays() cascade;
+create or replace function ensure_unique_grant_arrays()
     returns trigger as $$
     begin
         perform assert_array_unique(NEW.capability_grant_required_groups, 'capability_grant_required_groups');
+        perform assert_array_unique(NEW.capability_grant_hostnames, 'capability_grant_hostnames');
         return new;
     end;
 $$ language plpgsql;
-create trigger capabilities_http_grants_unique_groups before update or insert on capabilities_http_grants
-    for each row execute procedure ensure_unique_grant_groups();
+create trigger capabilities_http_grants_unique_arrays before update or insert on capabilities_http_grants
+    for each row execute procedure ensure_unique_grant_arrays();
 
 
 drop function if exists ensure_sensible_rank_update() cascade;
