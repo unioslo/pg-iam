@@ -560,16 +560,16 @@ create or replace function test_capabilities_http()
                     '{"admin2-group", "very-special-group"}', 'wildcard',
                     '123', 'bla', current_date, 'f');
         delete from capabilities_http where capability_name = 'admin2';
-        insert into capabilities_http_grants (capability_names_allowed,
+        insert into capabilities_http_grants (capability_grant_rank, capability_names_allowed,
                                               capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
-                                      values ('{export}',
+                                      values (null, '{export}',
                                               '{api.com}', 'files',
                                               'PUT', '/p11/files');
-        insert into capabilities_http_grants (capability_names_allowed,
+        insert into capabilities_http_grants (capability_grant_rank, capability_names_allowed,
                                               capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
-                                      values ('{export}',
+                                      values (1, '{export}',
                                               '{api.com}', 'files',
                                               'GET', '/(.*)/export');
         insert into capabilities_http_grants (capability_names_allowed,
@@ -578,10 +578,10 @@ create or replace function test_capabilities_http()
                                       values ('{export}',
                                               '{api.com}', 'files',
                                               'DELETE', '/(.*)/files');
-        insert into capabilities_http_grants (capability_names_allowed,
+        insert into capabilities_http_grants (capability_grant_rank, capability_names_allowed,
                                               capability_grant_hostnames, capability_grant_namespace,
                                               capability_grant_http_method, capability_grant_uri_pattern)
-                                      values ('{export,admin}',
+                                      values (2, '{export,admin}',
                                               '{api.com}', 'files',
                                               'GET', '/(.*)/admin');
         -- immutability
