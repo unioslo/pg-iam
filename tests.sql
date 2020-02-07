@@ -490,22 +490,22 @@ create or replace function test_capabilities_http()
     declare grid3 uuid;
     declare grid4 uuid;
     begin
-        insert into capabilities_http (capability_name, capability_default_claims,
+        insert into capabilities_http (capability_name, capability_hostnames, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
                                   capability_lifetime, capability_description, capability_expiry_date)
-            values ('p11import', '{"role": "p11_import_user"}',
+            values ('p11import', '{api.com}', '{"role": "p11_import_user"}',
                     '{"p11-export-group", "p11-special-group"}', 'exact',
                     '123', 'bla', current_date);
-        insert into capabilities_http (capability_name, capability_default_claims,
+        insert into capabilities_http (capability_name, capability_hostnames, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
                                   capability_lifetime, capability_description, capability_expiry_date)
-            values ('export', '{"role": "export_user"}',
+            values ('export', '{api.com}', '{"role": "export_user"}',
                     '{"admin-group", "export-group"}', 'wildcard',
                     '123', 'bla', current_date);
-        insert into capabilities_http (capability_name, capability_default_claims,
+        insert into capabilities_http (capability_name, capability_hostnames, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
                                   capability_lifetime, capability_description, capability_expiry_date)
-            values ('admin', '{"role": "admin_user"}',
+            values ('admin', '{api.com}', '{"role": "admin_user"}',
                     '{"admin-group", "special-group"}', 'wildcard',
                     '123', 'bla', current_date);
         -- immutability
@@ -523,10 +523,10 @@ create or replace function test_capabilities_http()
         end;
         -- uniqueness
         begin
-            insert into capabilities_http (capability_name, capability_default_claims,
+            insert into capabilities_http (capability_name, capability_hostnames, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
                                   capability_lifetime, capability_description, capability_expiry_date)
-                values ('admin', '{"role": "admin_user"}',
+                values ('admin', '{api.com}', '{"role": "admin_user"}',
                         '{"admin-group", "special-group"}', 'wildcard',
                         '123', 'bla', current_date);
             assert false;
@@ -541,10 +541,10 @@ create or replace function test_capabilities_http()
         end;
         -- referential constraints
         begin
-            insert into capabilities_http (capability_name, capability_default_claims,
+            insert into capabilities_http (capability_name, capability_hostnames, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
                                   capability_lifetime, capability_description, capability_expiry_date)
-            values ('admin2', '{"role": "admin_user"}',
+            values ('admin2', '{api.com}', '{"role": "admin_user"}',
                     '{"admin2-group", "very-special-group"}', 'wildcard',
                     '123', 'bla', current_date);
             assert false;
@@ -552,11 +552,11 @@ create or replace function test_capabilities_http()
             raise notice 'capabilities_http: group must exist to be referenced in new capability';
         end;
         -- ability to override group references
-        insert into capabilities_http (capability_name, capability_default_claims,
+        insert into capabilities_http (capability_name, capability_hostnames, capability_default_claims,
                                   capability_required_groups, capability_group_match_method,
                                   capability_lifetime, capability_description, capability_expiry_date,
                                   capability_group_existence_check)
-            values ('admin2', '{"role": "admin_user"}',
+            values ('admin2', '{api.com}', '{"role": "admin_user"}',
                     '{"admin2-group", "very-special-group"}', 'wildcard',
                     '123', 'bla', current_date, 'f');
         delete from capabilities_http where capability_name = 'admin2';
@@ -763,10 +763,10 @@ create or replace function test_capabilities_http()
         assert array['self'] = (select capability_grant_required_groups from capabilities_http_grants
                                 where capability_grant_name = 'allow_get'), 'capability_grant_group_remove issue';
         -- test that deleting a capability_name automatically removes it from any references in capability_names_allowed
-        insert into capabilities_http (capability_name, capability_default_claims,
+        insert into capabilities_http (capability_name, capability_hostnames, capability_default_claims,
                                        capability_required_groups, capability_group_match_method,
                                        capability_lifetime, capability_description, capability_expiry_date)
-                               values ('edit', '{"role": "editor"}',
+                               values ('edit', '{api.com}', '{"role": "editor"}',
                                       '{"p11-export-group", "p11-special-group"}', 'exact',
                                       '123', 'bla', current_date);
         insert into capabilities_http_grants (capability_names_allowed,
@@ -909,10 +909,10 @@ create or replace function test_funcs()
         assert data->>'person_id' = pid::text, err;
         -- person_capabilities
         insert into capabilities_http (
-            capability_name, capability_default_claims,
+            capability_name, capability_hostnames, capability_default_claims,
             capability_required_groups, capability_group_match_method,
             capability_lifetime, capability_description, capability_expiry_date)
-            values ('p11-art', '{"role": "p11_art_user"}',
+            values ('p11-art', '{api.com}', '{"role": "p11_art_user"}',
                     '{"p11-surrealist-group", "p11-admin-group"}', 'exact',
                     '123', 'bla', current_date);
         insert into capabilities_http_grants (capability_names_allowed,
