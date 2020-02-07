@@ -58,9 +58,9 @@ setup() {
         psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_capabilities.sql
         exit
     fi
-    num_persons=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from persons" -At)
-    num_users=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from users" -At)
-    num_groups=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from groups" -At)
+    num_persons=$(psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from persons" -At)
+    num_users=$(psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from users" -At)
+    num_groups=$(psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from groups" -At)
     echo "Persons: $num_persons"
     echo "Users: $num_users"
     echo "Groups: $num_groups"
@@ -72,8 +72,8 @@ setup() {
     if [[ $ANS == "y" ]]; then
         psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_identities_groups.sql
     fi
-    num_caps=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from capabilities_http" -At)
-    num_grants=$(psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "select count(*) from capabilities_http_grants" -At)
+    num_caps=$(psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from capabilities_http" -At)
+    num_grants=$(psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from capabilities_http_grants" -At)
     echo "Capabilities: $num_caps"
     echo "Grants: $num_grants"
     if [[ $DROP_TABLES == "true" ]]; then
