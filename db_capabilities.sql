@@ -276,24 +276,18 @@ drop function if exists generate_grant_rank() cascade;
 create or replace function generate_grant_rank()
     returns trigger as $$
     declare num int;
-    declare new_rank int;
     begin
         -- check if first grant for (host, namespace, method) combination
         select count(*) from capabilities_http_grants
             where capability_grant_namespace = NEW.capability_grant_namespace
             and capability_grant_http_method = NEW.capability_grant_http_method
             into num;
-        if num = 1 then -- because trigger runs after insert of first entry
-            new_rank := 1;
-        else
-            new_rank := num;
-        end if;
         if NEW.capability_grant_rank is not null then
-            assert NEW.capability_grant_rank = new_rank,
+            assert NEW.capability_grant_rank = num,
                 'grant rank values must be monotonically increasing';
             return new;
         end if;
-        update capabilities_http_grants set capability_grant_rank = new_rank
+        update capabilities_http_grants set capability_grant_rank = num
             where capability_grant_id = NEW.capability_grant_id;
         return new;
     end;
