@@ -35,6 +35,7 @@ create table if not exists capabilities_http(
     row_id uuid unique not null default gen_random_uuid(),
     capability_id uuid unique not null default gen_random_uuid(),
     capability_name text unique not null primary key,
+    capability_hostnames text[] not null,
     capability_default_claims jsonb,
     capability_required_groups text[],
     capability_required_attributes jsonb,
@@ -47,16 +48,17 @@ create table if not exists capabilities_http(
 );
 
 
-drop function if exists ensure_unique_capability_groups() cascade;
-create or replace function ensure_unique_capability_groups()
+drop function if exists ensure_unique_capability_attributes() cascade;
+create or replace function ensure_unique_capability_attributes()
     returns trigger as $$
     begin
         perform assert_array_unique(NEW.capability_required_groups, 'capability_required_groups');
+        perform assert_array_unique(NEW.capability_hostnames, 'capability_hostnames');
         return new;
     end;
 $$ language plpgsql;
 create trigger capabilities_http_unique_groups before update or insert on capabilities_http
-    for each row execute procedure ensure_unique_capability_groups();
+    for each row execute procedure ensure_unique_capability_attributes();
 
 
 create trigger capabilities_http_audit after update or insert or delete on capabilities_http
