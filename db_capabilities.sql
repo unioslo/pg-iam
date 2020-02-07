@@ -275,7 +275,6 @@ create trigger capabilities_http_grants_rank_update before update on capabilitie
 drop function if exists generate_grant_rank() cascade;
 create or replace function generate_grant_rank()
     returns trigger as $$
-    declare current_max int;
     declare num int;
     declare new_rank int;
     begin
@@ -284,14 +283,10 @@ create or replace function generate_grant_rank()
             where capability_grant_namespace = NEW.capability_grant_namespace
             and capability_grant_http_method = NEW.capability_grant_http_method
             into num;
-        select max(capability_grant_rank) from capabilities_http_grants
-            where capability_grant_namespace = NEW.capability_grant_namespace
-            and capability_grant_http_method = NEW.capability_grant_http_method
-            into current_max;
         if num = 1 then -- because trigger runs after insert of first entry
-                new_rank := 1;
-            else
-                new_rank := current_max + 1;
+            new_rank := 1;
+        else
+            new_rank := num;
         end if;
         if NEW.capability_grant_rank is not null then
             assert NEW.capability_grant_rank = new_rank,
