@@ -44,6 +44,8 @@ create table if not exists audit_log_objects_capabilities_http
     partition of audit_log_objects for values in ('capabilities_http');
 create table if not exists audit_log_objects_capabilities_http_instances
     partition of audit_log_objects for values in ('capabilities_http_instances');
+create table if not audit_log_objects_capabilities_http_grants
+    partition of audit_log_objects for values in ('capabilities_http_grants');
 
 
 create table if not exists audit_log_relations(
@@ -58,8 +60,6 @@ create table if not exists audit_log_relations_group_memberships
     partition of audit_log_relations for values in ('group_memberships');
 create table if not exists audit_log_relations_group_moderators
     partition of audit_log_relations for values in ('group_moderators');
-create table if not exists audit_log_relations_capabilities_http_grants
-    partition of audit_log_relations for values in ('capabilities_http_grants');
 
 
 drop function if exists update_audit_log_objects() cascade;
