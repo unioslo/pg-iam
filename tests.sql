@@ -57,12 +57,6 @@ create or replace function test_persons_users_groups()
             raise notice 'cannot assign gid between 0 and 999, as expected';
         end;
         begin
-            insert into groups (group_name, group_type, group_posix_gid)
-                values ('g1', 'generic', 200001);
-        exception when others then
-            raise notice 'cannot assign gid between 200000 and 220000, as expected';
-        end;
-        begin
             update groups set group_posix_gid = '2000' where group_name = 'p11-sconne-group';
             assert false;
         exception when others then
@@ -229,32 +223,32 @@ create or replace function test_group_memeberships_moderators()
     begin
         -- create persons and users
         insert into persons (full_name, person_expiry_date)
-            values ('Sarah Conner', '2020-10-01');
+            values ('Sarah Conner', '2050-10-01');
         select person_id from persons where full_name like '%Conner' into pid;
         insert into users (person_id, user_name, user_expiry_date)
-            values (pid, 'p11-sconne', '2020-03-28');
+            values (pid, 'p11-sconne', '2050-03-28');
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p66-sconne', '2019-12-01');
         insert into persons (full_name, person_expiry_date)
-            values ('John Conner2', '2020-10-01');
+            values ('John Conner2', '2050-10-01');
         select person_id from persons where full_name like '%Conner2' into pid;
         insert into users (person_id, user_name, user_expiry_date)
-            values (pid, 'p11-jconn', '2020-03-28');
+            values (pid, 'p11-jconn', '2050-03-28');
         insert into persons (full_name, person_expiry_date)
-            values ('Frank Castle', '2020-10-01');
+            values ('Frank Castle', '2050-10-01');
         select person_id from persons where full_name like '%Castle' into pid;
         insert into users (person_id, user_name, user_expiry_date)
-            values (pid, 'p11-fcl', '2020-03-28');
+            values (pid, 'p11-fcl', '2050-03-28');
         insert into persons (full_name, person_expiry_date)
-            values ('Virginia Woolf', '2020-10-01');
+            values ('Virginia Woolf', '2050-10-01');
         select person_id from persons where full_name like '%Woolf' into pid;
         insert into users (person_id, user_name, user_expiry_date)
-            values (pid, 'p11-vwf', '2020-03-28');
+            values (pid, 'p11-vwf', '2050-03-28');
         insert into persons (full_name, person_expiry_date)
-            values ('David Gilgamesh', '2020-10-01');
+            values ('David Gilgamesh', '2050-10-01');
         select person_id from persons where full_name like '%Gilgamesh' into pid;
         insert into users (person_id, user_name, user_expiry_date)
-            values (pid, 'p11-dgmsh', '2020-03-28');
+            values (pid, 'p11-dgmsh', '2050-03-28');
         -- create groups
         insert into groups (group_name, group_class, group_type)
             values ('p11-admin-group', 'secondary', 'generic');
