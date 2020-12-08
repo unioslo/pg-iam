@@ -259,8 +259,6 @@ create or replace function generate_new_posix_id(table_name text, colum_name tex
             new_id := 1000;
         elsif current_max_id >= 0 and current_max_id <= 999 then
             new_id := 1000;
-        elsif current_max_id >= 200000 and current_max_id <= 220000 then
-            new_id := 220001;
         else
             new_id := current_max_id + 1;
         end if;
@@ -291,7 +289,6 @@ create table if not exists users(
     user_name text unique not null primary key,
     user_group text,
     user_posix_uid int unique
-        check ((user_posix_uid > 999 and user_posix_uid < 200000) or user_posix_uid > 220000)
         default generate_new_posix_uid(), -- note: can still create holes
     user_group_posix_gid int
         check ((user_group_posix_gid > 999 and user_group_posix_gid < 200000) or user_group_posix_gid > 220000),
@@ -407,7 +404,6 @@ create table if not exists groups(
     group_primary_member text,
     group_description text,
     group_posix_gid int unique -- person groups do not have gids
-        check ((group_posix_gid > 999 and group_posix_gid < 200000) or group_posix_gid > 220000),
     group_metadata jsonb
 );
 
