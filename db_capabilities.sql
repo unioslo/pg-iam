@@ -191,7 +191,7 @@ create table if not exists capabilities_http_grants(
     capability_grant_quick boolean default 't',
     capability_grant_start_date timestamptz,
     capability_grant_end_date timestamptz,
-    capability_grant_max_num_usages int,
+    capability_grant_max_num_usages int check (capability_grant_max_num_usages >= 0),
     capability_grant_group_existence_check boolean default 't',
     capability_grant_metadata jsonb,
     unique (capability_grant_namespace,
@@ -325,7 +325,7 @@ create or replace function capabilities_http_grants_group_check()
         end if;
         for new_grp in select unnest(NEW.capability_grant_required_groups) loop
             select count(*) from groups where group_name like '%' || new_grp || '%' into num;
-            if new_grp not in ('self', 'moderator') then
+            if new_grp not in ('self', 'moderator', 'client') then
                 assert num > 0, new_grp || ' does not exist';
             end if;
         end loop;
