@@ -184,7 +184,13 @@ create or replace function test_persons_users_groups()
             update groups set group_expiry_date = '2000-01-01' where group_primary_member = 'p11-sconne';
             assert false;
         exception when others then
-            raise notice 'primary group updates';
+            raise notice 'user group exp updates only allowed via primary';
+        end;
+        begin
+            update groups set group_expiry_date = '2000-01-01' where group_primary_member = pid::text;
+            assert false;
+        exception when others then
+            raise notice 'person group exp updates only allowed via primary';
         end;
         -- deletion; cascades, constraints
         begin

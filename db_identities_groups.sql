@@ -381,28 +381,42 @@ drop function if exists group_management() cascade;
 create or replace function group_management()
     returns trigger as $$
     declare primary_member_state boolean;
-    declare curr_user_exp date;
+    declare curr_exp date;
     begin
         if OLD.group_activated != NEW.group_activated then
             if OLD.group_type = 'person' then
-                select person_activated from persons where person_group = OLD.group_name into primary_member_state;
+                select person_activated from persons
+                    where person_group = OLD.group_name
+                    into primary_member_state;
                 if NEW.group_activated != primary_member_state then
                     raise exception using message = 'person groups can only be deactived by deactivating persons';
                 end if;
             elsif OLD.group_type = 'user' then
-                select user_activated from users where user_group = OLD.group_name into primary_member_state;
+                select user_activated from users
+                    where user_group = OLD.group_name
+                    into primary_member_state;
                 if NEW.group_activated != primary_member_state then
                     raise exception using message = 'user groups can only be deactived by deactivating users';
                 end if;
             -- TODO: else if institution or project group
             end if;
         elsif OLD.group_expiry_date != NEW.group_expiry_date then
-            -- TODO: need to mirror the activation checks
-            -- TODO: else if institution or project group
-            select user_expiry_date from users where user_name = NEW.group_primary_member into curr_user_exp;
-            if NEW.group_expiry_date != curr_user_exp then
-                raise exception using message = 'primary group dates are modified via modifications on persons/users';
+            if OLD.group_type = 'person' then
+                select person_expiry_date from persons
+                    where person_id = OLD.group_primary_member::uuid
+                    into curr_exp;
+                if NEW.group_expiry_date != curr_exp then
+                    raise exception using message = 'person group dates are modified via modifications on persons';
+                end if;
+            elsif OLD.group_type = 'user' then
+                select user_expiry_date from users
+                    where user_name = OLD.group_primary_member
+                    into curr_exp;
+                if NEW.group_expiry_date != curr_exp then
+                    raise exception using message = 'user group dates are modified via modifications on users';
+                end if;
             end if;
+            -- TODO: else if institution or project group
         end if;
         return new;
     end;
