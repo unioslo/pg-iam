@@ -32,12 +32,6 @@ create or replace function test_persons_users_groups()
             raise notice 'cannot assign uid between 0 and 999, as expected';
         end;
         begin
-            insert into users (person_id, user_name, uid) values (pid, 'p33-sconne', 200001);
-            assert false;
-        exception when others then
-            raise notice 'cannot assign uid between 200000 and 220000, as expected';
-        end;
-        begin
             update users set user_posix_uid = '2000' where user_name = 'p11-sconne';
             assert false;
         exception when others then
@@ -429,16 +423,8 @@ create or replace function test_group_memeberships_moderators()
         begin
             insert into group_moderators (group_name, group_moderator_name)
                 values ('p11-clinical-group', 'p11-special-group');
-            assert false;
         exception when others then
             raise notice 'group_moderators: redundancy check works - cannot recreate existing relations';
-        end;
-        begin
-            insert into group_moderators (group_name, group_moderator_name)
-                values ('p11-clinical-group', 'p11-clinical-group');
-            assert false;
-        exception when assert_failure then
-            raise notice 'group_moderators: redundancy check works - groups cannot moderate themselves';
         end;
         -- cyclicality
         begin
@@ -997,6 +983,22 @@ create or replace function test_funcs()
 $$ language plpgsql;
 
 
+create or replace function test_institutions()
+    returns boolean as $$
+    begin
+        return true;
+    end;
+$$ language plpgsql;
+
+
+create or replace function test_projects()
+    returns boolean as $$
+    begin
+        return true;
+    end;
+$$ language plpgsql;
+
+
 create or replace function test_cascading_deletes(keep_data boolean default 'false')
     returns boolean as $$
     begin
@@ -1015,6 +1017,8 @@ create or replace function test_cascading_deletes(keep_data boolean default 'fal
         delete from audit_log_relations;
         delete from capabilities_http_grants;
         delete from capabilities_http;
+        delete from institutions;
+        delete from projects;
         return true;
     end;
 $$ language plpgsql;
@@ -1034,6 +1038,8 @@ create or replace function check_no_data(del_existing boolean default 'false')
         assert (select count(*) from groups) = 0, 'groups not empty';
         assert (select count(*) from capabilities_http) = 0, 'capabilities_http not empty';
         assert (select count(*) from capabilities_http_grants) = 0, 'capabilities_http_grants not empty';
+        assert (select count(*) from institutions) = 0, 'institutions not empty';
+        assert (select count(*) from projects) = 0, 'projects not empty';
         return true;
     end;
 $$ language plpgsql;
@@ -1046,6 +1052,8 @@ select test_capabilities_http();
 select test_audit();
 select test_capability_instances();
 select test_funcs();
+select test_institutions();
+select test_projects();
 select test_cascading_deletes(:keep_test);
 
 drop function if exists check_no_data(boolean);
@@ -1054,4 +1062,6 @@ drop function if exists test_group_memeberships_moderators();
 drop function if exists test_capabilities_http();
 drop function if exists test_audit();
 drop function if exists test_funcs();
+drop function if exists test_institutions();
+drop function if exists test_projects();
 drop function if exists test_cascading_deletes(boolean);
