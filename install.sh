@@ -51,43 +51,73 @@ _guide="\
 
 "
 
-setup() {
-    psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "create extension pgcrypto"
-    if [[ $FORCE == "true" ]]; then
-        psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_identities_groups.sql
-        psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_capabilities.sql
-        exit
-    fi
-    num_persons=$(psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from persons" -At)
-    num_users=$(psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from users" -At)
-    num_groups=$(psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from groups" -At)
-    echo "Persons: $num_persons"
-    echo "Users: $num_users"
-    echo "Groups: $num_groups"
-    if [[ $DROP_TABLES == "true" ]]; then
-        read -p 'Do you want to (re)install the persons, users, and groups tables and functions (thereby dropping data)? (y/n) > ' ANS
-    else
-        read -p 'Do you want to (re)install the persons, users, and groups functions (no table data will be lost)? (y/n) > ' ANS
-    fi
+prompt_tables() {
+    read -p "Do you want to (re)install the $1 tables and functions (thereby dropping data)? (y/n) > " ANS
     if [[ $ANS == "y" ]]; then
-        psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_identities_groups.sql
-    fi
-    num_caps=$(psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from capabilities_http" -At)
-    num_grants=$(psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from capabilities_http_grants" -At)
-    echo "Capabilities: $num_caps"
-    echo "Grants: $num_grants"
-    if [[ $DROP_TABLES == "true" ]]; then
-        read -p 'Do you want to (re)install the capabilities functionality (thereby dropping existing data)? (y/n) > ' ANS
-    else
-        read -p 'Do you want to (re)install the capabilities functions (no table data will be lost)? (y/n) > ' ANS
-    fi
-    if [[ $ANS == "y" ]]; then
-        psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./db_capabilities.sql
+        exec_sql_file $2
     fi
 }
 
+prompt_functions() {
+    read -p "Do you want to (re)install the $1 functions (no table data will be lost)? (y/n) > " ANS
+    if [[ $ANS == "y" ]]; then
+        exec_sql_file $2
+    fi
+}
+
+prompt() {
+    if [[ $DROP_TABLES == "true" ]]; then
+        prompt_tables $1 $2
+    else
+        prompt_functions $1 $2
+    fi
+}
+
+exec_sql_file() {
+    psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f $1
+}
+
+count_rows_in_table() {
+    psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from $1" -At
+}
+
+fresh_install() {
+    exec_sql_file ./db_audit.sql
+    exec_sql_file ./db_identities_groups.sql
+    exec_sql_file ./db_capabilities.sql
+    exec_sql_file ./db_organisations.sql
+    exit 0
+}
+
+show_count() {
+    echo "$1: " $(count_rows_in_table $1)
+}
+
+setup() {
+    psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "create extension pgcrypto"
+
+    if [[ $FORCE == "true" ]]; then fresh_install; fi
+
+    show_count "audit_log_objects"
+    show_count "audit_log_relations"
+    prompt "audit" ./db_audit.sql
+
+    show_count "persons"
+    show_count "users"
+    show_count "groups"
+    prompt "identities" ./db_identities_groups.sql
+
+    show_count "capabilities_http"
+    show_count "capabilities_http_grants"
+    prompt "capabilities" ./db_capabilities.sql
+
+    show_count "institutions"
+    show_count "projects"
+    prompt "organisations" ./db_organisations.sql
+}
+
 sqltest() {
-    psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f ./tests.sql
+    exec_sql_file ./tests.sql
 }
 
 export DELETE_EXISTING_DATA=false
