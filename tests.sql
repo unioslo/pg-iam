@@ -392,6 +392,9 @@ create or replace function test_group_memeberships_moderators()
             values ('p11-import-group', 'p11-admin-group');
         insert into group_moderators (group_name, group_moderator_name)
             values ('p11-clinical-group', 'p11-special-group');
+        -- self-moderation
+        insert into group_moderators (group_name, group_moderator_name)
+            values ('p11-admin-group', 'p11-admin-group');
         -- referential constraints
         begin
             insert into group_moderators (group_name, group_moderator_name)

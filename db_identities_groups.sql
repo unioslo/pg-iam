@@ -633,11 +633,15 @@ create or replace function group_moderators_check_dag_requirements()
                 from groups where group_name = NEW.group_moderator_name) >= current_date, response;
         response := NEW.group_name || ' is a primary group, and cannot be moderated';
         assert (select group_class from groups where group_name = NEW.group_name) = 'secondary', response;
-        response := 'Making ' || NEW.group_name || ' a moderator of '
-                   || NEW.group_moderator_name || ' will create a cyclical graph - which is not allowed.';
-        assert (select count(*) from group_moderators
-                where group_name = NEW.group_moderator_name
-                and group_moderator_name = NEW.group_name) = 0, response;
+        if NEW.group_moderator_name != NEW.group_name then
+            -- self-moderation is allowed
+            response := 'Making ' || NEW.group_name || ' a moderator of '
+                        || NEW.group_moderator_name || ' will create a cyclical graph - which is not allowed.';
+
+            assert (select count(*) from group_moderators
+                    where group_name = NEW.group_moderator_name
+                    and group_moderator_name = NEW.group_name) = 0, response;
+        end if;
         return new;
     end;
 $$ language plpgsql;
