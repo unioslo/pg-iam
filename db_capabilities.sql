@@ -297,7 +297,7 @@ create trigger capabilities_http_grants_grant_generation after insert on capabil
 
 
 create trigger capabilities_http_grants_audit after update or insert or delete on capabilities_http_grants
-    for each row execute procedure update_audit_log_relations();
+    for each row execute procedure update_audit_log_objects();
 
 
 drop function if exists capabilities_http_grants_immutability() cascade;
