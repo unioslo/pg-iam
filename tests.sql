@@ -994,7 +994,67 @@ $$ language plpgsql;
 
 create or replace function test_institutions()
     returns boolean as $$
+    declare grp text;
     begin
+        insert into institutions (institution_name, institution_long_name)
+            values ('uil', 'University of Leon');
+        -- defaults
+        assert (select institution_group from institutions
+                where institution_name = 'uil') = 'uil-group',
+            'institution group name default broken';
+        assert (select institution_activated from institutions
+                where institution_name = 'uil') = 't',
+            'institution activation default broken';
+        begin
+            update institutions set row_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
+                where institution_name = 'uil';
+            assert false, 'institutions: row_id mutable';
+        exception when others then
+            raise notice 'institutions: row_id immutable';
+        end;
+        begin
+            update institutions set institution_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
+                where institution_name = 'uil';
+            assert false, 'institutions: institution_id mutable';
+        exception when others then
+            raise notice 'institutions: institution_id immutable';
+        end;
+        begin
+            update institutions set institution_name = 'liu'
+                where institution_name = 'uil';
+            assert false, 'institutions: institution_name mutable';
+        exception when others then
+            raise notice 'institutions: institution_name immutable';
+        end;
+        begin
+            update institutions set institution_group = 'foo-group'
+                where institution_name = 'uil';
+            assert false, 'institutions: institution_group mutable';
+        exception when others then
+            raise notice 'institutions: institution_group immutable';
+        end;
+        -- groups
+        select institution_group from institutions
+            where institution_name = 'uil' into grp;
+        assert (select count(*) from groups where group_name = grp) = 1,
+            'institution group not generated correctly';
+        assert (select group_type from groups where group_name = grp) = 'web',
+            'institution group generated with incorrect type';
+        update institutions set institution_activated = 'f' where institution_name = 'uil';
+        assert (select group_activated from groups where group_name = grp) = 'f',
+            'institution group activation status management not working';
+        begin
+            update groups set group_activated = 't' where group_name = grp;
+            assert false, 'institution group activation mutable on groups';
+        exception when others then
+            raise notice 'institution group activation not mutable on groups';
+        end;
+        begin
+            update groups set group_expiry_date = '2020-01-01' where group_name = grp;
+            assert false, 'institution group_expiry_date mutable on groups';
+        exception when others then
+            raise notice 'institution group_expiry_date not mutable on groups';
+        end;
         return true;
     end;
 $$ language plpgsql;
@@ -1003,6 +1063,11 @@ $$ language plpgsql;
 create or replace function test_projects()
     returns boolean as $$
     begin
+
+        -- immutability
+
+        -- groups
+
         return true;
     end;
 $$ language plpgsql;
