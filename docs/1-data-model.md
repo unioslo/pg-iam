@@ -23,6 +23,9 @@ Capability Grants
  -> Namespace identifier
  -> HTTP method
  -> URI pattern
+
+Institutions -> Groups (class:secondary type:generic,web)
+Projects     -> Groups (class:secondary type:generic,web)
 ```
 
 - `Persons`: root objects
@@ -56,13 +59,13 @@ Capability Grants
         - a user's expiry date cannot be later than the expiry date of the person it belongs to
     - `groups`
         - secondary groups' expiry date can be changed directly
-- Capabilities
+- `Capabilities`
     - a capability can be obtained by a person or user who is a member of a set of specified requried groups
     - capabilities are linked to grants on resources
     - access control is therefore managed through group membership
-- Capability instances
+- `Capability Instances`
   - parameterised Capabilities, for use in generation of capability URLs
-- Capability grants
+- `Capability Grants`
     - grant are grouped into sets
     - grant sets are defined by:
         - api hostname
@@ -76,6 +79,10 @@ Capability Grants
         - start date
         - end date
         - maximum number of usages
+- `Institutions`
+    - generates an automatically managed secondary web group
+- `Projects`
+    - generates an automatically managed secondary web group
 
 # Group membership graphs
 
