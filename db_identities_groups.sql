@@ -382,41 +382,70 @@ create or replace function group_management()
     returns trigger as $$
     declare primary_member_state boolean;
     declare curr_exp date;
+    declare msg text;
     begin
         if OLD.group_activated != NEW.group_activated then
+            msg := 'group activation status is managed via';
             if OLD.group_type = 'person' then
                 select person_activated from persons
                     where person_group = OLD.group_name
                     into primary_member_state;
                 if NEW.group_activated != primary_member_state then
-                    raise exception using message = 'person groups can only be deactived by deactivating persons';
+                    raise exception using message = 'person ' || msg || ' persons';
                 end if;
             elsif OLD.group_type = 'user' then
                 select user_activated from users
                     where user_group = OLD.group_name
                     into primary_member_state;
                 if NEW.group_activated != primary_member_state then
-                    raise exception using message = 'user groups can only be deactived by deactivating users';
+                    raise exception using message = 'user ' || msg || ' users';
                 end if;
-            -- TODO: else if institution or project group
+            elsif OLD.group_name in (select institution_group from institutions) then
+                select institution_activated from institutions
+                    where institution_group = OLD.group_name
+                    into primary_member_state;
+                if NEW.group_activated != primary_member_state then
+                    raise exception using message = 'institution ' || msg || ' institutions';
+                end if;
+            elsif OLD.group_name in (select project_group from projects) then
+                select institution_activated from projects
+                    where project_group = OLD.group_name
+                    into primary_member_state;
+                if NEW.group_activated != primary_member_state then
+                    raise exception using message = 'project ' || msg || ' projects';
+                end if;
             end if;
         elsif OLD.group_expiry_date != NEW.group_expiry_date then
+            msg := 'group dates are modified via modifications on';
             if OLD.group_type = 'person' then
                 select person_expiry_date from persons
                     where person_id = OLD.group_primary_member::uuid
                     into curr_exp;
                 if NEW.group_expiry_date != curr_exp then
-                    raise exception using message = 'person group dates are modified via modifications on persons';
+                    raise exception using message = 'person ' || msg || ' persons';
                 end if;
             elsif OLD.group_type = 'user' then
                 select user_expiry_date from users
                     where user_name = OLD.group_primary_member
                     into curr_exp;
                 if NEW.group_expiry_date != curr_exp then
-                    raise exception using message = 'user group dates are modified via modifications on users';
+                    raise exception using message = 'user ' || msg || ' users';
+                end if;
+            elsif OLD.group_name in (select institution_group from institutions) then
+                select institution_expiry_date from institutions
+                    where institution_group = OLD.group_name
+                    into curr_exp;
+                if NEW.group_expiry_date != curr_exp then
+                    raise exception using message = 'institution ' || msg || ' institutions';
+                end if;
+            elsif OLD.group_name in (select project_group from projects) then
+                select project_end_date from projects
+                    where project_group = OLD.group_name
+                    into curr_exp;
+                if NEW.group_expiry_date != curr_exp then
+                    raise exception using message = 'project ' || msg || ' projects';
                 end if;
             end if;
-            -- TODO: else if institution or project group
         end if;
         return new;
     end;
