@@ -82,10 +82,10 @@ count_rows_in_table() {
 }
 
 fresh_install() {
-    exec_sql_file ./db_audit.sql
-    exec_sql_file ./db_identities_groups.sql
-    exec_sql_file ./db_capabilities.sql
-    exec_sql_file ./db_organisations.sql
+    exec_sql_file ./src/audit.sql
+    exec_sql_file ./src/identities.sql
+    exec_sql_file ./src/capabilities.sql
+    exec_sql_file ./src/organisations.sql
     exit 0
 }
 
@@ -100,20 +100,20 @@ setup() {
 
     show_count "audit_log_objects"
     show_count "audit_log_relations"
-    prompt "audit" ./db_audit.sql
+    prompt "audit" ./src/audit.sql
 
     show_count "persons"
     show_count "users"
     show_count "groups"
-    prompt "identities" ./db_identities_groups.sql
+    prompt "identities" ./src/identities.sql
 
     show_count "capabilities_http"
     show_count "capabilities_http_grants"
-    prompt "capabilities" ./db_capabilities.sql
+    prompt "capabilities" ./src/capabilities.sql
 
     show_count "institutions"
     show_count "projects"
-    prompt "organisations" ./db_organisations.sql
+    prompt "organisations" ./src/organisations.sql
 }
 
 sqltest() {
