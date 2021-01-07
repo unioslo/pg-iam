@@ -116,7 +116,7 @@ create or replace function project_immutability()
     end;
 $$ language plpgsql;
 create trigger ensure_project_immutability before update on projects
-    for each row execute procedure institution_immutability();
+    for each row execute procedure project_immutability();
 
 
 drop function if exists project_management() cascade;
@@ -125,9 +125,9 @@ create or replace function project_management()
     declare new_grp text;
     begin
         if (TG_OP = 'INSERT') then
-            new_grp := NEW.project_name || '-group';
+            new_grp := NEW.project_number || '-group';
             update projects set project_group = new_grp
-                where project_name = NEW.project_name;
+                where project_number = NEW.project_number;
             insert into groups (group_name, group_class, group_type, group_description)
                 values (new_grp, 'secondary', 'web', 'project group');
         elsif (TG_OP = 'DELETE') then
@@ -135,11 +135,11 @@ create or replace function project_management()
         elsif (TG_OP = 'UPDATE') then
             if OLD.project_activated != NEW.project_activated then
                 update groups set group_activated = NEW.project_activated
-                    where group_name = OLD.group_name;
+                    where group_name = OLD.project_group;
             end if;
-            if OLD.project_expiry_date != NEW.project_expiry_date then
-                update groups set group_expiry_date = NEW.project_expiry_date
-                    where group_name = OLD.group_name;
+            if OLD.project_end_date != NEW.project_end_date then
+                update groups set group_expiry_date = NEW.project_end_date
+                    where group_name = OLD.project_group;
             end if;
         end if;
     return new;

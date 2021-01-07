@@ -1005,6 +1005,7 @@ create or replace function test_institutions()
         assert (select institution_activated from institutions
                 where institution_name = 'uil') = 't',
             'institution activation default broken';
+        -- immutability
         begin
             update institutions set row_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
                 where institution_name = 'uil';
@@ -1062,12 +1063,73 @@ $$ language plpgsql;
 
 create or replace function test_projects()
     returns boolean as $$
+    declare grp text;
     begin
-
+        insert into projects (project_number, project_name, project_start_date, project_end_date)
+            values ('p11', 'raka', '2020-01-02', '2050-01-01');
+        -- defaults
+        assert (select project_group from projects where project_name = 'raka') = 'p11-group',
+            'project group generation not working';
+        assert (select project_activated from projects where project_name = 'raka') = 't',
+            'project activation default not working';
         -- immutability
-
+        begin
+            update projects set row_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
+                where project_name = 'raka';
+            assert false, 'projects: row_id mutable';
+        exception when others then
+            raise notice 'projects: row_id immutable';
+        end;
+        begin
+            update projects set project_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
+                where project_name = 'raka';
+            assert false, 'projects: project_id mutable';
+        exception when others then
+            raise notice 'projects: project_id immutable';
+        end;
+        begin
+            update projects set project_number = 'lolcat'
+                where project_name = 'raka';
+            assert false, 'projects: project_number mutable';
+        exception when others then
+            raise notice 'projects: project_number immutable';
+        end;
+        begin
+            update projects set project_name = 'lovecats'
+                where project_name = 'raka';
+            assert false, 'projects: project_name mutable';
+        exception when others then
+            raise notice 'projects: project_name immutable';
+        end;
+        begin
+            update projects set project_group = 'some-group'
+                where project_name = 'raka';
+            assert false, 'projects: project_group mutable';
+        exception when others then
+            raise notice 'projects: project_group immutable';
+        end;
         -- groups
-
+        select project_group from projects
+            where project_number = 'p11' into grp;
+        assert (select count(*) from groups where group_name = grp) = 1,
+            'project group generation not working';
+        assert (select group_type from groups where group_name = grp) = 'web',
+            'project group generated with incorrect type';
+        update projects set project_activated = 'f' where project_group = grp;
+        assert (select group_activated from groups where group_name = grp) = 'f',
+            'project group management not working';
+        begin
+            update groups set group_activated = 't' where group_name = grp;
+            assert false, 'proejct group activation mutable on groups';
+        exception when others then
+            raise notice 'proejct group activation not mutable on groups';
+        end;
+        begin
+            update groups set group_expiry_date = '2020-01-01' where group_name = grp;
+            assert false, 'proejct group_expiry_date mutable on groups';
+        exception when others then
+            raise notice 'proejct group_expiry_date not mutable on groups';
+        end;
         return true;
     end;
 $$ language plpgsql;
