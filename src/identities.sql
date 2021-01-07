@@ -409,7 +409,7 @@ create or replace function group_management()
                     raise exception using message = 'institution ' || msg || ' institutions';
                 end if;
             elsif OLD.group_name in (select project_group from projects) then
-                select institution_activated from projects
+                select project_activated from projects
                     where project_group = OLD.group_name
                     into primary_member_state;
                 if NEW.group_activated != primary_member_state or primary_member_state is null then
