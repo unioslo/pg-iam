@@ -22,7 +22,7 @@ select drop_tables(:drop_table_flag);
 create table if not exists audit_log_objects(
     identity text default null,
     operation text not null,
-    event_time timestamptz default now(),
+    event_time timestamptz default current_timestamp,
     table_name text not null,
     row_id uuid not null,
     column_name text,
@@ -50,7 +50,7 @@ create table if not exists audit_log_objects_projects
 create table if not exists audit_log_relations(
     identity text default null,
     operation text not null,
-    event_time timestamptz default now(),
+    event_time timestamptz default current_timestamp,
     table_name text not null,
     parent text,
     child text

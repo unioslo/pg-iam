@@ -18,3 +18,8 @@ alter table groups add constraint groups_group_posix_gid_check check (group_posi
 drop trigger capabilities_http_grants_audit on capabilities_http_grants;
 create trigger capabilities_http_grants_audit after update or insert or delete on capabilities_http_grants
     for each row execute procedure update_audit_log_objects();
+
+-- change now() to current_timestamp
+-- (to not be affected by session-speifics)
+alter table audit_log_objects alter column event_time set default current_timestamp;
+alter table audit_log_relations alter column event_time set default current_timestamp;
