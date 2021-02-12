@@ -39,3 +39,6 @@ alter table audit_log_relations alter column event_time set default current_time
 drop trigger apabilities_http_grants_correct_names_allowed on capabilities_http_grants;
 create trigger capabilities_http_grants_correct_names_allowed before insert or update on capabilities_http_grants
     for each row execute procedure ensure_correct_capability_names_allowed();
+
+-- drop old audit partition
+drop table if exists audit_log_relations_capabilities_http_grants;
