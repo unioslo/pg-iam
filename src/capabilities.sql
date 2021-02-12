@@ -236,7 +236,7 @@ create or replace function ensure_correct_capability_names_allowed()
         return new;
     end;
 $$ language plpgsql;
-create trigger apabilities_http_grants_correct_names_allowed before insert or update on capabilities_http_grants
+create trigger capabilities_http_grants_correct_names_allowed before insert or update on capabilities_http_grants
     for each row execute procedure ensure_correct_capability_names_allowed();
 
 

@@ -1,8 +1,19 @@
+/*
 
--- using install.sh
--- replace functions
--- modify audit tables
--- define organisational tables
+export SUPERUSER=
+export DBOWNER=
+export DBNAME=
+export DBHOST=
+
+./install.sh --only-replace-functions --setup
+# saying yes to all
+
+psql -U $DBOWNER -h $BHOST -d $DBNAME -f mgrt/1.5-to-2.0.sql
+
+./install.sh  --setup
+# defining the institutional tabless
+
+*/
 
 -- drop constraints
 alter table users drop constraint users_user_group_posix_gid_check;
@@ -23,3 +34,8 @@ create trigger capabilities_http_grants_audit after update or insert or delete o
 -- (to not be affected by session-speifics)
 alter table audit_log_objects alter column event_time set default current_timestamp;
 alter table audit_log_relations alter column event_time set default current_timestamp;
+
+-- fix typo
+drop trigger apabilities_http_grants_correct_names_allowed on capabilities_http_grants;
+create trigger capabilities_http_grants_correct_names_allowed before insert or update on capabilities_http_grants
+    for each row execute procedure ensure_correct_capability_names_allowed();
