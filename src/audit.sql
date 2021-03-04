@@ -80,7 +80,8 @@ create or replace function update_audit_log_objects()
                     left join pg_catalog.pg_description pgd
                     on pgd.objoid = st.relid
                     and pgd.objsubid = c.ordinal_position
-                    where st.relname = $1') using table_name
+                    where st.relname = $1
+                    and st.schemaname = $2') using table_name, 'public'
         loop
             execute format('select ($1).%s::text', colname) using OLD into old_data;
             execute format('select ($1).%s::text', colname) using NEW into new_data;
