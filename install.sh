@@ -33,6 +33,7 @@ _guide="\
     --keep-test-data            Do not delete test data.
     --setup                     Create the DB schema.
     --test                      Run SQL tests to ensure the DB schema works.
+    --backup                    create a backup of current data in named schema.
     --guide                     Print this guide
 
     Examples
@@ -48,6 +49,8 @@ _guide="\
 
     # only update function definitions
     ./install.sh --only-replace-functions --setup
+
+    ./install.sh --backup mybackupschema
 
 "
 
@@ -120,6 +123,11 @@ sqltest() {
     exec_sql_file ./tests.sql
 }
 
+make_backup() {
+    echo "backing up data to schema: $BU_SCHEMA"
+    exec_sql_file ./src/backup.sql
+}
+
 export DELETE_EXISTING_DATA=false
 export KEEP_TEST_DATA=false
 export DROP_TABLES=true
@@ -133,6 +141,7 @@ while (( "$#" )); do
         --only-replace-functions)   shift; export DROP_TABLES=false ;;
         --del-existing-data)        shift; export DELETE_EXISTING_DATA=true ;;
         --keep-test-data)           shift; export KEEP_TEST_DATA=true ;;
+        --backup)                   shift; export BU_SCHEMA=$1; make_backup; exit 0 ;;
         --setup)                    shift; setup; exit 0 ;;
         --test)                     shift; sqltest; exit 0 ;;
         --guide)                    printf "%s\n" "$_guide"; exit 0 ;;
