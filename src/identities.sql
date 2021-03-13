@@ -122,6 +122,10 @@ create trigger person_group_trigger after insert or delete or update on persons
     for each row execute procedure person_management();
 
 
+create trigger persons_channel_notify after insert or delete or update on persons
+    for each row execute procedure notify_listeners();
+
+
 -- cannot drop this since default value of column depends on it
 -- so we always only replace it, unless all tables are dropped
 -- in which case we will recreate the default value anyways
@@ -267,6 +271,10 @@ create or replace function generate_new_posix_gid()
         return new_gid;
     end;
 $$ language plpgsql;
+
+
+create trigger users_channel_notify after insert or delete or update on users
+    for each row execute procedure notify_listeners();
 
 
 create table if not exists groups(
@@ -456,6 +464,10 @@ create trigger group_management_trigger before update on groups
     for each row execute procedure group_management();
 
 
+create trigger groups_channel_notify after insert or delete or update on groups
+    for each row execute procedure notify_listeners();
+
+
 create table if not exists group_memberships(
     group_name text not null references groups (group_name) on delete cascade,
     group_member_name text not null references groups (group_name) on delete cascade,
@@ -632,6 +644,10 @@ create trigger group_memberships_dag_requirements_trigger before insert on group
     for each row execute procedure group_memberships_check_dag_requirements();
 
 
+create trigger group_memberships_channel_notify after insert or delete or update on group_memberships
+    for each row execute procedure notify_listeners();
+
+
 create table if not exists group_moderators(
     group_name text not null references groups (group_name) on delete cascade,
     group_moderator_name text not null references groups (group_name) on delete cascade,
@@ -692,6 +708,10 @@ create or replace function group_moderators_check_dag_requirements()
 $$ language plpgsql;
 create trigger group_memberships_dag_requirements_trigger after insert on group_moderators
     for each row execute procedure group_moderators_check_dag_requirements();
+
+
+create trigger group_moderators_channel_notify after update or insert or delete on group_moderators
+    for each row execute procedure notify_listeners();
 
 
 drop function if exists get_memberships(text) cascade;

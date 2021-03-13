@@ -100,6 +100,10 @@ create trigger ensure_capabilities_http_group_check before insert or update on c
     for each row execute procedure capabilities_http_group_check();
 
 
+create trigger capabilities_http_channel_notify after update or insert or delete on capabilities_http
+    for each row execute procedure notify_listeners();
+
+
 create table if not exists capabilities_http_instances(
     row_id uuid unique not null default gen_random_uuid(),
     capability_name text references capabilities_http (capability_name) on delete cascade,
@@ -173,6 +177,10 @@ create or replace function capability_instance_get(id text)
                                  'instance_metadata', meta);
     end;
 $$ language plpgsql;
+
+
+create trigger capabilities_http_instances_channel_notify after update or insert or delete on capabilities_http_instances
+    for each row execute procedure notify_listeners();
 
 
 create table if not exists capabilities_http_grants(
@@ -500,6 +508,10 @@ create or replace function capability_grant_group_remove(grant_reference text, g
         return true;
     end;
 $$ language plpgsql;
+
+
+create trigger capabilities_http_grants_channel_notify after update or insert or delete on capabilities_http_grants
+    for each row execute procedure notify_listeners();
 
 
 drop function if exists grp_cpbts(text, boolean) cascade;

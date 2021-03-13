@@ -85,6 +85,7 @@ count_rows_in_table() {
 }
 
 fresh_install() {
+    exec_sql_file ./src/notifications.sql
     exec_sql_file ./src/audit.sql
     exec_sql_file ./src/identities.sql
     exec_sql_file ./src/capabilities.sql
@@ -100,6 +101,8 @@ setup() {
     psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "create extension pgcrypto"
 
     if [[ $FORCE == "true" ]]; then fresh_install; fi
+
+    exec_sql_file ./src/notifications.sql
 
     show_count "audit_log_objects"
     show_count "audit_log_relations"
