@@ -81,6 +81,10 @@ create trigger institution_group_trigger after insert or delete or update on ins
     for each row execute procedure institution_management();
 
 
+create trigger institutions_channel_notify after update or insert or delete on institutions
+    for each row execute procedure notify_listeners();
+
+
 create table if not exists projects(
     row_id uuid unique not null default gen_random_uuid(),
     project_id uuid unique not null default gen_random_uuid(),
@@ -147,3 +151,6 @@ create or replace function project_management()
 $$ language plpgsql;
 create trigger project_group_trigger after insert or delete or update on projects
     for each row execute procedure project_management();
+
+create trigger projects_channel_notify after update or insert or delete on projects
+    for each row execute procedure notify_listeners();
