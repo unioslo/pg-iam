@@ -87,7 +87,7 @@ create or replace function person_management()
     returns trigger as $$
     declare new_pid text;
     declare new_pgrp text;
-    declare exp date;
+    declare exp timestamptz;
     declare unam text;
     begin
         if (TG_OP = 'INSERT') then
@@ -211,8 +211,8 @@ create or replace function user_management()
     returns trigger as $$
     declare new_unam text;
     declare new_ugrp text;
-    declare person_exp date;
-    declare user_exp date;
+    declare person_exp timestamptz;
+    declare user_exp timestamptz;
     declare ugroup_posix_gid int;
     begin
         if (TG_OP = 'INSERT') then
@@ -389,7 +389,7 @@ drop function if exists group_management() cascade;
 create or replace function group_management()
     returns trigger as $$
     declare primary_member_state boolean;
-    declare curr_exp date;
+    declare curr_exp timestamptz;
     declare msg text;
     begin
         if OLD.group_activated != NEW.group_activated or
