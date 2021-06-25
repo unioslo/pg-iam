@@ -89,7 +89,7 @@ create table if not exists projects(
     row_id uuid unique not null default gen_random_uuid(),
     project_id uuid unique not null default gen_random_uuid(),
     project_number text not null primary key,
-    project_name text unique not null,
+    project_name text not null,
     project_long_name text,
     project_activated boolean not null default 't',
     project_start_date timestamptz not null,
@@ -111,8 +111,6 @@ create or replace function project_immutability()
             raise exception using message = 'project_id is immutable';
         elsif OLD.project_number != NEW.project_number then
             raise exception using message = 'project_number is immutable';
-        elsif OLD.project_name != NEW.project_name then
-            raise exception using message = 'project_name is immutable';
         elsif OLD.project_group != NEW.project_group then
             raise exception using message = 'project_group is immutable';
         end if;
