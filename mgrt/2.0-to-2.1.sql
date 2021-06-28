@@ -11,7 +11,7 @@ export DBHOST=
 ./install.sh --only-replace-functions --setup
 # saying yes to all
 
-psql -U $DBOWNER -h $BHOST -d $DBNAME -f mgrt/1.5-to-2.1.sql
+psql -U $DBOWNER -h $BHOST -d $DBNAME -f mgrt/2.0-to-2.1.sql
 
 */
 
