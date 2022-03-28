@@ -23,21 +23,22 @@ create or replace function create_grants_message(operation text, data record)
     declare out text;
     begin
         out = operation || ':' ||
-           'capability_names_allowed::' || data.capability_names_allowed::text || ':::' ||
-           'capability_grant_id::' || data.capability_grant_id || ':::' ||
-           'capability_grant_hostnames::' || data.capability_grant_hostnames::text || ':::' ||
-           'capability_grant_namespace::' || data.capability_grant_namespace || ':::' ||
-           'capability_grant_http_method::' || data.capability_grant_http_method || ':::' ||
-           'capability_grant_rank::' || maybe_null(data.capability_grant_rank::text) || ':::' ||
-           'capability_grant_uri_pattern::' || data.capability_grant_uri_pattern || ':::' ||
-           'capability_grant_required_groups::' || maybe_null(data.capability_grant_required_groups::text) || ':::' ||
-           'capability_grant_required_attributes::' || maybe_null(data.capability_grant_required_attributes::text) || ':::' ||
-           'capability_grant_quick::' || data.capability_grant_quick || ':::' ||
-           'capability_grant_start_date::' || maybe_null(data.capability_grant_start_date::text) || ':::' ||
-           'capability_grant_end_date::' || maybe_null(data.capability_grant_end_date::text) || ':::' ||
-           'capability_grant_max_num_usages::' || maybe_null(data.capability_grant_max_num_usages::text) || ':::' ||
-           'capability_grant_group_existence_check::' || data.capability_grant_group_existence_check || ':::' ||
-           'capability_grant_metadata::' || maybe_null(data.capability_grant_metadata::text);
+            'capability_names_allowed::' || data.capability_names_allowed::text || ':::' ||
+            'capability_grant_id::' || data.capability_grant_id || ':::' ||
+            'capability_grant_name::' || data.capability_grant_name || ':::' ||
+            'capability_grant_hostnames::' || data.capability_grant_hostnames::text || ':::' ||
+            'capability_grant_namespace::' || data.capability_grant_namespace || ':::' ||
+            'capability_grant_http_method::' || data.capability_grant_http_method || ':::' ||
+            'capability_grant_rank::' || maybe_null(data.capability_grant_rank::text) || ':::' ||
+            'capability_grant_uri_pattern::' || data.capability_grant_uri_pattern || ':::' ||
+            'capability_grant_required_groups::' || maybe_null(data.capability_grant_required_groups::text) || ':::' ||
+            'capability_grant_required_attributes::' || maybe_null(data.capability_grant_required_attributes::text) || ':::' ||
+            'capability_grant_quick::' || data.capability_grant_quick || ':::' ||
+            'capability_grant_start_date::' || maybe_null(data.capability_grant_start_date::text) || ':::' ||
+            'capability_grant_end_date::' || maybe_null(data.capability_grant_end_date::text) || ':::' ||
+            'capability_grant_max_num_usages::' || maybe_null(data.capability_grant_max_num_usages::text) || ':::' ||
+            'capability_grant_group_existence_check::' || data.capability_grant_group_existence_check || ':::' ||
+            'capability_grant_metadata::' || maybe_null(data.capability_grant_metadata::text);
         return out;
     end;
 $$ language plpgsql;
