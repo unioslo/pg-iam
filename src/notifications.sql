@@ -50,7 +50,6 @@ create or replace function notify_listeners()
     declare channel_name text;
     declare operation text;
     declare subject text;
-    declare new_rank text;
     begin
         table_name := TG_TABLE_NAME::text;
         channel_name := 'channel_' || table_name;
