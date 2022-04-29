@@ -78,7 +78,7 @@ create or replace function person_uniqueness()
         return new;
     end;
 $$ language plpgsql;
-create trigger ensure_person_uniqueness before insert on persons
+create trigger ensure_person_uniqueness before insert or update on persons
     for each row execute procedure person_uniqueness();
 
 
