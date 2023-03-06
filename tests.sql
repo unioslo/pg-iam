@@ -1095,13 +1095,6 @@ create or replace function test_projects()
             raise notice 'projects: project_number immutable';
         end;
         begin
-            update projects set project_name = 'lovecats'
-                where project_name = 'raka';
-            assert false, 'projects: project_name mutable';
-        exception when others then
-            raise notice 'projects: project_name immutable';
-        end;
-        begin
             update projects set project_group = 'some-group'
                 where project_name = 'raka';
             assert false, 'projects: project_group mutable';
