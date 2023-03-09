@@ -529,26 +529,33 @@ create or replace view pgiam.first_order_members as
     where gm.group_member_name = g.group_name;
 
 
-drop function if exists include_membership(text, timestamptz, timestamptz, boolean);
+drop function if exists include_membership(text, timestamptz, timestamptz, text, boolean);
 create or replace function include_membership(
-    target_group text,
+    source_group text,
     start_date timestamptz,
     end_date timestamptz,
+    target_group text,
     filter_inactive boolean default 'false'
 ) returns boolean as $$
-    declare exp_date timestamptz;
-    declare activated boolean;
+    declare source_exp timestamptz;
+    declare source_activated boolean;
+    declare target_exp timestamptz;
+    declare target_activated boolean;
     begin
         if filter_inactive = 'false' then
             return 'true';
         end if;
         select group_expiry_date, group_activated from groups
-            where group_name = target_group into exp_date, activated;
+            where group_name = source_group into source_exp, source_activated;
+        select group_expiry_date, group_activated from groups
+            where group_name = target_group into target_exp, target_activated;
         if (
-            (activated is null or activated = 't')
-            and (exp_date is null or current_date < exp_date)
+            (source_activated is null or source_activated = 't')
+            and (source_exp is null or current_date < source_exp)
             and (start_date is null or current_date > start_date)
             and (end_date is null or current_date < end_date)
+            and (target_activated is null or target_activated = 't')
+            and (target_exp is null or current_date < target_exp)
         ) then
             return 'true';
         else
@@ -606,7 +613,8 @@ create or replace function group_get_children(parent_group text, filter_membersh
             select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
             from pgiam.first_order_members where group_name = parent_group
             and group_class = 'primary' loop
-            if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+            -- add option to pass parent here too
+            if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
                 insert into mem values (gn, gmn, gc, gpm, sd, ed);
             end if;
         end loop;
@@ -614,7 +622,7 @@ create or replace function group_get_children(parent_group text, filter_membersh
             select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
             from pgiam.first_order_members where group_name = parent_group
             and group_class = 'secondary' loop
-            if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+            if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
                 insert into sec values (gn, gmn, gc, gpm, sd, ed);
             end if;
         end loop;
@@ -625,11 +633,11 @@ create or replace function group_get_children(parent_group text, filter_membersh
                 from sec where group_member_name = current_member
                 into gn, gmn, gc, gpm, sd, ed;
             if gc = 'primary' then
-                if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
                     insert into mem values (gn, gmn, gc, gpm, sd, ed);
                 end if;
             elsif gc = 'secondary' then
-                if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
                     insert into mem values (gn, gmn, gc, gpm, sd, ed);
                 end if;
                 new_current_member := gmn;
@@ -638,13 +646,13 @@ create or replace function group_get_children(parent_group text, filter_membersh
                     select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
                     from pgiam.first_order_members where group_name = new_current_member loop
                     if gc = 'primary' then
-                        if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                        if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
                             insert into mem values (gn, gmn, gc, gpm, sd, ed);
                         end if;
                         delete from sec where group_member_name = gmn;
                     else
                         recursive_current_member := gmn;
-                        if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                        if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
                             insert into mem values (gn, gmn, gc, gpm, sd, ed);
                         end if;
                         -- this new secondary member can have both primary and seconday
@@ -652,7 +660,7 @@ create or replace function group_get_children(parent_group text, filter_membersh
                         for gn, gmn, gc, gpm, sd, ed in
                             select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
                             from pgiam.first_order_members where group_name = recursive_current_member loop
-                            if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                            if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
                                 insert into sec values (gn, gmn, gc, gpm, sd, ed);
                             end if;
                         end loop;
@@ -704,7 +712,8 @@ create or replace function group_get_parents(child_group text, filter_membership
         delete from parents;
         for gn, sd, ed in select group_name, start_date, end_date
             from pgiam.first_order_members where group_member_name = child_group loop
-            if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+            -- also add the child to the filter
+            if include_membership(gn, sd, ed, child_group, filter_memberships) = 'true' then
                 insert into candidates values (child_group, gn, sd, ed);
             end if;
         end loop;
@@ -717,7 +726,7 @@ create or replace function group_get_parents(child_group text, filter_membership
             -- so we find all recursive memberships
             for gn, sd, ed in select group_name, start_date, end_date from pgiam.first_order_members
                 where group_member_name = mgn loop
-                if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                if include_membership(gn, sd, ed, mgn, filter_memberships) = 'true' then
                     insert into candidates values (mgn, gn, sd, ed);
                 end if;
             end loop;
