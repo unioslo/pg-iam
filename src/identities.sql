@@ -467,12 +467,33 @@ create trigger group_management_trigger before update on groups
 create trigger groups_channel_notify after insert or delete or update on groups
     for each row execute procedure notify_listeners();
 
-
+-- TODO: need to update the audit log table to contain these dates...
 create table if not exists group_memberships(
     group_name text not null references groups (group_name) on delete cascade,
     group_member_name text not null references groups (group_name) on delete cascade,
+    start_date timestamptz check(start_date < end_date),
+    end_date timestamptz check(end_date > start_date and end_date > current_date),
     unique (group_name, group_member_name)
 );
+
+
+drop function if exists group_memberships_constraint_check() cascade;
+create or replace function group_memberships_constraint_check()
+    returns trigger as $$
+    declare group_exp timestamptz;
+    begin
+        if NEW.end_date != OLD.end_date then
+            select group_expiry_date from groups
+                where group_name in (NEW.group_name, OLD.group_name) into group_exp;
+            if group_exp is not null and NEW.end_date > group_exp then
+                raise exception using message = 'membership end_date cannot exceed group expiry date';
+            end if;
+        end if;
+        return new;
+    end;
+$$ language plpgsql;
+create trigger group_memberships_constraints before insert or update on group_memberships
+    for each row execute procedure group_memberships_constraint_check();
 
 
 create trigger group_memberships_audit after update or insert or delete on group_memberships
@@ -496,100 +517,196 @@ create trigger ensure_group_memberships_immutability before update on group_memb
 
 
 create or replace view pgiam.first_order_members as
-    select gm.group_name, gm.group_member_name, g.group_class, g.group_type, g.group_primary_member
+    select
+        gm.group_name,
+        gm.group_member_name,
+        g.group_class,
+        g.group_type,
+        g.group_primary_member,
+        gm.start_date,
+        gm.end_date
     from group_memberships gm, groups g
     where gm.group_member_name = g.group_name;
 
 
-drop table if exists pgiam.members cascade; -- accounting table for temp data
-create table if not exists pgiam.members(group_name text, group_member_name text, group_class text, group_primary_member text);
+drop function if exists include_membership(text, timestamptz, timestamptz, boolean);
+create or replace function include_membership(
+    target_group text,
+    start_date timestamptz,
+    end_date timestamptz,
+    filter_inactive boolean default 'false'
+) returns boolean as $$
+    declare exp_date timestamptz;
+    declare activated boolean;
+    begin
+        if filter_inactive = 'false' then
+            return 'true';
+        end if;
+        select group_expiry_date, group_activated from groups
+            where group_name = target_group into exp_date, activated;
+        if (
+            (activated is null or activated = 't')
+            and (exp_date is null or current_date < exp_date)
+            and (start_date is null or current_date > start_date)
+            and (end_date is null or current_date < end_date)
+        ) then
+            return 'true';
+        else
+            return 'false';
+        end if;
+    end;
+$$ language plpgsql;
+
+
+-- will have to return time constraints from here
+drop table if exists pgiam.members cascade;
+create table if not exists pgiam.members(
+    group_name text,
+    group_member_name text,
+    group_class text,
+    group_primary_member text,
+    start_date timestamptz,
+    end_date timestamptz
+);
 drop function if exists group_get_children(text) cascade;
-create or replace function group_get_children(parent_group text)
+drop function if exists group_get_children(text, boolean) cascade;
+create or replace function group_get_children(parent_group text, filter_memberships boolean default 'false')
     returns setof pgiam.members as $$
     declare num int;
     declare gn text;
     declare gmn text;
     declare gpm text;
     declare gc text;
+    declare sd timestamptz;
+    declare ed timestamptz;
     declare row record;
     declare current_member text;
     declare new_current_member text;
     declare recursive_current_member text;
     begin
-        create temporary table if not exists sec(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
-        create temporary table if not exists mem(group_name text, group_member_name text, group_class text, group_primary_member text) on commit drop;
+        create temporary table if not exists sec(
+            group_name text,
+            group_member_name text,
+            group_class text,
+            group_primary_member text,
+            start_date timestamptz,
+            end_date timestamptz
+        ) on commit drop;
+        create temporary table if not exists mem(
+            group_name text,
+            group_member_name text,
+            group_class text,
+            group_primary_member text,
+            start_date timestamptz,
+            end_date timestamptz
+        ) on commit drop;
         delete from sec;
         delete from mem;
-        select count(*) from pgiam.first_order_members where group_name = parent_group
-            and group_class = 'secondary' into num;
-        if num = 0 then
-            return query execute format ('select group_name, group_member_name, group_class, group_primary_member
-                from pgiam.first_order_members where group_name = $1 order by group_primary_member') using parent_group;
-        else
-            for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
-                from pgiam.first_order_members where group_name = parent_group
-                and group_class = 'primary' loop
-                insert into mem values (gn, gmn, gc, gpm);
-            end loop;
-            for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
-                from pgiam.first_order_members where group_name = parent_group
-                and group_class = 'secondary' loop
-                insert into sec values (gn, gmn, gc, gpm);
-            end loop;
-            select count(*) from sec into num;
-            while num > 0 loop
-                select group_member_name from sec limit 1 into current_member;
-                select group_name, group_member_name, group_class, group_primary_member
-                    from sec where group_member_name = current_member
-                    into gn, gmn, gc, gpm;
-                if gc = 'primary' then
-                    insert into mem values (gn, gmn, gc, gpm);
-                elsif gc = 'secondary' then
-                    insert into mem values (gn, gmn, gc, gpm);
-                    new_current_member := gmn;
-                    -- first add primary groups to members, and remove them from sec
-                    for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
-                        from pgiam.first_order_members where group_name = new_current_member loop
-                        if gc = 'primary' then
-                            insert into mem values (gn, gmn, gc, gpm);
-                            delete from sec where group_member_name = gmn;
-                        else
-                            recursive_current_member := gmn;
-                            insert into mem values (gn, gmn, gc, gpm);
-                            -- this new secondary member can have both primary and seconday
-                            -- members itself, but just add all its members to sec, and we will handle them
-                            for gn, gmn, gc, gpm in select group_name, group_member_name, group_class, group_primary_member
-                                from pgiam.first_order_members where group_name = recursive_current_member loop
-                                insert into sec values (gn, gmn, gc, gpm);
-                            end loop;
-                        end if;
-                    end loop;
+        for gn, gmn, gc, gpm, sd, ed in
+            select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
+            from pgiam.first_order_members where group_name = parent_group
+            and group_class = 'primary' loop
+            if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                insert into mem values (gn, gmn, gc, gpm, sd, ed);
+            end if;
+        end loop;
+        for gn, gmn, gc, gpm, sd, ed in
+            select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
+            from pgiam.first_order_members where group_name = parent_group
+            and group_class = 'secondary' loop
+            if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                insert into sec values (gn, gmn, gc, gpm, sd, ed);
+            end if;
+        end loop;
+        select count(*) from sec into num;
+        while num > 0 loop
+            select group_member_name from sec limit 1 into current_member;
+            select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
+                from sec where group_member_name = current_member
+                into gn, gmn, gc, gpm, sd, ed;
+            if gc = 'primary' then
+                if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                    insert into mem values (gn, gmn, gc, gpm, sd, ed);
                 end if;
-                delete from sec where group_member_name = current_member;
-                select count(*) from sec into num;
-            end loop;
-            return query select * from mem order by group_primary_member;
-        end if;
+            elsif gc = 'secondary' then
+                if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                    insert into mem values (gn, gmn, gc, gpm, sd, ed);
+                end if;
+                new_current_member := gmn;
+                -- first add primary groups to members, and remove them from sec
+                for gn, gmn, gc, gpm, sd, ed in
+                    select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
+                    from pgiam.first_order_members where group_name = new_current_member loop
+                    if gc = 'primary' then
+                        if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                            insert into mem values (gn, gmn, gc, gpm, sd, ed);
+                        end if;
+                        delete from sec where group_member_name = gmn;
+                    else
+                        recursive_current_member := gmn;
+                        if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                            insert into mem values (gn, gmn, gc, gpm, sd, ed);
+                        end if;
+                        -- this new secondary member can have both primary and seconday
+                        -- members itself, but just add all its members to sec, and we will handle them
+                        for gn, gmn, gc, gpm, sd, ed in
+                            select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
+                            from pgiam.first_order_members where group_name = recursive_current_member loop
+                            if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                                insert into sec values (gn, gmn, gc, gpm, sd, ed);
+                            end if;
+                        end loop;
+                    end if;
+                end loop;
+            end if;
+            delete from sec where group_member_name = current_member;
+            select count(*) from sec into num;
+        end loop;
+        return query select * from mem order by group_primary_member;
     end;
 $$ language plpgsql;
 
 
-drop table if exists pgiam.memberships cascade; -- accounting table for temp data
-create table if not exists pgiam.memberships(member_name text, member_group_name text);
-drop function if exists group_get_parents(text) cascade;
-create or replace function group_get_parents(child_group text)
+-- consider allowing filtering on constraints here
+drop table if exists pgiam.memberships cascade; -- return type
+create table if not exists pgiam.memberships(
+    member_name text,
+    member_group_name text,
+    start_date timestamptz,
+    end_date timestamptz
+);
+drop function if exists group_get_parents(text) cascade; -- changed signature
+drop function if exists group_get_parents(text, boolean) cascade;
+create or replace function group_get_parents(child_group text, filter_memberships boolean default 'false')
     returns setof pgiam.memberships as $$
     declare num int;
     declare mgn text;
     declare mn text;
     declare gn text;
+    declare sd timestamptz;
+    declare ed timestamptz;
+    declare grp_exp timestamptz;
+    declare grp_actived boolean;
     begin
-        create temporary table if not exists candidates(member_name text, member_group_name text) on commit drop;
-        create temporary table if not exists parents(member_name text, member_group_name text) on commit drop;
+        create temporary table if not exists candidates(
+            member_name text,
+            member_group_name text,
+            start_date timestamptz,
+            end_date timestamptz
+        ) on commit drop;
+        create temporary table if not exists parents(
+            member_name text,
+            member_group_name text,
+            start_date timestamptz,
+            end_date timestamptz
+        ) on commit drop;
         delete from candidates;
         delete from parents;
-        for gn in select group_name from pgiam.first_order_members where group_member_name = child_group loop
-            insert into candidates values (child_group, gn);
+        for gn, sd, ed in select group_name, start_date, end_date
+            from pgiam.first_order_members where group_member_name = child_group loop
+            if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                insert into candidates values (child_group, gn, sd, ed);
+            end if;
         end loop;
         select count(*) from candidates into num;
         while num > 0 loop
@@ -598,8 +715,11 @@ create or replace function group_get_parents(child_group text)
             delete from candidates where member_name = mn and member_group_name = mgn;
             -- now check if the current candidate has parents
             -- so we find all recursive memberships
-            for gn in select group_name from pgiam.first_order_members where group_member_name = mgn loop
-                insert into candidates values (mgn, gn);
+            for gn, sd, ed in select group_name, start_date, end_date from pgiam.first_order_members
+                where group_member_name = mgn loop
+                if include_membership(gn, sd, ed, filter_memberships) = 'true' then
+                    insert into candidates values (mgn, gn, sd, ed);
+                end if;
             end loop;
             select count(*) from candidates into num;
         end loop;
@@ -715,7 +835,9 @@ create trigger group_moderators_channel_notify after update or insert or delete 
 
 
 drop function if exists get_memberships(text) cascade;
-create or replace function get_memberships(member text, grp text)
+drop function if exists get_memberships(text, text) cascade;
+drop function if exists get_memberships(text, text, boolean) cascade;
+create or replace function get_memberships(member text, grp text, filter_memberships boolean default 'false')
     returns json as $$
     declare data json;
     begin
@@ -724,12 +846,16 @@ create or replace function get_memberships(member text, grp text)
                 $1, member_name,
                 $2, member_group_name,
                 $3, group_activated,
-                $4, group_expiry_date))
-            from (select member_name, member_group_name from group_get_parents($5)
-                  union select %s, %s)a
+                $4, group_expiry_date,
+                $5, json_build_object($6, start_date, $7, end_date)))
+            from (select member_name, member_group_name, start_date, end_date from group_get_parents($8, $9)
+                  union select %s, %s, null, null)a
             join (select group_name, group_activated, group_expiry_date from groups)b
-            on a.member_group_name = b.group_name', quote_literal(member), quote_literal(grp))
-            using 'member_name', 'member_group', 'group_activated', 'group_expiry_date', grp
+            on a.member_group_name = b.group_name',
+            quote_literal(member), quote_literal(grp)
+        )
+            using 'member_name', 'member_group', 'group_activated', 'group_expiry_date',
+                  'constraints', 'start_date', 'end_date', grp, filter_memberships
             into data;
         return data;
     end;
@@ -737,7 +863,8 @@ $$ language plpgsql;
 
 
 drop function if exists person_groups(text) cascade;
-create or replace function person_groups(person_id text)
+drop function if exists person_groups(text, boolean) cascade;
+create or replace function person_groups(person_id text, filter_memberships boolean default 'false')
     returns json as $$
     declare pid uuid;
     declare pgrp text;
@@ -748,15 +875,19 @@ create or replace function person_groups(person_id text)
         pid := $1::uuid;
         assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_group from persons where persons.person_id = pid into pgrp;
-        select get_memberships(person_id, pgrp) into pgroups;
-        select json_build_object('person_id', person_id, 'person_groups', pgroups) into data;
+        select get_memberships(person_id, pgrp, filter_memberships) into pgroups;
+        select json_build_object(
+            'person_id', person_id,
+            'person_groups', pgroups
+        ) into data;
         return data;
     end;
 $$ language plpgsql;
 
 
 drop function if exists user_groups(text) cascade;
-create or replace function user_groups(user_name text)
+drop function if exists user_groups(text, boolean) cascade;
+create or replace function user_groups(user_name text, filter_memberships boolean default 'false')
     returns json as $$
     declare ugrp text;
     declare ugroups json;
@@ -766,8 +897,11 @@ create or replace function user_groups(user_name text)
         execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
         assert exst = 't', 'user does not exist';
         select user_group from users where users.user_name = $1 into ugrp;
-        select get_memberships(user_name, ugrp) into ugroups;
-        select json_build_object('user_name', user_name, 'user_groups', ugroups) into data;
+        select get_memberships(user_name, ugrp, filter_memberships) into ugroups;
+        select json_build_object(
+            'user_name', user_name,
+            'user_groups', ugroups
+        ) into data;
         return data;
     end;
 $$ language plpgsql;
@@ -797,9 +931,15 @@ create or replace function user_moderators(user_name text)
     end;
 $$ language plpgsql;
 
-
+-- add optional params for adding constraints here
 drop function if exists group_member_add(text, text) cascade;
-create or replace function group_member_add(group_name text, member text)
+drop function if exists group_member_add(text, text, timestamptz, timestamptz) cascade;
+create or replace function group_member_add(
+    group_name text,
+    member text,
+    start_date timestamptz default null,
+    end_date timestamptz default null
+)
     returns json as $$
     declare gnam text;
     declare unam text;
@@ -822,8 +962,8 @@ create or replace function group_member_add(group_name text, member text)
                 end;
             end;
         end if;
-        execute format('insert into group_memberships values ($1, $2)')
-            using gnam, mem;
+        execute format('insert into group_memberships values ($1, $2, $3, $4)')
+            using gnam, mem, start_date, end_date;
         return json_build_object('message', 'member added');
     end;
 $$ language plpgsql;
@@ -860,26 +1000,36 @@ create or replace function group_member_remove(group_name text, member text)
 $$ language plpgsql;
 
 
+-- join group activation and expiry onto group_get_children
 drop function if exists grp_mems(text) cascade;
-create or replace function grp_mems(gn text)
-    returns table(group_name text,
-                  group_member_name text,
-                  group_primary_member text,
-                  group_activated boolean,
-                  group_expiry_date timestamptz) as $$
+drop function if exists grp_mems(text, boolean) cascade;
+create or replace function grp_mems(gn text, filter_memberships boolean default 'false')
+    returns table(
+        group_name text,
+        group_member_name text,
+        group_primary_member text,
+        group_activated boolean,
+        group_expiry_date timestamptz,
+        start_date timestamptz,
+        end_date timestamptz
+    ) as $$
     select a.group_name,
            a.group_member_name,
            a.group_primary_member,
            b.group_activated,
-           b.group_expiry_date
-    from (select group_name, group_member_name, group_primary_member from group_get_children(gn))a
+           b.group_expiry_date,
+           a.start_date,
+           a.end_date
+    from (select group_name, group_member_name, group_primary_member, start_date, end_date
+          from group_get_children(gn, filter_memberships))a
     join (select group_name, group_activated, group_expiry_date from groups)b
     on a.group_name = b.group_name
 $$ language sql;
 
 
 drop function if exists group_members(text) cascade;
-create or replace function group_members(group_name text)
+drop function if exists group_members(text, boolean) cascade;
+create or replace function group_members(group_name text, filter_memberships boolean default 'false')
     returns json as $$
     declare direct_data json;
     declare transitive_data json;
@@ -887,26 +1037,29 @@ create or replace function group_members(group_name text)
     declare data json;
     begin
         assert (select exists(select 1 from groups where groups.group_name = $1)) = 't', 'group does not exist';
-        select json_agg(distinct group_primary_member) from group_get_children($1)
+        select json_agg(distinct group_primary_member) from group_get_children($1, filter_memberships)
             where group_primary_member is not null into primary_data;
         select json_agg(json_build_object(
             'group', gm.group_name,
             'group_member', gm.group_member_name,
             'primary_member', gm.group_primary_member,
             'activated', gm.group_activated,
-            'expiry_date', gm.group_expiry_date))
-            from grp_mems($1) gm where gm.group_name = $1 into direct_data;
+            'expiry_date', gm.group_expiry_date,
+            'constraints', json_build_object('start_date', gm.start_date, 'end_date', gm.end_date)))
+            from grp_mems($1, filter_memberships) gm where gm.group_name = $1 into direct_data;
         select json_agg(json_build_object(
             'group', gm.group_name,
             'group_member', gm.group_member_name,
             'primary_member', gm.group_primary_member,
             'activated', gm.group_activated,
-            'expiry_date', gm.group_expiry_date))
-            from grp_mems($1) gm where gm.group_name != $1 into transitive_data;
-        select json_build_object('group_name', group_name,
-                                 'direct_members', direct_data,
-                                 'transitive_members', transitive_data,
-                                 'ultimate_members', primary_data) into data;
+            'expiry_date', gm.group_expiry_date,
+            'constraints', json_build_object('start_date', gm.start_date, 'end_date', gm.end_date)))
+            from grp_mems($1, filter_memberships) gm where gm.group_name != $1 into transitive_data;
+        select json_build_object(
+            'group_name', group_name,
+            'direct_members', direct_data,
+            'transitive_members', transitive_data,
+            'ultimate_members', primary_data) into data;
         return data;
     end;
 $$ language plpgsql;
