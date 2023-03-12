@@ -473,6 +473,7 @@ create table if not exists group_memberships(
     group_member_name text not null references groups (group_name) on delete cascade,
     start_date timestamptz check(start_date < end_date),
     end_date timestamptz check(end_date > start_date and end_date > current_date),
+    weekdays jsonb, -- {"mon": {"start": "08:00", "end": "17:00"}}
     unique (group_name, group_member_name)
 );
 
@@ -481,6 +482,9 @@ drop function if exists group_memberships_constraint_check() cascade;
 create or replace function group_memberships_constraint_check()
     returns trigger as $$
     declare group_exp timestamptz;
+    declare day text;
+    declare start_t timetz;
+    declare end_t timetz;
     begin
         if NEW.end_date != OLD.end_date then
             select group_expiry_date from groups
@@ -488,6 +492,15 @@ create or replace function group_memberships_constraint_check()
             if group_exp is not null and NEW.end_date > group_exp then
                 raise exception using message = 'membership end_date cannot exceed group expiry date';
             end if;
+        elsif NEW.weekdays != OLD.weekdays then
+            for day in select jsonb_object_keys(NEW.weekdays) loop
+                assert day in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'), 'unrecognised day ' || day;
+                start_t := cast(NEW.weekdays->day->>'start' as timetz);
+                end_t := cast(NEW.weekdays->day->>'end' as timetz);
+                assert start_t is not null, 'missing start time';
+                assert end_t is not null, 'missing end time';
+                assert start_t < end_t, 'start time must be before end time';
+            end loop;
         end if;
         return new;
     end;
@@ -524,18 +537,56 @@ create or replace view pgiam.first_order_members as
         g.group_type,
         g.group_primary_member,
         gm.start_date,
-        gm.end_date
+        gm.end_date,
+        gm.weekdays
     from group_memberships gm, groups g
     where gm.group_member_name = g.group_name;
 
+drop function if exists day_from_ts(timestamptz) cascade;
+create or replace function day_from_ts(ts timestamptz)
+    returns text as $$
+    declare days text[];
+    declare out text;
+    begin
+        days := array['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+        select days[(select extract (isodow from ts))] into out;
+        return out;
+    end;
+$$ language plpgsql;
 
-drop function if exists include_membership(text, timestamptz, timestamptz, text, boolean);
+drop function if exists allowed_time(jsonb, timestamptz) cascade;
+create or replace function allowed_time(
+    weekdays jsonb,
+    client_timestamp timestamptz
+) returns boolean as $$
+    declare day jsonb;
+    begin
+        if weekdays is null then return 'true'; end if;
+        select weekdays->day_from_ts(client_timestamp) into day;
+        if day is null or (
+            client_timestamp::timetz between
+                cast(day->>'start' as timetz)
+                and cast(day->>'end' as timetz)
+        ) then
+            return 'true';
+        else
+            return 'false';
+        end if;
+    end;
+$$ language plpgsql;
+
+
+drop function if exists include_membership(
+    text, timestamptz, timestamptz, jsonb, text, boolean, timestamptz
+) cascade;
 create or replace function include_membership(
     source_group text,
     start_date timestamptz,
     end_date timestamptz,
+    weekdays jsonb,
     target_group text,
-    filter_inactive boolean default 'false'
+    filter_inactive boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
 ) returns boolean as $$
     declare source_exp timestamptz;
     declare source_activated boolean;
@@ -551,11 +602,12 @@ create or replace function include_membership(
             where group_name = target_group into target_exp, target_activated;
         if (
             (source_activated is null or source_activated = 't')
-            and (source_exp is null or current_date < source_exp)
-            and (start_date is null or current_date > start_date)
-            and (end_date is null or current_date < end_date)
+            and (source_exp is null or client_timestamp < source_exp)
+            and (start_date is null or client_timestamp > start_date)
+            and (end_date is null or client_timestamp < end_date)
             and (target_activated is null or target_activated = 't')
-            and (target_exp is null or current_date < target_exp)
+            and (target_exp is null or client_timestamp < target_exp)
+            and allowed_time(weekdays, client_timestamp)
         ) then
             return 'true';
         else
@@ -573,12 +625,17 @@ create table if not exists pgiam.members(
     group_class text,
     group_primary_member text,
     start_date timestamptz,
-    end_date timestamptz
+    end_date timestamptz,
+    weekdays jsonb
 );
 drop function if exists group_get_children(text) cascade;
 drop function if exists group_get_children(text, boolean) cascade;
-create or replace function group_get_children(parent_group text, filter_memberships boolean default 'false')
-    returns setof pgiam.members as $$
+drop function if exists group_get_children(text, boolean, timestamptz) cascade;
+create or replace function group_get_children(
+    parent_group text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns setof pgiam.members as $$
     declare num int;
     declare gn text;
     declare gmn text;
@@ -586,6 +643,7 @@ create or replace function group_get_children(parent_group text, filter_membersh
     declare gc text;
     declare sd timestamptz;
     declare ed timestamptz;
+    declare wkds jsonb;
     declare row record;
     declare current_member text;
     declare new_current_member text;
@@ -597,7 +655,8 @@ create or replace function group_get_children(parent_group text, filter_membersh
             group_class text,
             group_primary_member text,
             start_date timestamptz,
-            end_date timestamptz
+            end_date timestamptz,
+            weekdays jsonb
         ) on commit drop;
         create temporary table if not exists mem(
             group_name text,
@@ -605,63 +664,69 @@ create or replace function group_get_children(parent_group text, filter_membersh
             group_class text,
             group_primary_member text,
             start_date timestamptz,
-            end_date timestamptz
+            end_date timestamptz,
+            weekdays jsonb
         ) on commit drop;
         delete from sec;
         delete from mem;
-        for gn, gmn, gc, gpm, sd, ed in
-            select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
+        for gn, gmn, gc, gpm, sd, ed, wkds in
+            select group_name, group_member_name, group_class,
+                   group_primary_member, start_date, end_date, weekdays
             from pgiam.first_order_members where group_name = parent_group
             and group_class = 'primary' loop
             -- add option to pass parent here too
-            if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
-                insert into mem values (gn, gmn, gc, gpm, sd, ed);
+            if include_membership(gn, sd, ed, wkds, gmn, filter_memberships, client_timestamp) = 'true' then
+                insert into mem values (gn, gmn, gc, gpm, sd, ed, wkds);
             end if;
         end loop;
-        for gn, gmn, gc, gpm, sd, ed in
-            select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
+        for gn, gmn, gc, gpm, sd, ed, wkds in
+            select group_name, group_member_name, group_class,
+                   group_primary_member, start_date, end_date, weekdays
             from pgiam.first_order_members where group_name = parent_group
             and group_class = 'secondary' loop
-            if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
-                insert into sec values (gn, gmn, gc, gpm, sd, ed);
+            if include_membership(gn, sd, ed, wkds, gmn, filter_memberships, client_timestamp) = 'true' then
+                insert into sec values (gn, gmn, gc, gpm, sd, ed, wkds);
             end if;
         end loop;
         select count(*) from sec into num;
         while num > 0 loop
             select group_member_name from sec limit 1 into current_member;
-            select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
+            select group_name, group_member_name, group_class,
+                   group_primary_member, start_date, end_date, weekdays
                 from sec where group_member_name = current_member
-                into gn, gmn, gc, gpm, sd, ed;
+                into gn, gmn, gc, gpm, sd, ed, wkds;
             if gc = 'primary' then
-                if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
-                    insert into mem values (gn, gmn, gc, gpm, sd, ed);
+                if include_membership(gn, sd, ed, wkds, gmn, filter_memberships, client_timestamp) = 'true' then
+                    insert into mem values (gn, gmn, gc, gpm, sd, ed, wkds);
                 end if;
             elsif gc = 'secondary' then
-                if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
-                    insert into mem values (gn, gmn, gc, gpm, sd, ed);
+                if include_membership(gn, sd, ed, wkds, gmn, filter_memberships, client_timestamp) = 'true' then
+                    insert into mem values (gn, gmn, gc, gpm, sd, ed, wkds);
                 end if;
                 new_current_member := gmn;
                 -- first add primary groups to members, and remove them from sec
-                for gn, gmn, gc, gpm, sd, ed in
-                    select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
+                for gn, gmn, gc, gpm, sd, ed, wkds in
+                    select group_name, group_member_name, group_class,
+                           group_primary_member, start_date, end_date, weekdays
                     from pgiam.first_order_members where group_name = new_current_member loop
                     if gc = 'primary' then
-                        if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
-                            insert into mem values (gn, gmn, gc, gpm, sd, ed);
+                        if include_membership(gn, sd, ed, wkds, gmn, filter_memberships, client_timestamp) = 'true' then
+                            insert into mem values (gn, gmn, gc, gpm, sd, ed, wkds);
                         end if;
                         delete from sec where group_member_name = gmn;
                     else
                         recursive_current_member := gmn;
-                        if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
-                            insert into mem values (gn, gmn, gc, gpm, sd, ed);
+                        if include_membership(gn, sd, ed, wkds, gmn, filter_memberships, client_timestamp) = 'true' then
+                            insert into mem values (gn, gmn, gc, gpm, sd, ed, wkds);
                         end if;
                         -- this new secondary member can have both primary and seconday
                         -- members itself, but just add all its members to sec, and we will handle them
-                        for gn, gmn, gc, gpm, sd, ed in
-                            select group_name, group_member_name, group_class, group_primary_member, start_date, end_date
+                        for gn, gmn, gc, gpm, sd, ed, wkds in
+                            select group_name, group_member_name, group_class,
+                                   group_primary_member, start_date, end_date, weekdays
                             from pgiam.first_order_members where group_name = recursive_current_member loop
-                            if include_membership(gn, sd, ed, gmn, filter_memberships) = 'true' then
-                                insert into sec values (gn, gmn, gc, gpm, sd, ed);
+                            if include_membership(gn, sd, ed, wkds, gmn, filter_memberships, client_timestamp) = 'true' then
+                                insert into sec values (gn, gmn, gc, gpm, sd, ed, wkds);
                             end if;
                         end loop;
                     end if;
@@ -681,12 +746,16 @@ create table if not exists pgiam.memberships(
     member_name text,
     member_group_name text,
     start_date timestamptz,
-    end_date timestamptz
+    end_date timestamptz,
+    weekdays jsonb
 );
 drop function if exists group_get_parents(text) cascade; -- changed signature
 drop function if exists group_get_parents(text, boolean) cascade;
-create or replace function group_get_parents(child_group text, filter_memberships boolean default 'false')
-    returns setof pgiam.memberships as $$
+create or replace function group_get_parents(
+    child_group text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns setof pgiam.memberships as $$
     declare num int;
     declare mgn text;
     declare mn text;
@@ -695,26 +764,29 @@ create or replace function group_get_parents(child_group text, filter_membership
     declare ed timestamptz;
     declare grp_exp timestamptz;
     declare grp_actived boolean;
+    declare wkds jsonb;
     begin
         create temporary table if not exists candidates(
             member_name text,
             member_group_name text,
             start_date timestamptz,
-            end_date timestamptz
+            end_date timestamptz,
+            weekdays jsonb
         ) on commit drop;
         create temporary table if not exists parents(
             member_name text,
             member_group_name text,
             start_date timestamptz,
-            end_date timestamptz
+            end_date timestamptz,
+            weekdays jsonb
         ) on commit drop;
         delete from candidates;
         delete from parents;
-        for gn, sd, ed in select group_name, start_date, end_date
+        for gn, sd, ed, wkds in select group_name, start_date, end_date, weekdays
             from pgiam.first_order_members where group_member_name = child_group loop
             -- also add the child to the filter
-            if include_membership(gn, sd, ed, child_group, filter_memberships) = 'true' then
-                insert into candidates values (child_group, gn, sd, ed);
+            if include_membership(gn, sd, ed, wkds, child_group, filter_memberships, client_timestamp) = 'true' then
+                insert into candidates values (child_group, gn, sd, ed, wkds);
             end if;
         end loop;
         select count(*) from candidates into num;
@@ -724,10 +796,10 @@ create or replace function group_get_parents(child_group text, filter_membership
             delete from candidates where member_name = mn and member_group_name = mgn;
             -- now check if the current candidate has parents
             -- so we find all recursive memberships
-            for gn, sd, ed in select group_name, start_date, end_date from pgiam.first_order_members
-                where group_member_name = mgn loop
-                if include_membership(gn, sd, ed, mgn, filter_memberships) = 'true' then
-                    insert into candidates values (mgn, gn, sd, ed);
+            for gn, sd, ed, wkds in select group_name, start_date, end_date, weekdays
+                from pgiam.first_order_members where group_member_name = mgn loop
+                if include_membership(gn, sd, ed, wkds, child_group, filter_memberships, client_timestamp) = 'true' then
+                    insert into candidates values (mgn, gn, sd, ed, wkds);
                 end if;
             end loop;
             select count(*) from candidates into num;
@@ -846,8 +918,12 @@ create trigger group_moderators_channel_notify after update or insert or delete 
 drop function if exists get_memberships(text) cascade;
 drop function if exists get_memberships(text, text) cascade;
 drop function if exists get_memberships(text, text, boolean) cascade;
-create or replace function get_memberships(member text, grp text, filter_memberships boolean default 'false')
-    returns json as $$
+create or replace function get_memberships(
+    member text,
+    grp text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns json as $$
     declare data json;
     begin
         execute format(
@@ -857,14 +933,15 @@ create or replace function get_memberships(member text, grp text, filter_members
                 $3, group_activated,
                 $4, group_expiry_date,
                 $5, json_build_object($6, start_date, $7, end_date)))
-            from (select member_name, member_group_name, start_date, end_date from group_get_parents($8, $9)
-                  union select %s, %s, null, null)a
+            from (select member_name, member_group_name, start_date, end_date, weekdays
+                  from group_get_parents($8, $9, $10)
+                  union select %s, %s, null, null, null)a
             join (select group_name, group_activated, group_expiry_date from groups)b
             on a.member_group_name = b.group_name',
             quote_literal(member), quote_literal(grp)
         )
             using 'member_name', 'member_group', 'group_activated', 'group_expiry_date',
-                  'constraints', 'start_date', 'end_date', grp, filter_memberships
+                  'constraints', 'start_date', 'end_date', grp, filter_memberships, client_timestamp
             into data;
         return data;
     end;
@@ -873,8 +950,12 @@ $$ language plpgsql;
 
 drop function if exists person_groups(text) cascade;
 drop function if exists person_groups(text, boolean) cascade;
-create or replace function person_groups(person_id text, filter_memberships boolean default 'false')
-    returns json as $$
+drop function if exists person_groups(text, boolean, timestamptz) cascade;
+create or replace function person_groups(
+    person_id text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns json as $$
     declare pid uuid;
     declare pgrp text;
     declare res json;
@@ -884,7 +965,7 @@ create or replace function person_groups(person_id text, filter_memberships bool
         pid := $1::uuid;
         assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_group from persons where persons.person_id = pid into pgrp;
-        select get_memberships(person_id, pgrp, filter_memberships) into pgroups;
+        select get_memberships(person_id, pgrp, filter_memberships, client_timestamp) into pgroups;
         select json_build_object(
             'person_id', person_id,
             'person_groups', pgroups
@@ -896,8 +977,12 @@ $$ language plpgsql;
 
 drop function if exists user_groups(text) cascade;
 drop function if exists user_groups(text, boolean) cascade;
-create or replace function user_groups(user_name text, filter_memberships boolean default 'false')
-    returns json as $$
+drop function if exists user_groups(text, boolean, timestamptz) cascade;
+create or replace function user_groups(
+    user_name text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns json as $$
     declare ugrp text;
     declare ugroups json;
     declare exst boolean;
@@ -906,7 +991,7 @@ create or replace function user_groups(user_name text, filter_memberships boolea
         execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
         assert exst = 't', 'user does not exist';
         select user_group from users where users.user_name = $1 into ugrp;
-        select get_memberships(user_name, ugrp, filter_memberships) into ugroups;
+        select get_memberships(user_name, ugrp, filter_memberships, client_timestamp) into ugroups;
         select json_build_object(
             'user_name', user_name,
             'user_groups', ugroups
@@ -943,13 +1028,14 @@ $$ language plpgsql;
 -- add optional params for adding constraints here
 drop function if exists group_member_add(text, text) cascade;
 drop function if exists group_member_add(text, text, timestamptz, timestamptz) cascade;
+drop function if exists group_member_add(text, text, timestamptz, timestamptz, jsonb) cascade;
 create or replace function group_member_add(
     group_name text,
     member text,
     start_date timestamptz default null,
-    end_date timestamptz default null
-)
-    returns json as $$
+    end_date timestamptz default null,
+    weekdays jsonb default null
+) returns json as $$
     declare gnam text;
     declare unam text;
     declare mem text;
@@ -971,8 +1057,8 @@ create or replace function group_member_add(
                 end;
             end;
         end if;
-        execute format('insert into group_memberships values ($1, $2, $3, $4)')
-            using gnam, mem, start_date, end_date;
+        execute format('insert into group_memberships values ($1, $2, $3, $4, $5)')
+            using gnam, mem, start_date, end_date, weekdays;
         return json_build_object('message', 'member added');
     end;
 $$ language plpgsql;
@@ -1009,18 +1095,22 @@ create or replace function group_member_remove(group_name text, member text)
 $$ language plpgsql;
 
 
--- join group activation and expiry onto group_get_children
 drop function if exists grp_mems(text) cascade;
 drop function if exists grp_mems(text, boolean) cascade;
-create or replace function grp_mems(gn text, filter_memberships boolean default 'false')
-    returns table(
+drop function if exists grp_mems(text, boolean, timestamptz) cascade;
+create or replace function grp_mems(
+    gn text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns table(
         group_name text,
         group_member_name text,
         group_primary_member text,
         group_activated boolean,
         group_expiry_date timestamptz,
         start_date timestamptz,
-        end_date timestamptz
+        end_date timestamptz,
+        weekdays jsonb
     ) as $$
     select a.group_name,
            a.group_member_name,
@@ -1028,9 +1118,10 @@ create or replace function grp_mems(gn text, filter_memberships boolean default 
            b.group_activated,
            b.group_expiry_date,
            a.start_date,
-           a.end_date
-    from (select group_name, group_member_name, group_primary_member, start_date, end_date
-          from group_get_children(gn, filter_memberships))a
+           a.end_date,
+           a.weekdays
+    from (select group_name, group_member_name, group_primary_member, start_date, end_date, weekdays
+          from group_get_children(gn, filter_memberships, client_timestamp))a
     join (select group_name, group_activated, group_expiry_date from groups)b
     on a.group_name = b.group_name
 $$ language sql;
@@ -1038,15 +1129,18 @@ $$ language sql;
 
 drop function if exists group_members(text) cascade;
 drop function if exists group_members(text, boolean) cascade;
-create or replace function group_members(group_name text, filter_memberships boolean default 'false')
-    returns json as $$
+create or replace function group_members(
+    group_name text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns json as $$
     declare direct_data json;
     declare transitive_data json;
     declare primary_data json;
     declare data json;
     begin
         assert (select exists(select 1 from groups where groups.group_name = $1)) = 't', 'group does not exist';
-        select json_agg(distinct group_primary_member) from group_get_children($1, filter_memberships)
+        select json_agg(distinct group_primary_member) from group_get_children($1, filter_memberships, client_timestamp)
             where group_primary_member is not null into primary_data;
         select json_agg(json_build_object(
             'group', gm.group_name,
@@ -1054,16 +1148,26 @@ create or replace function group_members(group_name text, filter_memberships boo
             'primary_member', gm.group_primary_member,
             'activated', gm.group_activated,
             'expiry_date', gm.group_expiry_date,
-            'constraints', json_build_object('start_date', gm.start_date, 'end_date', gm.end_date)))
-            from grp_mems($1, filter_memberships) gm where gm.group_name = $1 into direct_data;
+            'constraints', json_build_object(
+                'start_date', gm.start_date,
+                'end_date', gm.end_date,
+                'weekdays', gm.weekdays
+            )
+        )) from grp_mems($1, filter_memberships, client_timestamp) gm
+            where gm.group_name = $1 into direct_data;
         select json_agg(json_build_object(
             'group', gm.group_name,
             'group_member', gm.group_member_name,
             'primary_member', gm.group_primary_member,
             'activated', gm.group_activated,
             'expiry_date', gm.group_expiry_date,
-            'constraints', json_build_object('start_date', gm.start_date, 'end_date', gm.end_date)))
-            from grp_mems($1, filter_memberships) gm where gm.group_name != $1 into transitive_data;
+            'constraints', json_build_object(
+                'start_date', gm.start_date,
+                'end_date', gm.end_date,
+                'weekdays', gm.weekdays
+            )
+        )) from grp_mems($1, filter_memberships, client_timestamp) gm
+            where gm.group_name != $1 into transitive_data;
         select json_build_object(
             'group_name', group_name,
             'direct_members', direct_data,
