@@ -53,7 +53,10 @@ create table if not exists audit_log_relations(
     event_time timestamptz default current_timestamp,
     table_name text not null,
     parent text,
-    child text
+    child text,
+    start_date timestamptz,
+    end_date timestamptz,
+    weekdays jsonb
 ) partition by list (table_name);
 create table if not exists audit_log_relations_group_memberships
     partition of audit_log_relations for values in ('group_memberships');
@@ -106,6 +109,9 @@ create or replace function update_audit_log_relations()
     declare parent text;
     declare child text;
     declare session_identity text;
+    declare start_date timestamptz := null;
+    declare end_date timestamptz := null;
+    declare weekdays jsonb := null;
     begin
         session_identity := current_setting('session.identity', 't');
         table_name := TG_TABLE_NAME::text;
@@ -113,6 +119,9 @@ create or replace function update_audit_log_relations()
             if table_name = 'group_memberships' then
                 parent := NEW.group_name;
                 child := NEW.group_member_name;
+                start_date := NEW.start_date;
+                end_date := NEW.end_date;
+                weekdays := NEW.weekdays;
             elsif table_name = 'group_moderators' then
                 parent := NEW.group_name;
                 child := NEW.group_moderator_name;
@@ -121,13 +130,19 @@ create or replace function update_audit_log_relations()
             if table_name = 'group_memberships' then
                 parent := OLD.group_name;
                 child := OLD.group_member_name;
+                start_date := OLD.start_date;
+                end_date := OLD.end_date;
+                weekdays := OLD.weekdays;
             elsif table_name = 'group_moderators' then
                 parent := OLD.group_name;
                 child := OLD.group_moderator_name;
             end if;
         end if;
-        insert into audit_log_relations(identity, operation, table_name, parent, child)
-            values (session_identity, TG_OP, table_name, parent, child);
+        insert into audit_log_relations(
+            identity, operation, table_name, parent, child, start_date, end_date, weekdays
+        ) values (
+            session_identity, TG_OP, table_name, parent, child, start_date, end_date, weekdays
+        );
         return new;
     end;
 $$ language plpgsql;
