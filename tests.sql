@@ -469,6 +469,239 @@ create or replace function test_group_memeberships_moderators()
 $$ language plpgsql;
 
 
+create or replace function test_group_membership_constraints()
+    returns boolean as $$
+    declare mems json;
+    declare grps json;
+    declare tomorrow jsonb;
+    declare hour_from_now jsonb;
+    declare num int;
+    begin
+        -- create persons, users, groups
+        insert into persons (full_name, person_expiry_date)
+            values ('Bruce Wayne', '2050-10-01');
+        insert into persons (full_name, person_expiry_date)
+            values ('Peter Parker', '2060-10-01');
+        insert into persons (full_name, person_expiry_date)
+            values ('Frida Kahlo', '2077-10-01');
+        insert into persons (full_name, person_expiry_date)
+            values ('Carol Danvers', '2080-10-01');
+        insert into persons (full_name, person_expiry_date)
+            values ('Breyten Breytenbach', '2090-10-01');
+        insert into users (person_id, user_name, user_expiry_date)
+            values (
+                (select person_id from persons where full_name like 'Bruce%'),
+                'p12-bwn',
+                '2050-03-28'
+            );
+        insert into users (person_id, user_name, user_expiry_date)
+            values (
+                (select person_id from persons where full_name like 'Peter%'),
+                'p12-pp',
+                '2060-10-01'
+            );
+        insert into users (person_id, user_name, user_expiry_date)
+            values (
+                (select person_id from persons where full_name like 'Frida%'),
+                'p12-fkl',
+                '2060-10-01'
+            );
+        insert into users (person_id, user_name, user_expiry_date)
+            values (
+                (select person_id from persons where full_name like 'Carol%'),
+                'p12-cld',
+                '2060-10-01'
+            );
+        insert into users (person_id, user_name, user_expiry_date)
+            values (
+                (select person_id from persons where full_name like 'Breyten%'),
+                'p12-brb',
+                '2060-10-01'
+            );
+        insert into groups (group_name, group_class, group_type)
+            values ('p12-admin-group', 'secondary', 'generic');
+        insert into groups (group_name, group_class, group_type)
+            values ('p12-export-group', 'secondary', 'generic');
+        insert into groups (group_name, group_class, group_type)
+            values ('p12-temp-group', 'secondary', 'generic');
+        insert into groups (group_name, group_class, group_type)
+            values ('p12-guest-group', 'secondary', 'generic');
+        insert into groups (group_name, group_class, group_type, group_expiry_date)
+            values ('p12-lol-group', 'secondary', 'generic', '2090-01-01');
+
+        -- check membership data validation
+        -- start and end date constraints
+        begin
+            perform group_member_add('p12-lol-group', 'p12-brb', null, '2091-01-01');
+            assert false;
+        exception when others then
+            raise notice '%', sqlerrm;
+            raise notice 'membership: end_date cannot exceed group expiry check works';
+        end;
+        begin
+            insert into group_memberships(
+                group_name, group_member_name, start_date, end_date
+            ) values (
+                'p12-admin-group', 'p12-brb-group', '2080-01-01', '2000-01-01'
+            );
+            assert false;
+        exception when check_violation then
+            raise notice '%', sqlerrm;
+            raise notice 'membership: start_date < end_date check works';
+        end;
+        -- weekdays constraints
+        begin
+            insert into group_memberships(
+                group_name, group_member_name, weekdays
+            ) values (
+                'p12-admin-group', 'p12-brb-group', '{"Lol": {}}'::jsonb
+            );
+            assert false;
+        exception when others then
+            raise notice '%', sqlerrm;
+            raise notice 'membership: weekdays wrong key name refused';
+        end;
+        begin
+            insert into group_memberships(
+                group_name, group_member_name, weekdays
+            ) values (
+                'p12-admin-group', 'p12-brb-group', '{"mon": {"end": "12:00"}}'::jsonb
+            );
+            assert false;
+        exception when others then
+            raise notice '%', sqlerrm;
+            raise notice 'membership: weekdays missing start time refused';
+        end;
+        begin
+            insert into group_memberships(
+                group_name, group_member_name, weekdays
+            ) values (
+                'p12-admin-group', 'p12-brb-group', '{"mon": {"start": "12:00"}}'::jsonb
+            );
+            assert false;
+        exception when others then
+            raise notice '%', sqlerrm;
+            raise notice 'membership: weekdays missing start end refused';
+        end;
+        begin
+            insert into group_memberships(
+                group_name, group_member_name, weekdays
+            ) values (
+                'p12-admin-group', 'p12-brb-group', '{"mon": {"start": "13:00", "end": "12:00"}}'::jsonb
+            );
+            assert false;
+        exception when others then
+            raise notice '%', sqlerrm;
+            raise notice 'membership: weekdays start > end time refused';
+        end;
+
+        -- create a valid membership graph
+        /*
+
+        p12-export-group
+            -> p12-bwn-group -> p12-bwn
+            -> p12-admin-group
+                -> p12-pp-group -> p12-pp
+                -> p12-temp-group
+                    -> p12-fkl-group -> p12-fkl (initial: not active yet)
+                -> p12-guest-group
+                    -> p12-cld-group -> p12-cld (initial: expired)
+
+        */
+        perform group_member_add('p12-export-group', 'p12-bwn');
+        perform group_member_add('p12-export-group', 'p12-admin-group');
+        perform group_member_add('p12-admin-group', 'p12-pp');
+        perform group_member_add('p12-admin-group', 'p12-temp-group');
+        perform group_member_add('p12-temp-group', 'p12-fkl', '2080-01-01', '2081-11-01');
+        perform group_member_add('p12-admin-group', 'p12-guest-group');
+        perform group_member_add('p12-guest-group', 'p12-cld', '2020-01-01', '2021-03-01');
+
+        -- check membership reporting (without and with constraint enforcement)
+        -- group_members
+        select group_members('p12-export-group') into mems;
+        assert json_array_length(mems->'direct_members') = 2, 'not reporting direct_members correctly';
+        assert json_array_length(mems->'transitive_members') = 5, 'not reporting transitive_members correctly';
+        assert json_array_length(mems->'ultimate_members') = 4, 'not reporting ultimate_members correctly';
+
+        -- with constraint filtering
+        select group_members('p12-export-group', 't') into mems;
+        assert json_array_length(mems->'direct_members') = 2, 'not reporting direct_members correctly';
+        assert json_array_length(mems->'transitive_members') = 3, 'not reporting transitive_members correctly';
+        assert json_array_length(mems->'ultimate_members') = 2, 'not filtering ultimate_members correctly';
+
+        -- add a weekday filter allowing only tomorrow
+        select ('{"' || day_from_ts(current_timestamp + interval '1 day') ||
+                '": {"start": "08:00", "end": "19:00"}}')::jsonb
+            into tomorrow;
+        update group_memberships set weekdays = tomorrow
+            where group_name = 'p12-export-group'
+            and group_member_name = 'p12-bwn-group';
+
+        -- using current_timestamp (default)
+        select group_members('p12-export-group', 't') into mems;
+        assert json_array_length(mems->'ultimate_members') = 1, 'not filtering ultimate_members correctly (defaut client_timestamp)';
+
+        -- pretend we're at time zone 0
+        -- add a weekday filter or after an hour from now (relative to time zone 0), today
+        select ('{"' || day_from_ts(current_timestamp at time zone '0') ||
+                '": {"start": "' || (current_time at time zone '0' + interval '1 hour')::time ||
+                '",  "end": "' || (current_time at time zone '0' + interval '3 hour')::time || '"}}')::jsonb
+            into hour_from_now;
+        update group_memberships set weekdays = hour_from_now
+            where group_name = 'p12-export-group'
+            and group_member_name = 'p12-bwn-group';
+
+        -- using client_timestamp provided by the caller (within the allowed time period)
+        select group_members('p12-export-group', 't', (current_timestamp at time zone '0' + interval '2 hour')) into mems;
+        assert json_array_length(mems->'ultimate_members') = 2, 'not filtering ultimate_members correctly (caller client_timestamp)';
+
+        -- using client_timestamp provided by the caller (outside the allowed time period)
+        select group_members('p12-export-group', 't', (current_timestamp at time zone '0' + interval '4 hour')) into mems;
+        assert json_array_length(mems->'ultimate_members') = 1, 'not filtering ultimate_members correctly (caller client_timestamp)';
+
+        -- ensure working limits on client timestamp
+        begin
+            select group_members('p12-export-group', 't', (current_timestamp + interval '4 days')) into mems;
+            assert false;
+        exception when others then
+            raise notice '%', sqlerrm;
+            raise notice 'membership: impossible client_timestamp refused';
+        end;
+
+        -- user_groups
+
+        select user_groups('p12-fkl') into grps;
+        assert json_array_length(grps->'user_groups') = 4, 'user_groups issue (no filtering)';
+        select user_groups('p12-fkl', 't') into grps;
+        assert json_array_length(grps->'user_groups') = 1, 'user_groups issue (with filtering - start date)';
+        select user_groups('p12-bwn') into grps;
+        assert json_array_length(grps->'user_groups') = 2, 'user_groups issue (no filtering)';
+        select user_groups('p12-bwn', 't', (current_timestamp at time zone '0' + interval '4 hour')) into grps;
+        assert json_array_length(grps->'user_groups') = 1, 'user_groups issue (with filtering - weekdays)';
+
+        -- check audit
+
+        select count(*) from audit_log_relations
+            where parent = 'p12-export-group'
+            and operation = 'UPDATE'
+            and weekdays is not null
+            into num;
+        assert num > 0, 'audit_log_relations not recording changes to weekdays';
+
+        -- delete persons, users, and groups
+        delete from persons where
+            full_name like 'Bruce%'
+            or full_name like 'Peter%'
+            or full_name like 'Frida%'
+            or full_name like 'Carol%'
+            or full_name like 'Breyten%';
+        delete from groups where group_name like 'p12%';
+
+        return 'true';
+    end;
+$$ language plpgsql;
+
+
 create or replace function test_capabilities_http()
     returns boolean as $$
     declare cid uuid;
@@ -1113,15 +1346,15 @@ create or replace function test_projects()
             'project group management not working';
         begin
             update groups set group_activated = 't' where group_name = grp;
-            assert false, 'proejct group activation mutable on groups';
+            assert false, 'project group activation mutable on groups';
         exception when others then
-            raise notice 'proejct group activation not mutable on groups';
+            raise notice 'project group activation not mutable on groups';
         end;
         begin
             update groups set group_expiry_date = '2020-01-01' where group_name = grp;
-            assert false, 'proejct group_expiry_date mutable on groups';
+            assert false, 'project group_expiry_date mutable on groups';
         exception when others then
-            raise notice 'proejct group_expiry_date not mutable on groups';
+            raise notice 'project group_expiry_date not mutable on groups';
         end;
         return true;
     end;
@@ -1177,6 +1410,7 @@ $$ language plpgsql;
 select check_no_data(:del_data);
 select test_persons_users_groups();
 select test_group_memeberships_moderators();
+select test_group_membership_constraints();
 select test_capabilities_http();
 select test_audit();
 select test_capability_instances();
@@ -1188,6 +1422,7 @@ select test_cascading_deletes(:keep_test);
 drop function if exists check_no_data(boolean);
 drop function if exists test_persons_users_groups();
 drop function if exists test_group_memeberships_moderators();
+drop function if exists test_group_membership_constraints();
 drop function if exists test_capabilities_http();
 drop function if exists test_audit();
 drop function if exists test_funcs();
