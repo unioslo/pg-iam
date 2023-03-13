@@ -4,8 +4,7 @@
 This example will demonstrate all the features mentioned in the `README`:
 
 - create persons, users, and groups with optional expiry dates
-- add users and/or groups to groups
-- add persons without users to groups, for external account access control management
+- add users and/or groups to groups, using temporal constraints where needed
 - allow groups to moderate memberships of other groups
 - create capabilities, specify criteria for obtaining them
 - specify the scope of the capabilities
@@ -23,18 +22,18 @@ First we will create two persons, each with one account, and two groups which we
 
 ```sql
 -- persons, users
-insert into persons (given_names, surname, person_expiry_date)
-    values ('Salvador', 'Dali', '2050-10-01');
+insert into persons (full_name, person_expiry_date)
+    values ('Salvador Dali', '2050-10-01');
 insert into users (person_id, user_name, user_expiry_date)
-    values ((select person_id from persons where surname = 'Dali'), 'dali', '2040-12-01');
-insert into persons (given_names, surname, person_expiry_date)
-    values ('Andre', 'Breton', '2050-10-01');
+    values ((select person_id from persons where full_name like '%Dali'), 'dali', '2040-12-01');
+insert into persons (full_name, person_expiry_date)
+    values ('Andre Breton', '2050-10-01');
 insert into users (person_id, user_name, user_expiry_date)
-    values ((select person_id from persons where surname = 'Breton'), 'abtn', '2050-01-01');
-insert into persons (given_names, surname, person_expiry_date)
-    values ('Juan', 'Miro', '2060-10-01');
+    values ((select person_id from persons where full_name like '%Breton'), 'abtn', '2050-01-01');
+insert into persons (full_name, person_expiry_date)
+    values ('Juan Miro', '2060-10-01');
 insert into users (person_id, user_name, user_expiry_date)
-    values ((select person_id from persons where surname = 'Miro'), 'jm', '2050-01-01');
+    values ((select person_id from persons where full_name like '%Miro'), 'jm', '2050-01-01');
 -- the groups
 insert into groups (group_name, group_class, group_type)
     values ('surrealist-group', 'secondary', 'generic');
@@ -47,52 +46,56 @@ insert into groups (group_name, group_class, group_type)
 Each person has an automatically created person group, and is activated by default.
 
 ```txt
-tsd_idp=> select person_id, person_activated, person_expiry_date, person_group, surname from persons;
-              person_id               | person_activated | person_expiry_date |                person_group                | surname
---------------------------------------+------------------+--------------------+--------------------------------------------+---------
- 49f25506-afeb-474f-92c4-02982c978e19 | t                | 2050-10-01         | 49f25506-afeb-474f-92c4-02982c978e19-group | Dali
- 9b087a8e-cbb6-440a-adb4-9cdbf3869f0a | t                | 2050-10-01         | 9b087a8e-cbb6-440a-adb4-9cdbf3869f0a-group | Breton
- ae935036-6991-4320-80b1-079da9ddf346 | t                | 2060-10-01         | ae935036-6991-4320-80b1-079da9ddf346-group | Miro
+tsd_idp=> select person_id, person_activated, person_expiry_date, person_group, full_name from persons;
+              person_id               | person_activated |   person_expiry_date   |                person_group                |   full_name
+--------------------------------------+------------------+------------------------+--------------------------------------------+---------------
+ 38d49b94-26ae-45cd-b654-52d4c455561f | t                | 2050-10-01 00:00:00+02 | 38d49b94-26ae-45cd-b654-52d4c455561f-group | Salvador Dali
+ d2de6e6f-48aa-4617-9b00-f26e702cafd9 | t                | 2050-10-01 00:00:00+02 | d2de6e6f-48aa-4617-9b00-f26e702cafd9-group | Andre Breton
+ 46dc5c2b-65ac-4b10-b6d2-39e48208897e | t                | 2060-10-01 00:00:00+02 | 46dc5c2b-65ac-4b10-b6d2-39e48208897e-group | Juan Miro
 ```
 
 Users also have automatically created groups, activation statuses, and expiry dates have been set.
 
 ```txt
 tsd_idp=> select person_id, user_name, user_group, user_activated, user_expiry_date from users;
-              person_id               | user_name | user_group | user_activated | user_expiry_date
---------------------------------------+-----------+------------+----------------+------------------
- 49f25506-afeb-474f-92c4-02982c978e19 | dali      | dali-group | t              | 2040-12-01
- 9b087a8e-cbb6-440a-adb4-9cdbf3869f0a | abtn      | abtn-group | t              | 2050-01-01
- ae935036-6991-4320-80b1-079da9ddf346 | jm        | jm-group   | t              | 2050-01-01
+              person_id               | user_name | user_group | user_activated |    user_expiry_date
+--------------------------------------+-----------+------------+----------------+------------------------
+ 38d49b94-26ae-45cd-b654-52d4c455561f | dali      | dali-group | t              | 2040-12-01 00:00:00+01
+ d2de6e6f-48aa-4617-9b00-f26e702cafd9 | abtn      | abtn-group | t              | 2050-01-01 00:00:00+01
+ 46dc5c2b-65ac-4b10-b6d2-39e48208897e | jm        | jm-group   | t              | 2050-01-01 00:00:00+01
 ```
 
 The automatically created groups are present in the `groups` table, while the group we created is also there. The person and user groups are `primary`, and have `group_primary_member`s, while the created groups are `secondary` and have no `group_primary_member`. In this case, neither have expiry dates set.
 
 ```txt
 tsd_idp=> select group_name, group_class, group_type, group_activated, group_expiry_date, group_primary_member from groups;
-                 group_name                 | group_class | group_type | group_activated | group_expiry_date |         group_primary_member
---------------------------------------------+-------------+------------+-----------------+-------------------+--------------------------------------
- 49f25506-afeb-474f-92c4-02982c978e19-group | primary     | person     | t               | 2050-10-01        | 49f25506-afeb-474f-92c4-02982c978e19
- dali-group                                 | primary     | user       | t               | 2040-12-01        | dali
- 9b087a8e-cbb6-440a-adb4-9cdbf3869f0a-group | primary     | person     | t               | 2050-10-01        | 9b087a8e-cbb6-440a-adb4-9cdbf3869f0a
- abtn-group                                 | primary     | user       | t               | 2050-01-01        | abtn
- ae935036-6991-4320-80b1-079da9ddf346-group | primary     | person     | t               | 2060-10-01        | ae935036-6991-4320-80b1-079da9ddf346
- jm-group                                   | primary     | user       | t               | 2050-01-01        | jm
- surrealist-group                           | secondary   | generic    | t               |                   |
- art-group                                  | secondary   | generic    | t               |                   |
- admin-group                                | secondary   | generic    | t               |                   |
+                 group_name                 | group_class | group_type | group_activated |   group_expiry_date    |         group_primary_member
+--------------------------------------------+-------------+------------+-----------------+------------------------+--------------------------------------
+ 38d49b94-26ae-45cd-b654-52d4c455561f-group | primary     | person     | t               | 2050-10-01 00:00:00+02 | 38d49b94-26ae-45cd-b654-52d4c455561f
+ dali-group                                 | primary     | user       | t               | 2040-12-01 00:00:00+01 | dali
+ d2de6e6f-48aa-4617-9b00-f26e702cafd9-group | primary     | person     | t               | 2050-10-01 00:00:00+02 | d2de6e6f-48aa-4617-9b00-f26e702cafd9
+ abtn-group                                 | primary     | user       | t               | 2050-01-01 00:00:00+01 | abtn
+ 46dc5c2b-65ac-4b10-b6d2-39e48208897e-group | primary     | person     | t               | 2060-10-01 00:00:00+02 | 46dc5c2b-65ac-4b10-b6d2-39e48208897e
+ jm-group                                   | primary     | user       | t               | 2050-01-01 00:00:00+01 | jm
+ surrealist-group                           | secondary   | generic    | t               |                        |
+ art-group                                  | secondary   | generic    | t               |                        |
+ admin-group                                | secondary   | generic    | t               |                        |      |                   |
 ```
 
 ### Set up group memberships, and moderators
 
-We want `Dali` to be in the `surrealist` group directly, but `Breton` will be included only via his membership to the `art` group. Using the helper function `group_member_add` has the advantage of allowing us to use user names to specify who we want to include in the group. In the implementation, only groups are members of other groups, so one could also simple insert the values into the `group_memberships` table if the application so pleased. Be that as it may, we proceed as follows:
+We want `Dali` to be in the `surrealist` group directly, but `Breton` will be included only via his membership to the `art` group. Let's suppose that the members of the `art` group should only have access to the resources protected by the `surrealist` group on Mondays between 08:00 and 17:00 (imagine they are expensive consultants who work by the hour). Let's further suppose that they are all employed for a time limited period. The `admin` group is also time limited, but can access the resources any time of day, any day of the week. We can then use temporal constraints on group membership to enforce these restrictions.
+
+Using the helper function `group_member_add` has the advantage of allowing us to use user names to specify who we want to include in the group. We can also (optionally) pass temporal constraint paremeters along with the membership specification.
+
+In the implementation, only groups are members of other groups, so one could also simple insert the values into the `group_memberships` table if the application so pleased. Be that as it may, we proceed as follows:
 
 ```sql
 select group_member_add('surrealist-group', 'dali');
-select group_member_add('art-group', 'abtn');
+select group_member_add('art-group', 'abtn', '2020-01-11', '2030-10-01', '{"mon": {"start": "08:00", "end": "17:00"}}'::jsonb);
 select group_member_add('admin-group', 'jm');
 select group_member_add('surrealist-group', 'art-group');
-select group_member_add('art-group', 'admin-group');
+select group_member_add('art-group', 'admin-group', '2020-01-11', '2030-10-01');
 insert into group_moderators (group_name, group_moderator_name) values ('art-group', 'admin-group');
 insert into group_moderators (group_name, group_moderator_name) values ('surrealist-group', 'admin-group');
 ```
@@ -101,56 +104,89 @@ We have now created a graph of members. If we want to get the information about 
 
 ```txt
 select group_members('surrealist-group');
---------------------------------------------
- {                                         +
-     "direct_members": [                   +
-         {                                 +
-             "group": "surrealist-group",  +
-             "activated": true,            +
-             "expiry_date": null,          +
-             "group_member": "dali-group", +
-             "primary_member": "dali"      +
-         },                                +
-         {                                 +
-             "group": "surrealist-group",  +
-             "activated": true,            +
-             "expiry_date": null,          +
-             "group_member": "art-group",  +
-             "primary_member": null        +
-         }                                 +
-     ],                                    +
-     "ultimate_members": [                 +
-         "abtn",                           +
-         "dali",                           +
-         "jm"                              +
-     ],                                    +
-     "transitive_members": [               +
-         {                                 +
-             "group": "art-group",         +
-             "activated": true,            +
-             "expiry_date": null,          +
-             "group_member": "abtn-group", +
-             "primary_member": "abtn"      +
-         },                                +
-         {                                 +
-             "group": "admin-group",       +
-             "activated": true,            +
-             "expiry_date": null,          +
-             "group_member": "jm-group",   +
-             "primary_member": "jm"        +
-         },                                +
-         {                                 +
-             "group": "art-group",         +
-             "activated": true,            +
-             "expiry_date": null,          +
-             "group_member": "admin-group",+
-             "primary_member": null        +
-         }                                 +
-     ]                                     +
+-----------------------------------------------------------
+ {                                                        +
+     "group_name": "surrealist-group",                    +
+     "direct_members": [                                  +
+         {                                                +
+             "group": "surrealist-group",                 +
+             "activated": true,                           +
+             "constraints": {                             +
+                 "end_date": null,                        +
+                 "weekdays": null,                        +
+                 "start_date": null                       +
+             },                                           +
+             "expiry_date": null,                         +
+             "group_member": "dali-group",                +
+             "primary_member": "dali"                     +
+         },                                               +
+         {                                                +
+             "group": "surrealist-group",                 +
+             "activated": true,                           +
+             "constraints": {                             +
+                 "end_date": null,                        +
+                 "weekdays": null,                        +
+                 "start_date": null                       +
+             },                                           +
+             "expiry_date": null,                         +
+             "group_member": "art-group",                 +
+             "primary_member": null                       +
+         }                                                +
+     ],                                                   +
+     "ultimate_members": [                                +
+         "abtn",                                          +
+         "dali",                                          +
+         "jm"                                             +
+     ],                                                   +
+     "transitive_members": [                              +
+         {                                                +
+             "group": "art-group",                        +
+             "activated": true,                           +
+             "constraints": {                             +
+                 "end_date": "2030-10-01T00:00:00+02:00", +
+                 "weekdays": {                            +
+                     "mon": {                             +
+                         "end": "17:00",                  +
+                         "start": "08:00"                 +
+                     }                                    +
+                 },                                       +
+                 "start_date": "2020-01-11T00:00:00+01:00"+
+             },                                           +
+             "expiry_date": null,                         +
+             "group_member": "abtn-group",                +
+             "primary_member": "abtn"                     +
+         },                                               +
+         {                                                +
+             "group": "admin-group",                      +
+             "activated": true,                           +
+             "constraints": {                             +
+                 "end_date": null,                        +
+                 "weekdays": null,                        +
+                 "start_date": null                       +
+             },                                           +
+             "expiry_date": null,                         +
+             "group_member": "jm-group",                  +
+             "primary_member": "jm"                       +
+         },                                               +
+         {                                                +
+             "group": "art-group",                        +
+             "activated": true,                           +
+             "constraints": {                             +
+                 "end_date": "2030-10-01T00:00:00+02:00", +
+                 "weekdays": null,                        +
+                 "start_date": "2020-01-11T00:00:00+01:00"+
+             },                                           +
+             "expiry_date": null,                         +
+             "group_member": "admin-group",               +
+             "primary_member": null                       +
+         }                                                +
+     ]                                                    +
  }
 ```
 
-If one is only interested in who the members are, regardless of the graph, then one can read the entries of the `ultimate_members` array. Otherwise one can refer to both `direct_members` and `transitive_members` for the full graph information. Via this one can also see whether any group in the graoh has been deactivcated or expired, and take action accordingly. We can also see the group moderators:
+If one is only interested in who the members are, regardless of the graph, then one can read the entries of the `ultimate_members` array. Otherwise one can refer to both `direct_members` and `transitive_members` for the full graph information, including temporal constraints. Via this one can also see whether any group in the graoh has been deactivcated or expired, and take action accordingly. It is also possible to apply filtering based on the membership constraints when calling the `group_members` function. See `2-db-structure.md` for details of the function signature.
+
+We can also see the group moderators:
 
 ```txt
 tsd_idp=> select group_moderators('surrealist-group');
@@ -242,31 +278,59 @@ In the authentication and authorization server, tokens can be issued to the iden
 
 ```txt
 tsd_idp=> select user_groups('jm');
--------------------------------------------------
- {                                              +
-     "user_name": "jm",                         +
-     "user_groups": [                           +
-         {                                      +
-             "member_name": "jm-group",         +
-             "member_group": "admin-group",     +
-             "group_activated": true,           +
-             "group_expiry_date": null          +
-         },                                     +
-         {                                      +
-             "member_name": "admin-group",      +
-             "member_group": "art-group",       +
-             "group_activated": true,           +
-             "group_expiry_date": null          +
-         },                                     +
-         {                                      +
-             "member_name": "art-group",        +
-             "member_group": "surrealist-group",+
-             "group_activated": true,           +
-             "group_expiry_date": null          +
-         }                                      +
-     ]                                          +
+--------------------------------------------------------------
+ {                                                           +
+     "user_name": "jm",                                      +
+     "user_groups": [                                        +
+         {                                                   +
+             "constraints": {                                +
+                 "end_date": null,                           +
+                 "weekdays": null,                           +
+                 "start_date": null                          +
+             },                                              +
+             "member_name": "art-group",                     +
+             "member_group": "surrealist-group",             +
+             "group_activated": true,                        +
+             "group_expiry_date": null                       +
+         },                                                  +
+         {                                                   +
+             "constraints": {                                +
+                 "end_date": "2030-10-01T00:00:00+02:00",    +
+                 "weekdays": null,                           +
+                 "start_date": "2020-01-11T00:00:00+01:00"   +
+             },                                              +
+             "member_name": "admin-group",                   +
+             "member_group": "art-group",                    +
+             "group_activated": true,                        +
+             "group_expiry_date": null                       +
+         },                                                  +
+         {                                                   +
+             "constraints": {                                +
+                 "end_date": null,                           +
+                 "weekdays": null,                           +
+                 "start_date": null                          +
+             },                                              +
+             "member_name": "jm-group",                      +
+             "member_group": "admin-group",                  +
+             "group_activated": true,                        +
+             "group_expiry_date": null                       +
+         },                                                  +
+         {                                                   +
+             "constraints": {                                +
+                 "end_date": null,                           +
+                 "weekdays": null,                           +
+                 "start_date": null                          +
+             },                                              +
+             "member_name": "jm",                            +
+             "member_group": "jm-group",                     +
+             "group_activated": true,                        +
+             "group_expiry_date": "2050-01-01T00:00:00+01:00"+
+         }                                                   +
+     ]                                                       +
  }
 ```
+
+It is also possible to apply filtering based on the membership constraints when calling the `user_groups` function. See `2-db-structure.md` for details of the function signature.
 
 When these tokens are used in subsequent requests for resource access, then the capabilities can be inspected to see if they allow the request to go ahead. In the the latter case, the `capability_grants` function would be useful. E.g.:
 
