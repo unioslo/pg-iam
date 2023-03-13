@@ -596,6 +596,11 @@ create or replace function include_membership(
         if filter_inactive = 'false' then
             return 'true';
         end if;
+        if client_timestamp not between
+            (current_timestamp at time zone '-12')
+            and (current_timestamp at time zone '+14') then
+            raise exception using message = 'impossible client_timestamp';
+        end if;
         select group_expiry_date, group_activated from groups
             where group_name = source_group into source_exp, source_activated;
         select group_expiry_date, group_activated from groups
