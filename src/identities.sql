@@ -467,12 +467,12 @@ create trigger group_management_trigger before update on groups
 create trigger groups_channel_notify after insert or delete or update on groups
     for each row execute procedure notify_listeners();
 
--- TODO: need to update the audit log table to contain these dates...
+
 create table if not exists group_memberships(
     group_name text not null references groups (group_name) on delete cascade,
     group_member_name text not null references groups (group_name) on delete cascade,
     start_date timestamptz check(start_date < end_date),
-    end_date timestamptz check(end_date > start_date and end_date > current_date),
+    end_date timestamptz,
     weekdays jsonb, -- {"mon": {"start": "08:00", "end": "17:00"}}
     unique (group_name, group_member_name)
 );
@@ -486,20 +486,26 @@ create or replace function group_memberships_constraint_check()
     declare start_t timetz;
     declare end_t timetz;
     begin
-        if NEW.end_date != OLD.end_date then
+        if NEW.end_date != OLD.end_date or NEW.end_date is not null then
             select group_expiry_date from groups
                 where group_name in (NEW.group_name, OLD.group_name) into group_exp;
             if group_exp is not null and NEW.end_date > group_exp then
                 raise exception using message = 'membership end_date cannot exceed group expiry date';
             end if;
-        elsif NEW.weekdays != OLD.weekdays then
+        elsif NEW.weekdays != OLD.weekdays or NEW.weekdays is not null then
             for day in select jsonb_object_keys(NEW.weekdays) loop
-                assert day in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'), 'unrecognised day ' || day;
+                if day not in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun') then
+                    raise exception using message = 'unrecognised day ' || day;
+                end if;
                 start_t := cast(NEW.weekdays->day->>'start' as timetz);
                 end_t := cast(NEW.weekdays->day->>'end' as timetz);
-                assert start_t is not null, 'missing start time';
-                assert end_t is not null, 'missing end time';
-                assert start_t < end_t, 'start time must be before end time';
+                if start_t is null then
+                    raise exception using message = 'missing start time';
+                elsif end_t is null then
+                    raise exception using message = 'missing end time';
+                elsif start_t > end_t then
+                    raise exception using message = 'start time must be before end time';
+                end if;
             end loop;
         end if;
         return new;
@@ -563,11 +569,10 @@ create or replace function allowed_time(
     begin
         if weekdays is null then return 'true'; end if;
         select weekdays->day_from_ts(client_timestamp) into day;
-        if day is null or (
-            client_timestamp::timetz between
-                cast(day->>'start' as timetz)
-                and cast(day->>'end' as timetz)
-        ) then
+        if client_timestamp::timetz between
+            cast(day->>'start' as timetz)
+            and cast(day->>'end' as timetz)
+        then
             return 'true';
         else
             return 'false';
@@ -597,8 +602,8 @@ create or replace function include_membership(
             return 'true';
         end if;
         if client_timestamp not between
-            (current_timestamp at time zone '-12')
-            and (current_timestamp at time zone '+14') then
+            (current_timestamp at time zone '+14')
+            and (current_timestamp at time zone '-12') then
             raise exception using message = 'impossible client_timestamp';
         end if;
         select group_expiry_date, group_activated from groups
@@ -796,8 +801,9 @@ create or replace function group_get_parents(
         end loop;
         select count(*) from candidates into num;
         while num > 0 loop
-            select member_name, member_group_name from candidates limit 1 into mn, mgn;
-            insert into parents values (mn, mgn);
+            select member_name, member_group_name, start_date, end_date, weekdays
+                from candidates limit 1 into mn, mgn, sd, ed, wkds;
+            insert into parents values (mn, mgn, sd, ed, wkds);
             delete from candidates where member_name = mn and member_group_name = mgn;
             -- now check if the current candidate has parents
             -- so we find all recursive memberships
@@ -937,16 +943,18 @@ create or replace function get_memberships(
                 $2, member_group_name,
                 $3, group_activated,
                 $4, group_expiry_date,
-                $5, json_build_object($6, start_date, $7, end_date)))
+                $5, json_build_object($6, start_date, $7, end_date, $8, weekdays)
+            ))
             from (select member_name, member_group_name, start_date, end_date, weekdays
-                  from group_get_parents($8, $9, $10)
+                  from group_get_parents($9, $10, $11)
                   union select %s, %s, null, null, null)a
             join (select group_name, group_activated, group_expiry_date from groups)b
             on a.member_group_name = b.group_name',
             quote_literal(member), quote_literal(grp)
         )
             using 'member_name', 'member_group', 'group_activated', 'group_expiry_date',
-                  'constraints', 'start_date', 'end_date', grp, filter_memberships, client_timestamp
+                  'constraints', 'start_date', 'end_date', 'weekdays',
+                  grp, filter_memberships, client_timestamp
             into data;
         return data;
     end;
