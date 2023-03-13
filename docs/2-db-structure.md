@@ -27,7 +27,11 @@ To investigate the tables more, it is best to install `pg-iam` and inspect the D
 To ease routine tasks for getting information, `pg-iam` provides a set of helper functions which combine information from various tables.
 
 ```sql
-person_groups(person_id text)
+person_groups(
+    person_id text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+)
 /*
     Returns:
     {person_id: '', person_groups: []}
@@ -45,7 +49,11 @@ person_access(person_id text)
     {person_id: '', person_access: {person_group_access: [], users_groups_access: []}}
 */
 
-user_groups(user_name text)
+user_groups(
+    user_name text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+)
 /*
     Returns:
     {user_name: '', user_groups: []}
@@ -63,7 +71,11 @@ user_capabilities(user_name text, grants boolean)
     {user_name: '', user_capabilities: []}
 */
 
-group_members(group_name text)
+group_members(
+    group_name text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+)
 /*
     Returns:
     {direct_members: [], transitive_members: [], ultimate_members: []}
@@ -75,7 +87,13 @@ group_moderators(group_name text)
     {group_name: '', group_moderators: []}
 */
 
-group_member_add(group_name text, member text)
+group_member_add(
+    group_name text,
+    member text,
+    start_date timestamptz default null,
+    end_date timestamptz default null,
+    weekdays jsonb default null
+)
 /*
     Returns:
     {message: ''}
