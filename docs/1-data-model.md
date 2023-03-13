@@ -40,6 +40,10 @@ Projects     -> Groups (class:secondary type:generic,web)
         - groups can be members of other groups
         - persons and/or user are members of other groups via their person or user groups, not directly
         - this can form Directed Acyclic Graphs
+        - memberships can have temporal constraints:
+            - start date: when the membership becomes active
+            - end date: after which the membership becomes inactive
+            - can be limited to being active between specific hours on a specific day of the week
     - moderator
         - groups can moderate other groups, but not transitively or cyclically
 - Activation
