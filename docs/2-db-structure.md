@@ -92,7 +92,7 @@ group_member_add(
     member text,
     start_date timestamptz default null,
     end_date timestamptz default null,
-    weekdays jsonb default null
+    weekdays jsonb default null -- e.g. {"mon": {"start": "08:00", "end": "17:00"}}
 )
 /*
     Returns:
