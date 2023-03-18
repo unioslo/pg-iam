@@ -14,7 +14,7 @@ create or replace function drop_tables(drop_table_flag boolean default 'true')
             drop table if exists group_memberships cascade;
             drop table if exists group_moderators cascade;
         else
-            raise notice 'NOT dropping tables - only functions will be replaced';
+            raise notice 'NOT dropping identities tables - only functions will be replaced';
         end if;
     return true;
     end;
@@ -46,11 +46,14 @@ create or replace function person_immutability()
     returns trigger as $$
     begin
         if OLD.row_id != NEW.row_id then
-            raise exception using message = 'row_id is immutable';
+            raise integrity_constraint_violation
+                using message = 'row_id is immutable';
         elsif OLD.person_id != NEW.person_id then
-            raise exception using message = 'person_id is immutable';
+            raise integrity_constraint_violation
+                using message = 'person_id is immutable';
         elsif OLD.person_group != NEW.person_group then
-            raise exception using message = 'person_group is immutable';
+            raise integrity_constraint_violation using
+                message = 'person_group is immutable';
         end if;
     return new;
     end;
@@ -72,7 +75,7 @@ create or replace function person_uniqueness()
                 end if;
             end loop;
         exception when invalid_parameter_value then
-            raise exception
+            raise invalid_parameter_value
                 using message = 'identifiers should be a json array, like [{k,v}, {...}]';
         end;
         return new;
@@ -185,19 +188,26 @@ create or replace function user_immutability()
     returns trigger as $$
     begin
         if OLD.row_id != NEW.row_id then
-            raise exception using message = 'row_id is immutable';
+            raise integrity_constraint_violation
+                using message = 'row_id is immutable';
         elsif OLD.user_id != NEW.user_id then
-            raise exception using message = 'user_id is immutable';
+            raise integrity_constraint_violation
+                using message = 'user_id is immutable';
         elsif OLD.user_name != NEW.user_name then
-            raise exception using message = 'user_name is immutable';
+            raise integrity_constraint_violation
+                using message = 'user_name is immutable';
         elsif OLD.user_group != NEW.user_group then
-            raise exception using message = 'user_group is immutable';
+            raise integrity_constraint_violation
+                using message = 'user_group is immutable';
         elsif OLD.user_posix_uid != NEW.user_posix_uid then
-            raise exception using message = 'user_posix_uid is immutable';
+            raise integrity_constraint_violation
+                using message = 'user_posix_uid is immutable';
         elsif NEW.user_posix_uid is null and NEW.user_posix_uid is not null then
-            raise exception using message = 'user_posix_uid cannot be set to null once set';
+            raise integrity_constraint_violation
+                using message = 'user_posix_uid cannot be set to null once set';
         elsif NEW.user_group_posix_gid is null and OLD.user_group_posix_gid is not null then
-            raise exception using message = 'user_group_posix_gid cannot be set to null once set';
+            raise integrity_constraint_violation
+                using message = 'user_group_posix_gid cannot be set to null once set';
         end if;
     return new;
     end;
@@ -230,7 +240,8 @@ create or replace function user_management()
                 select person_expiry_date from persons where person_id = NEW.person_id into person_exp;
                 if NEW.user_expiry_date is not null then
                     if NEW.user_expiry_date > person_exp then
-                        raise exception using message = 'a user cannot expire _after_ the person';
+                        raise integrity_constraint_violation
+                            using message = 'a user cannot expire _after_ the person';
                     end if;
                     user_exp := NEW.user_expiry_date;
                 else
@@ -248,7 +259,8 @@ create or replace function user_management()
             if OLD.user_expiry_date != NEW.user_expiry_date then
                 select person_expiry_date from persons where person_id = NEW.person_id into person_exp;
                 if NEW.user_expiry_date > person_exp then
-                    raise exception using message = 'a user cannot expire _after_ the person';
+                    raise integrity_constraint_violation
+                        using message = 'a user cannot expire _after_ the person';
                 else
                     update groups set group_expiry_date = NEW.user_expiry_date where group_primary_member = NEW.user_name;
                 end if;
@@ -340,13 +352,13 @@ create or replace function group_deletion()
         if OLD.group_type = 'person' then
             select count(*) from persons where person_group = OLD.group_name into amount;
             if amount = 1 then
-                raise exception using
+                raise restrict_violation using
                 message = 'person groups are automatically created and deleted based on person objects';
             end if;
         elsif OLD.group_type = 'user' then
             select count(*) from users where user_group = OLD.group_name into amount;
             if amount = 1 then
-                raise exception using
+                raise restrict_violation using
                 message = 'user groups are automatically created and deleted based on user objects';
             end if;
         end if;
@@ -362,21 +374,29 @@ create or replace function group_immutability()
     returns trigger as $$
     begin
         if OLD.row_id != NEW.row_id then
-            raise exception using message = 'row_id is immutable';
+            raise integrity_constraint_violation
+                using message = 'row_id is immutable';
         elsif OLD.group_id != NEW.group_id then
-            raise exception using message = 'group_id is immutable';
+            raise integrity_constraint_violation
+                using message = 'group_id is immutable';
         elsif OLD.group_name != NEW.group_name then
-            raise exception using message = 'group_name is immutable';
+            raise integrity_constraint_violation
+                using message = 'group_name is immutable';
         elsif OLD.group_class != NEW.group_class then
-            raise exception using message = 'group_class is immutable';
+            raise integrity_constraint_violation
+                using message = 'group_class is immutable';
         elsif OLD.group_type != NEW.group_type then
-            raise exception using message = 'group_type is immutable';
+            raise integrity_constraint_violation
+                using message = 'group_type is immutable';
         elsif OLD.group_primary_member != NEW.group_primary_member then
-            raise exception using message = 'group_primary_member is immutable';
+            raise integrity_constraint_violation
+                using message = 'group_primary_member is immutable';
         elsif OLD.group_posix_gid != NEW.group_posix_gid then
-            raise exception using message = 'group_posix_gid is immutable';
+            raise integrity_constraint_violation
+                using message = 'group_posix_gid is immutable';
         elsif NEW.group_posix_gid is null and OLD.group_posix_gid is not null then
-            raise exception using message = 'group_posix_gid cannot be set to null once set';
+            raise integrity_constraint_violation
+                using message = 'group_posix_gid cannot be set to null once set';
         end if;
     return new;
     end;
@@ -400,28 +420,32 @@ create or replace function group_management()
                     where person_group = OLD.group_name
                     into primary_member_state;
                 if NEW.group_activated != primary_member_state or primary_member_state is null then
-                    raise exception using message = 'person ' || msg || ' persons';
+                    raise restrict_violation
+                        using message = 'person ' || msg || ' persons';
                 end if;
             elsif OLD.group_type = 'user' then
                 select user_activated from users
                     where user_group = OLD.group_name
                     into primary_member_state;
                 if NEW.group_activated != primary_member_state or primary_member_state is null then
-                    raise exception using message = 'user ' || msg || ' users';
+                    raise restrict_violation
+                        using message = 'user ' || msg || ' users';
                 end if;
             elsif OLD.group_name in (select institution_group from institutions) then
                 select institution_activated from institutions
                     where institution_group = OLD.group_name
                     into primary_member_state;
                 if NEW.group_activated != primary_member_state or primary_member_state is null then
-                    raise exception using message = 'institution ' || msg || ' institutions';
+                    raise restrict_violation
+                        using message = 'institution ' || msg || ' institutions';
                 end if;
             elsif OLD.group_name in (select project_group from projects) then
                 select project_activated from projects
                     where project_group = OLD.group_name
                     into primary_member_state;
                 if NEW.group_activated != primary_member_state or primary_member_state is null then
-                    raise exception using message = 'project ' || msg || ' projects';
+                    raise restrict_violation
+                        using message = 'project ' || msg || ' projects';
                 end if;
             end if;
         elsif OLD.group_expiry_date != NEW.group_expiry_date or
@@ -432,28 +456,32 @@ create or replace function group_management()
                     where person_id = OLD.group_primary_member::uuid
                     into curr_exp;
                 if NEW.group_expiry_date != curr_exp or curr_exp is null then
-                    raise exception using message = 'person ' || msg || ' persons';
+                    raise restrict_violation
+                        using message = 'person ' || msg || ' persons';
                 end if;
             elsif OLD.group_type = 'user' then
                 select user_expiry_date from users
                     where user_name = OLD.group_primary_member
                     into curr_exp;
                 if NEW.group_expiry_date != curr_exp or curr_exp is null then
-                    raise exception using message = 'user ' || msg || ' users';
+                    raise restrict_violation
+                        using message = 'user ' || msg || ' users';
                 end if;
             elsif OLD.group_name in (select institution_group from institutions) then
                 select institution_expiry_date from institutions
                     where institution_group = OLD.group_name
                     into curr_exp;
                 if NEW.group_expiry_date != curr_exp or curr_exp is null then
-                    raise exception using message = 'institution ' || msg || ' institutions';
+                    raise restrict_violation
+                        using message = 'institution ' || msg || ' institutions';
                 end if;
             elsif OLD.group_name in (select project_group from projects) then
                 select project_end_date from projects
                     where project_group = OLD.group_name
                     into curr_exp;
                 if NEW.group_expiry_date != curr_exp or curr_exp is null then
-                    raise exception using message = 'project ' || msg || ' projects';
+                    raise restrict_violation
+                        using message = 'project ' || msg || ' projects';
                 end if;
             end if;
         end if;
@@ -490,21 +518,25 @@ create or replace function group_memberships_constraint_check()
             select group_expiry_date from groups
                 where group_name in (NEW.group_name, OLD.group_name) into group_exp;
             if group_exp is not null and NEW.end_date > group_exp then
-                raise exception using message = 'membership end_date cannot exceed group expiry date';
+                raise integrity_constraint_violation
+                    using message = 'membership end_date cannot exceed group expiry date';
             end if;
         elsif NEW.weekdays != OLD.weekdays or NEW.weekdays is not null then
             for day in select jsonb_object_keys(NEW.weekdays) loop
                 if day not in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun') then
-                    raise exception using message = 'unrecognised day ' || day;
+                    raise invalid_parameter_value using message = 'unrecognised day ' || day;
                 end if;
                 start_t := cast(NEW.weekdays->day->>'start' as timetz);
                 end_t := cast(NEW.weekdays->day->>'end' as timetz);
                 if start_t is null then
-                    raise exception using message = 'missing start time';
+                    raise invalid_parameter_value
+                        using message = 'missing start time';
                 elsif end_t is null then
-                    raise exception using message = 'missing end time';
+                    raise invalid_parameter_value
+                        using message = 'missing end time';
                 elsif start_t > end_t then
-                    raise exception using message = 'start time must be before end time';
+                    raise invalid_parameter_value
+                        using message = 'start time must be before end time';
                 end if;
             end loop;
         end if;
@@ -524,9 +556,11 @@ create or replace function group_memberships_immutability()
     returns trigger as $$
     begin
         if OLD.group_name != NEW.group_name then
-            raise exception using message = 'group_name is immutable';
+            raise integrity_constraint_violation
+                using message = 'group_name is immutable';
         elsif OLD.group_member_name != NEW.group_member_name then
-            raise exception using message = 'group_member_name is immutable';
+            raise integrity_constraint_violation
+                using message = 'group_member_name is immutable';
         end if;
     return new;
     end;
@@ -604,7 +638,7 @@ create or replace function include_membership(
         if client_timestamp not between
             (current_timestamp at time zone '+14')
             and (current_timestamp at time zone '-12') then
-            raise exception using message = 'impossible client_timestamp';
+            raise invalid_parameter_value using message = 'impossible client_timestamp';
         end if;
         select group_expiry_date, group_activated from groups
             where group_name = source_group into source_exp, source_activated;
@@ -876,9 +910,11 @@ create or replace function group_moderators_immutability()
     returns trigger as $$
     begin
         if OLD.group_name != NEW.group_name then
-            raise exception using message = 'group_name is immutable';
+            raise integrity_constraint_violation
+                using message = 'group_name is immutable';
         elsif OLD.group_member_name != NEW.group_member_name then
-            raise exception using message = 'group_member_name is immutable';
+            raise integrity_constraint_violation
+                using message = 'group_member_name is immutable';
         end if;
     return new;
     end;
@@ -1066,13 +1102,19 @@ create or replace function group_member_add(
                     assert (select exists(select 1 from users where users.user_name = member)) = 't';
                     select user_group from users where users.user_name = member into mem;
                 exception when others or assert_failure then
-                    return json_build_object('message', 'could not add member');
+                    return json_build_object(
+                        'message',
+                        'could not add ' || member || ' to ' || group_name
+                    );
                 end;
             end;
         end if;
         execute format('insert into group_memberships values ($1, $2, $3, $4, $5)')
             using gnam, mem, start_date, end_date, weekdays;
-        return json_build_object('message', 'member added');
+        return json_build_object(
+            'message',
+            member || ' added to ' || group_name
+        );
     end;
 $$ language plpgsql;
 
@@ -1097,13 +1139,19 @@ create or replace function group_member_remove(group_name text, member text)
                     assert (select exists(select 1 from users where users.user_name = member)) = 't';
                     select user_group from users where users.user_name = member into mem;
                 exception when others or assert_failure then
-                    return json_build_object('message', 'could not remove member');
+                    return json_build_object(
+                        'message',
+                        'could not remove ' || member ' from ' || group_name
+                    );
                 end;
             end;
         end if;
         execute format('delete from group_memberships where group_name = $1 and group_member_name = $2')
             using gnam, mem;
-        return json_build_object('message', 'member removed');
+        return json_build_object(
+            'message',
+            member || ' remove from ' || group_name
+        );
     end;
 $$ language plpgsql;
 
