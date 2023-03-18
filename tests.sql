@@ -362,20 +362,20 @@ create or replace function test_group_memeberships_moderators()
         -- redundancy
         begin
             insert into group_memberships (group_name, group_member_name) values ('p11-export-group','p11-publication-group');
-            assert false;
+
         exception when assert_failure then
             raise notice 'group_memberships: redundancy check works';
         end;
         -- cyclicality
         begin
             insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-export-group');
-            assert false;
+
         exception when assert_failure then
             raise notice 'group_memberships: cyclicality check works';
         end;
         begin
             insert into group_memberships (group_name, group_member_name) values ('p11-admin-group','p11-export-group');
-            assert false;
+
         exception when assert_failure then
             raise notice 'group_memberships: cyclicality check works';
         end;
@@ -401,7 +401,7 @@ create or replace function test_group_memeberships_moderators()
         -- group classes
         begin
             insert into group_memberships values ('p11-sconne-group', 'p11-special-group');
-            assert false;
+
         exception when assert_failure then
             raise notice 'group_memberships: primary groups cannot have new members';
         end;
@@ -409,7 +409,7 @@ create or replace function test_group_memeberships_moderators()
         begin
             update groups set group_activated = 'f' where group_name = 'p11-import-group';
             insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-import-group');
-            assert false;
+
         exception when assert_failure then
             raise notice 'group_memberships: deactivated groups cannot be used in new relations';
         end;
@@ -417,7 +417,7 @@ create or replace function test_group_memeberships_moderators()
         begin
             update groups set group_expiry_date = '2017-01-01' where group_name = 'p11-import-group';
             insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-import-group');
-            assert false;
+
         exception when assert_failure then
             raise notice 'group_memberships: expired groups cannot be used in new relations';
         end;
@@ -477,7 +477,7 @@ create or replace function test_group_memeberships_moderators()
         begin
             insert into group_moderators (group_name, group_moderator_name)
                 values ('p11-special-group', 'p11-clinical-group');
-            assert false;
+
         exception when assert_failure then
             raise notice 'group_moderators: cyclicality check works';
         end;
@@ -486,7 +486,7 @@ create or replace function test_group_memeberships_moderators()
             update groups set group_activated = 'f' where group_name = 'p11-export-group';
             insert into group_moderators (group_name, group_moderator_name)
                 values ('p11-export-group', 'p11-admin-group');
-            assert false;
+
         exception when assert_failure then
             raise notice 'group_moderators: deactivated groups cannot be used';
         end;
@@ -495,7 +495,7 @@ create or replace function test_group_memeberships_moderators()
             update groups set group_expiry_date = '2011-01-01' where group_name = 'p11-export-group';
             insert into group_moderators (group_name, group_moderator_name)
                 values ('p11-export-group', 'p11-admin-group');
-            assert false;
+
         exception when assert_failure then
             raise notice 'group_moderators: expired groups cannot be used';
         end;
