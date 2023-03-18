@@ -180,6 +180,20 @@ create or replace function test_persons_users_groups()
             'person state changes not propagating to users';
         assert (select count(*) from groups where group_activated = 't') = 0,
             'person state changes not propagating to groups';
+        begin
+            update groups set group_activated = 't'
+                where group_name = pid::text || '-group';
+            assert false, 'person groups can be dectivated directly on group table';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
+        end;
+        begin
+            update groups set group_activated = 't'
+                where group_name = 'p66-sconne-group';
+            assert false, 'user groups can be dectivated directly on group table';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
+        end;
 
         -- expiry dates
         update persons set person_expiry_date = '2019-09-09';
