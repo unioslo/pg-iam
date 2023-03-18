@@ -362,22 +362,22 @@ create or replace function test_group_memeberships_moderators()
         -- redundancy
         begin
             insert into group_memberships (group_name, group_member_name) values ('p11-export-group','p11-publication-group');
-
-        exception when assert_failure then
-            raise notice 'group_memberships: redundancy check works';
+            assert false, 'group_memberships: redundancy check not working';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- cyclicality
         begin
             insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-export-group');
-
-        exception when assert_failure then
-            raise notice 'group_memberships: cyclicality check works';
+            assert false, 'group_memberships: cyclicality check not working';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             insert into group_memberships (group_name, group_member_name) values ('p11-admin-group','p11-export-group');
-
-        exception when assert_failure then
-            raise notice 'group_memberships: cyclicality check works';
+            assert false, 'group_memberships: cyclicality check not working, for transitive members';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- immutability
         begin
@@ -395,32 +395,32 @@ create or replace function test_group_memeberships_moderators()
         -- group classes
         begin
             insert into group_memberships values ('p11-sconne-group', 'p11-special-group');
-
-        exception when assert_failure then
-            raise notice 'group_memberships: primary groups cannot have new members';
+            assert false, 'group_memberships: primary groups cannot have new members';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- new relations and group activation state
         begin
             update groups set group_activated = 'f' where group_name = 'p11-import-group';
             insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-import-group');
-
-        exception when assert_failure then
-            raise notice 'group_memberships: deactivated groups cannot be used in new relations';
+            assert false, 'group_memberships: deactivated groups cannot be used in new relations';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- new relations and group expiry
         begin
             update groups set group_expiry_date = '2017-01-01' where group_name = 'p11-import-group';
             insert into group_memberships (group_name, group_member_name) values ('p11-publication-group','p11-import-group');
-
-        exception when assert_failure then
-            raise notice 'group_memberships: expired groups cannot be used in new relations';
+            assert false, 'group_memberships: expired groups cannot be used in new relations';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- shouldnt be able to be a member of itself
         begin
             insert into group_memberships (group_name, group_member_name)
                 values ('p11-special-group', 'p11-special-group');
-            --assert false, 'group_memberships: redundancy check - groups can be members of themselves';
-        exception when assert_failure then
+            assert false, 'group_memberships: redundancy check - groups can be members of themselves';
+        exception when integrity_constraint_violation then
             raise notice '%', sqlerrm;
         end;
 
