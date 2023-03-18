@@ -173,14 +173,15 @@ create or replace function test_persons_users_groups()
 
         -- states; cascades, constraints
         set session "request.identity" = 'milen';
+
+        -- activation status
         update persons set person_activated = 'f';
         assert (select count(*) from users where user_activated = 't') = 0,
             'person state changes not propagating to users';
         assert (select count(*) from groups where group_activated = 't') = 0,
             'person state changes not propagating to groups';
-        -- try change group states, expect fail
-        -- create secondary group, change state, delete it again
-        -- expiry dates: cascades, constraints
+
+        -- expiry dates
         update persons set person_expiry_date = '2019-09-09';
         update users set user_expiry_date = '2000-08-08' where user_name like 'p11-%';
         begin
@@ -195,6 +196,20 @@ create or replace function test_persons_users_groups()
                 where group_primary_member = pid::text;
             assert false, 'person group exp updates bypasses restriction via primary';
         exception when restrict_violation then
+            raise notice '%', sqlerrm;
+        end;
+        begin
+            update users set user_expiry_date = '2030-01-01'
+                where user_name like 'p66-s%';
+            assert false, 'users can expire _after_ persons - update';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        begin
+            insert into users (person_id, user_name, user_expiry_date)
+                values (pid, 'lol-user', '2080-01-01');
+            assert false, 'users can expire _after_ persons - insert';
+        exception when integrity_constraint_violation then
             raise notice '%', sqlerrm;
         end;
 
