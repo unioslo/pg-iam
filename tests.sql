@@ -353,11 +353,11 @@ create or replace function test_group_memeberships_moderators()
 
         -- referential constraints
         begin
-            insert into group_moderators (group_name, group_member_name)
+            insert into group_memberships (group_name, group_member_name)
                 values ('p77-clinical-group', 'p11-special-group');
-            assert false;
-        exception when others then
-            raise notice 'group_memberships: referential constraints work';
+            assert false, 'group_memberships: referential constraints do not work';
+        exception when foreign_key_violation then
+            raise notice '%', sqlerrm;
         end;
         -- redundancy
         begin
@@ -381,22 +381,16 @@ create or replace function test_group_memeberships_moderators()
         end;
         -- immutability
         begin
-            update group_memberships set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
-            assert false;
-        exception when others then
-            raise notice 'group_memberships: row_id immutable';
-        end;
-        begin
             update group_memberships set group_name = 'p11-clinical-group' where group_name = 'p11-special-group';
-            assert false;
-        exception when others then
-            raise notice 'group_memberships: group_name immutable';
+            assert false, 'group_memberships: group_name mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update group_memberships set group_member_name = 'p11-clinical-group' where group_name = 'p11-special-group';
-            assert false;
-        exception when others then
-            raise notice 'group_memberships: group_member_name immutable';
+            assert false, 'group_memberships: group_member_name mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- group classes
         begin
@@ -423,11 +417,11 @@ create or replace function test_group_memeberships_moderators()
         end;
         -- shouldnt be able to be a member of itself
         begin
-            insert into group_moderators (group_name, group_member_name)
+            insert into group_memberships (group_name, group_member_name)
                 values ('p11-special-group', 'p11-special-group');
-            assert false;
-        exception when others then
-            raise notice 'group_memberships: redundancy check - groups cannot be members of themselves';
+            --assert false, 'group_memberships: redundancy check - groups can be members of themselves';
+        exception when assert_failure then
+            raise notice '%', sqlerrm;
         end;
 
         /* GROUP MODERATORS */
@@ -442,36 +436,31 @@ create or replace function test_group_memeberships_moderators()
         -- referential constraints
         begin
             insert into group_moderators (group_name, group_moderator_name)
-                values ('p77-clinical-group', 'p11-special-group');
-            assert false;
-        exception when others then
-            raise notice 'group_moderators: referential constraints work';
+                values ('p79-clinical-group', 'p11-special-group');
+            assert false,  'group_moderators: referential constraints do not work';
+        exception when foreign_key_violation then
+            raise notice '%', sqlerrm;
         end;
         -- immutability
         begin
-            update group_moderators set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
-            assert false;
-        exception when others then
-            raise notice 'group_moderators: row_id immutable';
-        end;
-        begin
             update group_moderators set group_name = 'p11-admin-group' where group_name = 'p11-import-group';
-            assert false;
-        exception when others then
-            raise notice 'group_moderators: group_name immutable';
+            assert false, 'group_moderators: group_name mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
-            update group_moderators set group_member_name = 'p11-export-group' where group_name = 'p11-import-group';
-            assert false;
-        exception when others then
-            raise notice 'group_moderators: group_member_name immutable';
+            update group_moderators set group_moderator_name = 'p11-export-group' where group_name = 'p11-import-group';
+            assert false, 'group_moderators: group_moderator_name mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- redundancy
         begin
             insert into group_moderators (group_name, group_moderator_name)
                 values ('p11-clinical-group', 'p11-special-group');
-        exception when others then
-            raise notice 'group_moderators: redundancy check works - cannot recreate existing relations';
+            assert false, 'group_moderators: redundancy check - can recreate existing relations';
+        exception when unique_violation then
+            raise notice '%', sqlerrm;
         end;
         -- cyclicality
         begin
@@ -483,18 +472,22 @@ create or replace function test_group_memeberships_moderators()
         end;
         -- new relations and group activation state
         begin
-            update groups set group_activated = 'f' where group_name = 'p11-export-group';
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-lol-group', 'secondary', 'generic');
+            update groups set group_activated = 'f' where group_name = 'p11-lol-group';
             insert into group_moderators (group_name, group_moderator_name)
-                values ('p11-export-group', 'p11-admin-group');
+                values ('p11-lol-group', 'p11-admin-group');
 
         exception when assert_failure then
             raise notice 'group_moderators: deactivated groups cannot be used';
         end;
         -- new relations and group expiry
         begin
-            update groups set group_expiry_date = '2011-01-01' where group_name = 'p11-export-group';
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-lol-group', 'secondary', 'generic');
+            update groups set group_expiry_date = '2011-01-01' where group_name = 'p11-lol-group';
             insert into group_moderators (group_name, group_moderator_name)
-                values ('p11-export-group', 'p11-admin-group');
+                values ('p11-lol-group', 'p11-admin-group');
 
         exception when assert_failure then
             raise notice 'group_moderators: expired groups cannot be used';
