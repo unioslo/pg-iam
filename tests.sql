@@ -564,10 +564,9 @@ create or replace function test_group_membership_constraints()
         -- start and end date constraints
         begin
             perform group_member_add('p12-lol-group', 'p12-brb', null, '2091-01-01');
-            assert false;
-        exception when others then
+            assert false, 'membership: end_date can exceed group expiry check works';
+        exception when integrity_constraint_violation then
             raise notice '%', sqlerrm;
-            raise notice 'membership: end_date cannot exceed group expiry check works';
         end;
         begin
             insert into group_memberships(
@@ -575,10 +574,9 @@ create or replace function test_group_membership_constraints()
             ) values (
                 'p12-admin-group', 'p12-brb-group', '2080-01-01', '2000-01-01'
             );
-            assert false;
+            assert false, 'membership: start_date < end_date check works';
         exception when check_violation then
             raise notice '%', sqlerrm;
-            raise notice 'membership: start_date < end_date check works';
         end;
         -- weekdays constraints
         begin
@@ -587,10 +585,9 @@ create or replace function test_group_membership_constraints()
             ) values (
                 'p12-admin-group', 'p12-brb-group', '{"Lol": {}}'::jsonb
             );
-            assert false;
-        exception when others then
+            assert false, 'membership: weekdays wrong key name refused';
+        exception when invalid_parameter_value then
             raise notice '%', sqlerrm;
-            raise notice 'membership: weekdays wrong key name refused';
         end;
         begin
             insert into group_memberships(
@@ -598,10 +595,9 @@ create or replace function test_group_membership_constraints()
             ) values (
                 'p12-admin-group', 'p12-brb-group', '{"mon": {"end": "12:00"}}'::jsonb
             );
-            assert false;
-        exception when others then
+            assert false, 'membership: weekdays missing start time';
+        exception when invalid_parameter_value then
             raise notice '%', sqlerrm;
-            raise notice 'membership: weekdays missing start time refused';
         end;
         begin
             insert into group_memberships(
@@ -609,10 +605,9 @@ create or replace function test_group_membership_constraints()
             ) values (
                 'p12-admin-group', 'p12-brb-group', '{"mon": {"start": "12:00"}}'::jsonb
             );
-            assert false;
-        exception when others then
+            assert false, 'membership: weekdays missing end date';
+        exception when invalid_parameter_value then
             raise notice '%', sqlerrm;
-            raise notice 'membership: weekdays missing start end refused';
         end;
         begin
             insert into group_memberships(
@@ -620,10 +615,9 @@ create or replace function test_group_membership_constraints()
             ) values (
                 'p12-admin-group', 'p12-brb-group', '{"mon": {"start": "13:00", "end": "12:00"}}'::jsonb
             );
-            assert false;
-        exception when others then
+            assert false, 'membership: weekdays start > end time';
+        exception when invalid_parameter_value then
             raise notice '%', sqlerrm;
-            raise notice 'membership: weekdays start > end time refused';
         end;
 
         -- create a valid membership graph
@@ -693,10 +687,9 @@ create or replace function test_group_membership_constraints()
         -- ensure working limits on client timestamp
         begin
             select group_members('p12-export-group', 't', (current_timestamp + interval '4 days')) into mems;
-            assert false;
-        exception when others then
+            assert false, 'membership: impossible client_timestamp refused';
+        exception when invalid_parameter_value then
             raise notice '%', sqlerrm;
-            raise notice 'membership: impossible client_timestamp refused';
         end;
 
         -- user_groups
