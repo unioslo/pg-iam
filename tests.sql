@@ -18,25 +18,22 @@ create or replace function test_persons_users_groups()
             values (pid, 'p11-sconne', '2020-03-28');
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p66-sconne', '2019-12-01');
+
         -- creation
         assert (select count(*) from persons) = 1, 'person creation issue';
         assert (select count(*) from users) = 2, 'user creation issue';
         assert (select count(*) from groups) = 3, 'group creation issue';
+
         -- posix uids
         select user_posix_uid from users where user_name = 'p66-sconne' into uid;
         assert (select generate_new_posix_uid() = uid + 1), 'uid generation not monotonically increasing';
         begin
-            insert into users (person_id, user_name, uid) values (pid, 'p33-sconne', 0);
-            assert false;
-        exception when others then
-            raise notice 'cannot assign uid between 0 and 999, as expected';
-        end;
-        begin
             update users set user_posix_uid = '2000' where user_name = 'p11-sconne';
-            assert false;
-        exception when others then
-            raise notice 'uid is immutable';
+            assert false, 'user_posix_uid is mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
+
         -- posix gids
         select  group_posix_gid from groups where group_name = 'p66-sconne-group' into gid;
         assert (select generate_new_posix_gid() = gid + 1), 'gid generation not monotonically increasing';
@@ -46,15 +43,15 @@ create or replace function test_persons_users_groups()
         begin
             insert into groups (group_name, group_type, group_posix_gid)
                 values ('g1', 'generic', 0);
-            assert false;
-        exception when others then
-            raise notice 'cannot assign gid between 0 and 999, as expected';
+            assert false, 'can assign gid between 0 and 999';
+        exception when check_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update groups set group_posix_gid = '2000' where group_name = 'p11-sconne-group';
-            assert false;
-        exception when others then
-            raise notice 'gid is immutable';
+            assert false, 'group_posix_gid is mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         insert into users (person_id, user_name, user_expiry_date, user_group_posix_gid)
             values (pid, 'p89-sconne', '2019-12-01', 9001);
@@ -62,98 +59,103 @@ create or replace function test_persons_users_groups()
             'cannot explicitly set user gid';
         assert (select user_group_posix_gid from users where user_group = 'p89-sconne-group') = 9001,
             'user group gids are nor being synced to the users table';
+
         -- person identifiers uniqueness
         begin
             insert into persons (full_name, identifiers)
                 values ('Piet Mondrian', '[{"k1": 0}, {"k2": 1}]'::json);
             insert into persons (full_name, identifiers)
                 values ('Piet Mondrian', '[{"k2": 1}]'::json);
-            assert false;
-        exception when others then
-            raise notice 'persons identifiers are ensured to be unique';
+            assert false, 'persons identifiers are not ensured to be unique';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
-            insert into person (full_name, identifiers)
+            insert into persons (full_name, identifiers)
                 values ('Jackson Pollock', '{"k3": 99}'::json);
-            assert false;
-        exception when others then
-            raise notice 'persons identifiers are ensured to be json arrays';
+            assert false, 'persons identifiers are not ensured to be json arrays';
+        exception when invalid_parameter_value then
+            raise notice '%', sqlerrm;
         end;
+
         -- person attribute immutability
         begin
             update persons set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
-            assert false;
-        exception when others then
-            raise notice 'row_id immutable';
+            assert false, 'row_id mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update persons set person_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
-            assert false;
-        exception when others then
-            raise notice 'person_id immutable';
+            assert false, 'person_id mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update persons set person_group = 'e14c538a-4b8b-4393-9fb2-056e363899e1-group';
-            assert false;
-        exception when others then
-            raise notice 'person_group immutable';
+            assert false, 'person_group mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
+
         -- user attribute immutability
         begin
             update users set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
-            assert false;
-        exception when others then
-            raise notice 'row_id immutable';
+            assert false, 'row_id mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update users set user_id = 'a3981c7f-8e41-4222-9183-1815b6ec9c3b';
-            assert false;
-        exception when others then
-            raise notice 'user_id immutable';
+            assert false, 'user_id mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update users set user_name = 'p11-scnr';
-            assert false;
-        exception when others then
-            raise notice 'user_name immutable';
+            assert false, 'user_name mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update users set user_group = 'p11-s-group';
-            assert false;
-        exception when others then
-            raise notice 'user_group immutable';
+            assert false, 'user_group mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
+
         -- group attribute immutability
         begin
             update groups set row_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
-            assert false;
-        exception when others then
-            raise notice 'row_id immutable';
+            assert false, 'row_id mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update groups set group_id = 'e14c538a-4b8b-4393-9fb2-056e363899e1';
-            assert false;
-        exception when others then
-            raise notice 'group_id immutable';
+            assert false, 'group_id mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update groups set group_name = 'p22-lcd-group';
-            assert false;
-        exception when others then
-            raise notice 'group_name immutable';
+            assert false, 'group_name mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update groups set group_class = 'secondary';
-            assert false;
-        exception when others then
-            raise notice 'group_class immutable';
+            assert false, 'group_class mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update groups set group_type = 'person';
-            assert false;
-        exception when others then
-            raise notice 'group_type immutable';
+            assert false, 'group_type mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
+
         -- web groups, and their gid life-cycle
         insert into groups (group_name, group_class, group_type)
             values ('p11-wonderful-group', 'secondary', 'web');
@@ -163,11 +165,12 @@ create or replace function test_persons_users_groups()
             where group_name = 'p11-wonderful-group';
         begin
             update groups set group_posix_gid = null where group_name = 'p11-wonderful-group';
-            assert false;
-        exception when others then
-            raise notice 'cannot remove gids for web groups - as expected';
+            assert false, 'can remove gids for web groups';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         delete from groups where group_name = 'p11-wonderful-group';
+
         -- states; cascades, constraints
         set session "request.identity" = 'milen';
         update persons set person_activated = 'f';
@@ -181,32 +184,38 @@ create or replace function test_persons_users_groups()
         update persons set person_expiry_date = '2019-09-09';
         update users set user_expiry_date = '2000-08-08' where user_name like 'p11-%';
         begin
-            update groups set group_expiry_date = '2000-01-01' where group_primary_member = 'p11-sconne';
-            assert false;
-        exception when others then
-            raise notice 'user group exp updates only allowed via primary';
+            update groups set group_expiry_date = '2000-01-01'
+                where group_primary_member = 'p11-sconne';
+            assert false, 'user group exp updates bypasses restriction via primary';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
-            update groups set group_expiry_date = '2000-01-01' where group_primary_member = pid::text;
-            assert false;
-        exception when others then
-            raise notice 'person group exp updates only allowed via primary';
+            update groups set group_expiry_date = '2000-01-01'
+                where group_primary_member = pid::text;
+            assert false, 'person group exp updates bypasses restriction via primary';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
+
         -- deletion; cascades, constraints
         begin
             delete from groups where group_type = 'person';
-        exception when others then
-            raise notice 'person group deletion protected';
+            assert false, 'person group deletion not protected';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             delete from groups where group_type = 'user';
-        exception when others then
-            raise notice 'user group deletion protected';
+            assert false, 'user group deletion not protected';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             delete from groups where group_class = 'primary';
-        exception when others then
-            raise notice 'primary group deletion protected';
+            assert false, 'primary group deletion not protected';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         delete from persons;
         assert (select count(*) from users) = 0, 'cascading delete from person to users not working';
