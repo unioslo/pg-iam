@@ -859,6 +859,12 @@ create or replace function group_memberships_check_dag_requirements()
     returns trigger as $$
     declare response text;
     begin
+        if (
+            NEW.group_name not in (select group_name from groups)
+            or NEW.group_member_name not in (select group_name from groups)
+        ) then
+            return new; -- foreign key constraint will stop it
+        end if;
         -- Ensure we have only Directed Acylic Graphs, where primary groups are only allowed in leaves
         -- if a any of the groups are currently inactive or expired, the membership cannot be created
         -- also disallow any self-referential entries
@@ -912,9 +918,9 @@ create or replace function group_moderators_immutability()
         if OLD.group_name != NEW.group_name then
             raise integrity_constraint_violation
                 using message = 'group_name is immutable';
-        elsif OLD.group_member_name != NEW.group_member_name then
+        elsif OLD.group_moderator_name != NEW.group_moderator_name then
             raise integrity_constraint_violation
-                using message = 'group_member_name is immutable';
+                using message = 'group_moderator_name is immutable';
         end if;
     return new;
     end;
