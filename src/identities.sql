@@ -1090,27 +1090,12 @@ create or replace function user_moderators(user_name text)
     end;
 $$ language plpgsql;
 
--- add optional params for adding constraints here
-drop function if exists group_member_add(text, text) cascade;
-drop function if exists group_member_add(text, text, timestamptz, timestamptz) cascade;
-drop function if exists group_member_add(text, text, timestamptz, timestamptz, jsonb) cascade;
-create or replace function group_member_add(
-    group_name text,
-    member text,
-    start_date timestamptz default null,
-    end_date timestamptz default null,
-    weekdays jsonb default null
-) returns json as $$
-    declare gnam text;
-    declare unam text;
+
+drop function if exists find_group(text) cascade;
+create or replace function find_group(member text)
+    returns text as $$
     declare mem text;
     begin
-        gnam := $1;
-        if (
-            select exists(select 1 from groups where groups.group_name = gnam) = 'f'
-        ) then
-            raise invalid_parameter_value using message = gnam || ' does not exist';
-        end if;
         -- try map the member parameter to an existing: group, person, or user
         if member in (select groups.group_name from groups) then
             mem := member;
@@ -1136,6 +1121,27 @@ create or replace function group_member_add(
                 end;
             end;
         end if;
+        return mem;
+    end;
+$$ language plpgsql;
+
+
+-- add optional params for adding constraints here
+drop function if exists group_member_add(text, text) cascade;
+drop function if exists group_member_add(text, text, timestamptz, timestamptz) cascade;
+drop function if exists group_member_add(text, text, timestamptz, timestamptz, jsonb) cascade;
+create or replace function group_member_add(
+    group_name text,
+    member text,
+    start_date timestamptz default null,
+    end_date timestamptz default null,
+    weekdays jsonb default null
+) returns json as $$
+    declare gnam text;
+    declare mem text;
+    begin
+        gnam := $1;
+        mem := find_group(member);
         execute format('insert into group_memberships values ($1, $2, $3, $4, $5)')
             using gnam, mem, start_date, end_date, weekdays;
         return json_build_object(
@@ -1150,29 +1156,10 @@ drop function if exists group_member_remove(text, text) cascade;
 create or replace function group_member_remove(group_name text, member text)
     returns json as $$
     declare gnam text;
-    declare unam text;
     declare mem text;
     begin
         gnam := $1;
-        assert (select exists(select 1 from groups where groups.group_name = gnam)) = 't', 'group does not exist';
-        if member in (select groups.group_name from groups) then
-            mem := member;
-        else
-            begin
-                assert (select exists(select 1 from persons where persons.person_id = member::uuid)) = 't';
-                select person_group from persons where persons.person_id = member::uuid into mem;
-            exception when others or assert_failure then
-                begin
-                    assert (select exists(select 1 from users where users.user_name = member)) = 't';
-                    select user_group from users where users.user_name = member into mem;
-                exception when others or assert_failure then
-                    return json_build_object(
-                        'message',
-                        'could not remove ' || member ' from ' || group_name
-                    );
-                end;
-            end;
-        end if;
+        mem := find_group(member);
         execute format('delete from group_memberships where group_name = $1 and group_member_name = $2')
             using gnam, mem;
         return json_build_object(

@@ -427,13 +427,13 @@ create or replace function test_group_memeberships_moderators()
 
         -- safeguards in group_member_add
         begin
-            perform group_member_add('lol-group', 'p11-import-group');
+            perform group_member_add('lol', 'p11-import-group');
             assert false, 'group_member_add does not detect non-existent group';
-        exception when invalid_parameter_value then
+        exception when foreign_key_violation then
             raise notice '%', sqlerrm;
         end;
         begin
-            perform group_member_add('p11-import-group', 'yeah-group');
+            perform group_member_add('p11-import-group', 'yeah');
             assert false, 'group_member_add does not detect non-existent group';
         exception when invalid_parameter_value then
             raise notice '%', sqlerrm;
