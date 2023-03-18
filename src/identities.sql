@@ -859,7 +859,6 @@ create or replace function group_memberships_check_dag_requirements()
     returns trigger as $$
     declare response text;
     begin
-        -- Ensure we have only Directed Acylic Graphs
         if (
             NEW.group_name not in (select group_name from groups)
             or NEW.group_member_name not in (select group_name from groups)
@@ -1107,22 +1106,33 @@ create or replace function group_member_add(
     declare mem text;
     begin
         gnam := $1;
-        assert (select exists(select 1 from groups where groups.group_name = gnam)) = 't', 'group does not exist';
+        if (
+            select exists(select 1 from groups where groups.group_name = gnam) = 'f'
+        ) then
+            raise invalid_parameter_value using message = gnam || ' does not exist';
+        end if;
+        -- try map the member parameter to an existing: group, person, or user
         if member in (select groups.group_name from groups) then
             mem := member;
         else
             begin
-                assert (select exists(select 1 from persons where persons.person_id = member::uuid)) = 't';
+                mem := member::uuid;
+                if (
+                    (select exists(select 1 from persons where persons.person_id = member::uuid)) = 'f'
+                ) then
+                    raise invalid_parameter_value
+                        using message = 'person_id: ' || member || ' does not exist';
+                end if;
                 select person_group from persons where persons.person_id = member::uuid into mem;
-            exception when others or assert_failure then
+            exception when invalid_text_representation then
                 begin
-                    assert (select exists(select 1 from users where users.user_name = member)) = 't';
+                    if (
+                        (select exists(select 1 from users where users.user_name = member)) = 'f'
+                    ) then
+                        raise invalid_parameter_value
+                            using message = member || ' does not exist';
+                    end if;
                     select user_group from users where users.user_name = member into mem;
-                exception when others or assert_failure then
-                    return json_build_object(
-                        'message',
-                        'could not add ' || member || ' to ' || group_name
-                    );
                 end;
             end;
         end if;
@@ -1167,7 +1177,7 @@ create or replace function group_member_remove(group_name text, member text)
             using gnam, mem;
         return json_build_object(
             'message',
-            member || ' remove from ' || group_name
+            member || ' removed from ' || group_name
         );
     end;
 $$ language plpgsql;

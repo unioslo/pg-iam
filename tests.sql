@@ -258,6 +258,7 @@ create or replace function test_group_memeberships_moderators()
     returns boolean as $$
     declare pid uuid;
     declare row record;
+    declare out json;
     begin
         -- create persons and users
         insert into persons (full_name, person_expiry_date)
@@ -423,6 +424,28 @@ create or replace function test_group_memeberships_moderators()
         exception when integrity_constraint_violation then
             raise notice '%', sqlerrm;
         end;
+
+        -- safeguards in group_member_add
+        begin
+            perform group_member_add('lol-group', 'p11-import-group');
+            assert false, 'group_member_add does not detect non-existent group';
+        exception when invalid_parameter_value then
+            raise notice '%', sqlerrm;
+        end;
+        begin
+            perform group_member_add('p11-import-group', 'yeah-group');
+            assert false, 'group_member_add does not detect non-existent group';
+        exception when invalid_parameter_value then
+            raise notice '%', sqlerrm;
+        end;
+        begin
+            perform group_member_add('p11-import-group', '59c1987e-fa15-4509-9b4e-12557fdb9ed9');
+            assert false, 'group_member_add does not detect non-existent person_id';
+        exception when invalid_parameter_value then
+            raise notice '%', sqlerrm;
+        end;
+
+        -- safeguards in group_remove
 
         /* GROUP MODERATORS */
 
