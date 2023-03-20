@@ -1122,8 +1122,6 @@ create or replace function user_moderators(user_name text)
     declare mods json;
     declare data json;
     begin
-        execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
-        assert exst = 't', 'user does not exist';
         select user_groups->>'user_groups' from user_groups(user_name) into ugrps;
         if ugrps is null then
             mods := '[]'::json;
@@ -1227,7 +1225,7 @@ create or replace function group_members(
     declare primary_data json;
     declare data json;
     begin
-        assert (select exists(select 1 from groups where groups.group_name = $1)) = 't', 'group does not exist';
+        perform find_group(group_name);
         select json_agg(distinct group_primary_member) from group_get_children($1, filter_memberships, client_timestamp)
             where group_primary_member is not null into primary_data;
         select json_agg(json_build_object(
@@ -1271,7 +1269,7 @@ create or replace function group_moderators(group_name text)
     returns json as $$
     declare data json;
     begin
-        assert (select exists(select 1 from groups where groups.group_name = $1)) = 't', 'group does not exist';
+        perform find_group(group_name);
         select json_agg(json_build_object(
             'moderator', a.group_moderator_name,
             'activated', b.group_activated,
