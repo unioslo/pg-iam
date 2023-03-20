@@ -23,9 +23,12 @@ create or replace function assert_array_unique(arr text[], name text)
     declare err text;
     begin
         if arr is not null then
-            err := 'duplicate ' || name;
-            assert (select cardinality(array(select distinct unnest(arr)))) =
-                   (select cardinality(arr)), err;
+            if (select cardinality(array(select distinct unnest(arr)))) !=
+               (select cardinality(arr))
+            then
+                raise integrity_constraint_violation
+                using message = 'duplicate element: ' || name;
+            end if;
         end if;
     end;
 $$ language plpgsql;
@@ -69,9 +72,16 @@ drop function if exists capabilities_http_immutability() cascade;
 create or replace function capabilities_http_immutability()
     returns trigger as $$
     begin
-        assert OLD.row_id = NEW.row_id, 'row_id is immutable';
-        assert OLD.capability_id = NEW.capability_id, 'capability_id is immutable';
-        assert OLD.capability_name = NEW.capability_name, 'capability_name is immutable';
+        if OLD.row_id != NEW.row_id then
+            raise integrity_constraint_violation
+            using message = 'row_id is immutable';
+        elsif OLD.capability_id != NEW.capability_id then
+            raise integrity_constraint_violation
+            using message = 'capability_id is immutable';
+        elsif OLD.capability_name != NEW.capability_name then
+            raise integrity_constraint_violation
+            using message = 'capability_name is immutable';
+        end if;
         return new;
     end;
 $$ language plpgsql;
@@ -91,7 +101,10 @@ create or replace function capabilities_http_group_check()
         end if;
         for new_grp in select unnest(NEW.capability_required_groups) loop
             select count(*) from groups where group_name like '%' || new_grp || '%' into num;
-            assert num > 0, new_grp || ' does not exist';
+            if num = 0 then
+                raise integrity_constraint_violation
+                using message = new_grp || ' does not exist';
+            end if;
         end loop;
         return new;
     end;
@@ -123,9 +136,16 @@ drop function if exists capabilities_http_instances_immutability() cascade;
 create or replace function capabilities_http_instances_immutability()
     returns trigger as $$
     begin
-        assert OLD.row_id = NEW.row_id, 'row_id is immutable';
-        assert OLD.capability_name = NEW.capability_name, 'capability_name is immutable';
-        assert OLD.instance_id = NEW.instance_id, 'instance_id is immutable';
+        if OLD.row_id != NEW.row_id then
+            raise integrity_constraint_violation
+            using message = 'row_id is immutable';
+        elsif OLD.capability_name != NEW.capability_name then
+            raise integrity_constraint_violation
+            using message = 'capability_name is immutable';
+        elsif OLD.instance_id != NEW.instance_id then
+            raise integrity_constraint_violation
+            using message = 'instance_id is immutable';
+        end if;
         return new;
     end;
 $$ language plpgsql;
@@ -146,18 +166,21 @@ create or replace function capability_instance_get(id text)
     declare new_max int;
     begin
         iid := id::uuid;
-        assert iid in (select instance_id from capabilities_http_instances),
-            'instance not found';
+        if iid not in (select instance_id from capabilities_http_instances) then
+            raise invalid_parameter_value
+            using message = 'instance ' || id || ' not found';
+        end if;
         select capability_name, instance_start_date, instance_end_date,
                instance_usages_remaining, instance_metadata
         from capabilities_http_instances where instance_id = iid
             into cname, start_date, end_date, max, meta;
-        msg := 'instance not active yet - start time: ' || start_date::text;
-        assert current_timestamp > start_date, msg;
-        msg := 'instance expired - end time: ' || end_date::text;
-        if current_timestamp > end_date then
+        if current_timestamp < start_date then
+            raise restrict_violation
+            using message = 'instance not active yet - start time: ' || start_date::text;
+        elsif current_timestamp > end_date then
             delete from capabilities_http_instances where instance_id = iid;
-            assert false, msg;
+            raise restrict_violation
+            using message = 'instance expired - end time: ' || end_date::text;
         end if;
         new_max := null;
         if max is not null then
@@ -219,10 +242,12 @@ create or replace function ensure_capability_name_references_consistent()
             select capability_names_allowed, capability_grant_id from capabilities_http_grants
             where array[OLD.capability_name] <@ capability_names_allowed loop
             select array_remove(name_references, OLD.capability_name) into new;
-            assert cardinality(new) > 0,
+            if cardinality(new) = 0 then
+                raise restrict_violation using message =
                 'deleting the capability would leave one or more grants ' ||
                 'without a reference to any capability which is not allowed ' ||
                 'delete the grant before deleting the capability, or change the reference';
+            end if;
             update capabilities_http_grants set capability_names_allowed = new
                 where capability_grant_id = grant_id;
         end loop;
@@ -238,9 +263,14 @@ create or replace function ensure_correct_capability_names_allowed()
     returns trigger as $$
     begin
         perform assert_array_unique(NEW.capability_names_allowed, 'capability_names_allowed');
-        assert NEW.capability_names_allowed <@
-            (select array_append(array_agg(capability_name), 'all') from capabilities_http),
-            'trying to reference a capability name which does not exists: ' || NEW.capability_names_allowed::text;
+        if (
+            (NEW.capability_names_allowed <@ (
+                select array_append(array_agg(capability_name), 'all') from capabilities_http
+            ) = 'f')
+        ) then
+            raise integrity_constraint_violation
+            using message = 'capability does not exists: ' || NEW.capability_names_allowed::text;
+        end if;
         return new;
     end;
 $$ language plpgsql;
@@ -271,7 +301,8 @@ create or replace function ensure_sensible_rank_update()
             and capability_grant_http_method = NEW.capability_grant_http_method
             into num;
         if (num > 0 and NEW.capability_grant_rank > num) then
-            assert false, 'Rank cannot be updated to a value higher than the number of entries per hostname, namespace, method';
+            raise restrict_violation
+            using message = 'Rank cannot be updated to a value higher than the number of entries per hostname, namespace, method';
         end if;
         return new;
     end;
@@ -291,8 +322,10 @@ create or replace function generate_grant_rank()
             and capability_grant_http_method = NEW.capability_grant_http_method
             into num;
         if NEW.capability_grant_rank is not null then
-            assert NEW.capability_grant_rank = num,
-                'grant rank values must be monotonically increasing';
+            if NEW.capability_grant_rank != num then
+                raise restrict_violation
+                using message = 'grant rank values must be monotonically increasing';
+            end if;
             return new;
         end if;
         update capabilities_http_grants set capability_grant_rank = num
@@ -312,8 +345,13 @@ drop function if exists capabilities_http_grants_immutability() cascade;
 create or replace function capabilities_http_grants_immutability()
     returns trigger as $$
     begin
-        assert OLD.row_id = NEW.row_id, 'row_id is immutable';
-        assert OLD.capability_grant_id = NEW.capability_grant_id, 'capability_grant_id is immutable';
+        if OLD.row_id != NEW.row_id then
+            raise integrity_constraint_violation
+            using message = 'row_id is immutable';
+        elsif OLD.capability_grant_id != NEW.capability_grant_id then
+            raise integrity_constraint_violation
+            using message = 'capability_grant_id is immutable';
+        end if;
     return new;
     end;
 $$ language plpgsql;
@@ -334,7 +372,10 @@ create or replace function capabilities_http_grants_group_check()
         for new_grp in select unnest(NEW.capability_grant_required_groups) loop
             select count(*) from groups where group_name like '%' || new_grp || '%' into num;
             if new_grp not in ('self', 'moderator', 'client') then
-                assert num > 0, new_grp || ' does not exist';
+                if num = 0 then
+                    raise integrity_constraint_violation
+                    using message = new_grp || ' does not exist';
+                end if;
             end if;
         end loop;
         return new;
@@ -358,8 +399,10 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
     declare current_max_id uuid;
     begin
         target_id := grant_id::uuid;
-        assert target_id in (select capability_grant_id from capabilities_http_grants),
-            'grant_id not found';
+        if target_id not in (select capability_grant_id from capabilities_http_grants) then
+            raise invalid_parameter_value
+            using message = 'grant_id not found: ' || target_id;
+        end if;
         select capability_grant_rank from capabilities_http_grants
             where capability_grant_id = target_id into target_curr_rank;
         if new_grant_rank = target_curr_rank then
@@ -372,8 +415,10 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
             where capability_grant_namespace = target_namespace
             and capability_grant_http_method = target_http_method
             into current_max;
-        assert new_grant_rank - current_max <= 1,
-            'grant rank values must be monotonically increasing';
+        if (new_grant_rank - current_max) > 1 then
+            raise restrict_violation
+            using message = 'grant rank values must be monotonically increasing';
+        end if;
         if current_max = 1 then
             select capability_grant_id from capabilities_http_grants
                 where capability_grant_namespace = target_namespace
@@ -381,7 +426,10 @@ create or replace function capability_grant_rank_set(grant_id text, new_grant_ra
                 and capability_grant_rank = current_max
                 into current_max_id;
             if current_max_id = target_id then
-                assert new_grant_rank = 1, 'first entry must start at 1';
+                if new_grant_rank != 1 then
+                    raise restrict_violation
+                    using message = 'first entry must start at 1';
+                end if;
             end if;
         end if;
         update capabilities_http_grants set capability_grant_rank = null
@@ -449,24 +497,25 @@ create or replace function capability_grant_group_add(grant_reference text, grou
     returns boolean as $$
     declare current text[];
     declare new text[];
-    declare num int;
     begin
         begin
             perform grant_reference::uuid;
-            select count(*) from capabilities_http_grants
-                where capability_grant_id = grant_reference::uuid into num;
-            assert num = 1, 'grant not found';
             select capability_grant_required_groups from capabilities_http_grants
                 where capability_grant_id = grant_reference::uuid into current;
+            if current is null then
+                raise invalid_parameter_value
+                using message = 'not found: ' || grant_reference;
+            end if;
             select array_append(current, group_name) into new;
             update capabilities_http_grants set capability_grant_required_groups = new
                 where capability_grant_id = grant_reference::uuid;
         exception when invalid_text_representation then
-            select count(*) from capabilities_http_grants
-                where capability_grant_name = grant_reference into num;
-            assert num = 1, 'grant not found';
             select capability_grant_required_groups from capabilities_http_grants
                 where capability_grant_name = grant_reference into current;
+            if current is null then
+                raise invalid_parameter_value
+                using message = 'not found: ' || grant_reference;
+            end if;
             select array_append(current, group_name) into new;
             update capabilities_http_grants set capability_grant_required_groups = new
                 where capability_grant_name = grant_reference;
@@ -481,25 +530,26 @@ create or replace function capability_grant_group_remove(grant_reference text, g
     returns boolean as $$
     declare current text[];
     declare new text[];
-    declare num int;
     begin
         begin
             perform grant_reference::uuid;
-            select count(*) from capabilities_http_grants
-                where capability_grant_id = grant_reference::uuid into num;
-            assert num = 1, 'grant not found';
             select capability_grant_required_groups from capabilities_http_grants
                 where capability_grant_id = grant_reference::uuid into current;
+            if current is null then
+                raise invalid_parameter_value
+                using message = 'not found: ' || grant_reference;
+            end if;
             select array_remove(current, group_name) into new;
             if cardinality(new) = 0 then new := null; end if;
             update capabilities_http_grants set capability_grant_required_groups = new
                 where capability_grant_id = grant_reference::uuid;
         exception when invalid_text_representation then
-            select count(*) from capabilities_http_grants
-                where capability_grant_name = grant_reference into num;
-            assert num = 1, 'grant not found';
             select capability_grant_required_groups from capabilities_http_grants
                 where capability_grant_name = grant_reference into current;
+            if current is null then
+                raise invalid_parameter_value
+                using message = 'not found: ' || grant_reference;
+            end if;
             select array_remove(current, group_name) into new;
             if cardinality(new) = 0 then new := null; end if;
             update capabilities_http_grants set capability_grant_required_groups = new
@@ -528,7 +578,10 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
     declare grnt_mthd text;
     declare grnt_ptrn text;
     begin
-        assert (select exists(select 1 from groups where group_name = grp)) = 't', 'group does not exist';
+        if (select exists(select 1 from groups where group_name = grp)) = 'f' then
+            raise invalid_parameter_value
+            using message = 'group does not exist';
+        end if;
         create temporary table if not exists cpb(ct text unique not null) on commit drop;
         delete from cpb;
         -- exact group matches
@@ -585,7 +638,6 @@ create or replace function person_capabilities(person_id text, grants boolean de
     declare data json;
     begin
         pid := $1::uuid;
-        assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_group from persons where persons.person_id = pid into pgrp;
         select json_agg(grp_cpbts(member_group_name, grants)) from group_get_parents(pgrp) into data;
         return json_build_object('person_id', person_id, 'person_capabilities', data);
@@ -600,8 +652,6 @@ create or replace function user_capabilities(user_name text, grants boolean defa
     declare exst boolean;
     declare data json;
     begin
-        execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
-        assert exst = 't', 'user does not exist';
         select user_group from users where users.user_name = $1 into ugrp;
         select json_agg(grp_cpbts(member_group_name, grants)) from group_get_parents(ugrp) into data;
         return json_build_object('user_name', user_name, 'user_capabilities', data);
@@ -618,7 +668,6 @@ create or replace function person_access(person_id text)
     declare data json;
     begin
         pid := $1::uuid;
-        assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
         select person_capabilities($1, 't') into p_data;
         select json_agg(user_capabilities(user_name, 't')) from users, persons
             where users.person_id = persons.person_id and users.person_id = pid into u_data;
