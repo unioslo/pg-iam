@@ -1030,84 +1030,6 @@ create or replace function get_memberships(
 $$ language plpgsql;
 
 
-drop function if exists person_groups(text) cascade;
-drop function if exists person_groups(text, boolean) cascade;
-drop function if exists person_groups(text, boolean, timestamptz) cascade;
-create or replace function person_groups(
-    person_id text,
-    filter_memberships boolean default 'false',
-    client_timestamp timestamptz default current_timestamp
-) returns json as $$
-    declare pid uuid;
-    declare pgrp text;
-    declare res json;
-    declare pgroups json;
-    declare data json;
-    begin
-        pid := $1::uuid;
-        assert (select exists(select 1 from persons where persons.person_id = pid)) = 't', 'person does not exist';
-        select person_group from persons where persons.person_id = pid into pgrp;
-        select get_memberships(person_id, pgrp, filter_memberships, client_timestamp) into pgroups;
-        select json_build_object(
-            'person_id', person_id,
-            'person_groups', pgroups
-        ) into data;
-        return data;
-    end;
-$$ language plpgsql;
-
-
-drop function if exists user_groups(text) cascade;
-drop function if exists user_groups(text, boolean) cascade;
-drop function if exists user_groups(text, boolean, timestamptz) cascade;
-create or replace function user_groups(
-    user_name text,
-    filter_memberships boolean default 'false',
-    client_timestamp timestamptz default current_timestamp
-) returns json as $$
-    declare ugrp text;
-    declare ugroups json;
-    declare exst boolean;
-    declare data json;
-    begin
-        execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
-        assert exst = 't', 'user does not exist';
-        select user_group from users where users.user_name = $1 into ugrp;
-        select get_memberships(user_name, ugrp, filter_memberships, client_timestamp) into ugroups;
-        select json_build_object(
-            'user_name', user_name,
-            'user_groups', ugroups
-        ) into data;
-        return data;
-    end;
-$$ language plpgsql;
-
-
-drop function if exists user_moderators(text);
-create or replace function user_moderators(user_name text)
-    returns json as $$
-    declare exst boolean;
-    declare ugrps json;
-    declare mods json;
-    declare data json;
-    begin
-        execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
-        assert exst = 't', 'user does not exist';
-        select user_groups->>'user_groups' from user_groups(user_name) into ugrps;
-        if ugrps is null then
-            mods := '[]'::json;
-        else
-            select json_agg(group_name) from group_moderators
-                where group_moderator_name in
-                (select json_array_elements(user_groups->'user_groups')->>'member_group'
-                from user_groups(user_name)) into mods;
-        end if;
-        select json_build_object('user_name', user_name, 'user_moderators', mods) into data;
-        return data;
-    end;
-$$ language plpgsql;
-
-
 drop function if exists find_group(text) cascade;
 create or replace function find_group(member text)
     returns text as $$
@@ -1139,6 +1061,80 @@ create or replace function find_group(member text)
             end;
         end if;
         return mem;
+    end;
+$$ language plpgsql;
+
+
+drop function if exists person_groups(text) cascade;
+drop function if exists person_groups(text, boolean) cascade;
+drop function if exists person_groups(text, boolean, timestamptz) cascade;
+create or replace function person_groups(
+    person_id text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns json as $$
+    declare pid uuid;
+    declare pgrp text;
+    declare res json;
+    declare pgroups json;
+    declare data json;
+    begin
+        pgrp := find_group(person_id);
+        select get_memberships(person_id, pgrp, filter_memberships, client_timestamp) into pgroups;
+        select json_build_object(
+            'person_id', person_id,
+            'person_groups', pgroups
+        ) into data;
+        return data;
+    end;
+$$ language plpgsql;
+
+
+drop function if exists user_groups(text) cascade;
+drop function if exists user_groups(text, boolean) cascade;
+drop function if exists user_groups(text, boolean, timestamptz) cascade;
+create or replace function user_groups(
+    user_name text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns json as $$
+    declare ugrp text;
+    declare ugroups json;
+    declare exst boolean;
+    declare data json;
+    begin
+        ugrp := find_group(user_name);
+        select get_memberships(user_name, ugrp, filter_memberships, client_timestamp) into ugroups;
+        select json_build_object(
+            'user_name', user_name,
+            'user_groups', ugroups
+        ) into data;
+        return data;
+    end;
+$$ language plpgsql;
+
+
+drop function if exists user_moderators(text);
+create or replace function user_moderators(user_name text)
+    returns json as $$
+    declare exst boolean;
+    declare ugrps json;
+    declare mods json;
+    declare data json;
+    begin
+        execute format('select exists(select 1 from users where users.user_name = $1)') using $1 into exst;
+        assert exst = 't', 'user does not exist';
+        select user_groups->>'user_groups' from user_groups(user_name) into ugrps;
+        if ugrps is null then
+            mods := '[]'::json;
+        else
+            select json_agg(group_name) from group_moderators
+                where group_moderator_name in
+                (select json_array_elements(user_groups->'user_groups')->>'member_group'
+                from user_groups(user_name)) into mods;
+        end if;
+        select json_build_object('user_name', user_name, 'user_moderators', mods) into data;
+        return data;
     end;
 $$ language plpgsql;
 
