@@ -802,9 +802,9 @@ create or replace function test_capabilities_http()
                 values ('admin', '{api.com}', '{"role": "admin_user"}',
                         '{"admin-group", "special-group"}', 'wildcard',
                         '123', 'bla', current_date);
-            assert false;
+            assert false, 'capabilities_http: name uniqueness not guaranteed';
         exception when others then
-            raise notice 'capabilities_http: name uniqueness guaranteed';
+            raise notice '%', sqlerrm;
         end;
         begin
             update capabilities_http set capability_required_groups = '{self,self}'
@@ -965,19 +965,29 @@ create or replace function test_capabilities_http()
         end;
         -- uniqueness
         begin
-            insert into capabilities_http_grants (capability_names_allowed,
-                                                  capability_grant_hostnames, capability_grant_namespace,
-                                                  capability_grant_http_method, capability_grant_uri_pattern,
-                                                  capability_grant_required_groups, capability_grant_group_existence_check,
-                                                  capability_grant_rank)
-                                          values ('{export}'
-                                                  '{api.com}', 'files',
-                                                  'HEAD', '/(.*)/export',
-                                                  '{"my-own-custom-export-group"}', 'f',
-                                                  1);
-            assert false;
-        exception when others then
-            raise notice 'capabilities_http_grants: rank values must be unique within their grant sets - as expected';
+            insert into capabilities_http_grants (
+                capability_names_allowed,
+                capability_grant_hostnames,
+                capability_grant_namespace,
+                capability_grant_http_method,
+                capability_grant_uri_pattern,
+                capability_grant_required_groups,
+                capability_grant_group_existence_check,
+                capability_grant_rank
+            )
+            values (
+                '{export}',
+                '{api.com}',
+                'files',
+                'HEAD',
+                '/(.*)/export',
+                '{"my-own-custom-export-group"}',
+                'f',
+                1
+            );
+            assert false, 'capabilities_http_grants: rank values issue: not unique within their grant sets';
+        exception when unique_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update capabilities_http_grants set capability_grant_required_groups = '{self,self}'
