@@ -1176,17 +1176,16 @@ create or replace function test_audit()
     returns boolean as $$
     declare pid uuid;
     declare rid uuid;
-    declare msg text;
+    declare grp text;
     begin
         select person_id from persons limit 1 into pid;
         select row_id from persons where person_id = pid into rid;
         update persons set person_activated = 'f' where person_id = pid;
-        msg := 'audit_log does not work';
-        -- todo: redo this, add relations audit table
-        --assert (select old_data from audit_log
-          --      where row_id = rid and column_name = 'person_activated') = 'true', msg;
-        --assert (select new_data from audit_log
-          --      where row_id = rid and column_name = 'person_activated') = 'false', msg;
+        assert (select count(*) from audit_log_objects
+                where row_id = rid) > 0, 'issue with audit_log_objects';
+        select group_name from groups where group_class = 'secondary' limit 1 into grp;
+        assert (select count(*) from audit_log_relations
+                where parent = grp) > 0, 'issue with audit_log_relations';
         return true;
     end;
 $$ language plpgsql;
