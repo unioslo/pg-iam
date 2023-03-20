@@ -631,46 +631,64 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
 $$ language plpgsql;
 
 drop function if exists person_capabilities(text, boolean);
-create or replace function person_capabilities(person_id text, grants boolean default 'f')
-    returns json as $$
+drop function if exists person_capabilities(text, boolean, boolean, timestamptz);
+create or replace function person_capabilities(
+    person_id text,
+    grants boolean default 'f',
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns json as $$
     declare pid uuid;
     declare pgrp text;
     declare data json;
     begin
         pid := $1::uuid;
         select person_group from persons where persons.person_id = pid into pgrp;
-        select json_agg(grp_cpbts(member_group_name, grants)) from group_get_parents(pgrp) into data;
+        select json_agg(grp_cpbts(member_group_name, grants))
+            from group_get_parents(pgrp, filter_memberships, client_timestamp) into data;
         return json_build_object('person_id', person_id, 'person_capabilities', data);
     end;
 $$ language plpgsql;
 
 
 drop function if exists user_capabilities(text, boolean) cascade;
-create or replace function user_capabilities(user_name text, grants boolean default 'f')
-    returns json as $$
+drop function if exists user_capabilities(text, boolean, boolean, timestamptz) cascade;
+create or replace function user_capabilities(
+    user_name text,
+    grants boolean default 'f',
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns json as $$
     declare ugrp text;
     declare exst boolean;
     declare data json;
     begin
         select user_group from users where users.user_name = $1 into ugrp;
-        select json_agg(grp_cpbts(member_group_name, grants)) from group_get_parents(ugrp) into data;
+        select json_agg(grp_cpbts(member_group_name, grants))
+            from group_get_parents(ugrp, filter_memberships, client_timestamp) into data;
         return json_build_object('user_name', user_name, 'user_capabilities', data);
     end;
 $$ language plpgsql;
 
 
 drop function if exists person_access(text) cascade;
-create or replace function person_access(person_id text)
-    returns json as $$
+drop function if exists person_access(text, boolean, timestamptz) cascade;
+create or replace function person_access(
+    person_id text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+) returns json as $$
     declare pid uuid;
     declare p_data json;
     declare u_data json;
     declare data json;
     begin
         pid := $1::uuid;
-        select person_capabilities($1, 't') into p_data;
-        select json_agg(user_capabilities(user_name, 't')) from users, persons
-            where users.person_id = persons.person_id and users.person_id = pid into u_data;
+        select person_capabilities($1, 't', filter_memberships, client_timestamp) into p_data;
+        select json_agg(user_capabilities(user_name, 't', filter_memberships, client_timestamp))
+            from users, persons
+            where users.person_id = persons.person_id
+            and users.person_id = pid into u_data;
         select json_build_object('person_id', person_id,
                                  'person_group_access', p_data,
                                  'users_groups_access', u_data) into data;
