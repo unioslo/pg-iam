@@ -36,13 +36,17 @@ create or replace function institution_immutability()
     returns trigger as $$
     begin
         if OLD.row_id != NEW.row_id then
-            raise exception using message = 'row_id is immutable';
+            raise integrity_constraint_violation
+            using message = 'row_id is immutable';
         elsif OLD.institution_id != NEW.institution_id then
-            raise exception using message = 'institution_id is immutable';
+            raise integrity_constraint_violation
+            using message = 'institution_id is immutable';
         elsif OLD.institution_name != NEW.institution_name then
-            raise exception using message = 'institution_name is immutable';
+            raise integrity_constraint_violation
+            using message = 'institution_name is immutable';
         elsif OLD.institution_group != NEW.institution_group then
-            raise exception using message = 'institution_group is immutable';
+            raise integrity_constraint_violation
+            using message = 'institution_group is immutable';
         end if;
     return new;
     end;
@@ -106,13 +110,17 @@ create or replace function project_immutability()
     returns trigger as $$
     begin
         if OLD.row_id != NEW.row_id then
-            raise exception using message = 'row_id is immutable';
+            raise integrity_constraint_violation
+            using message = 'row_id is immutable';
         elsif OLD.project_id != NEW.project_id then
-            raise exception using message = 'project_id is immutable';
+            raise integrity_constraint_violation
+            using message = 'project_id is immutable';
         elsif OLD.project_number != NEW.project_number then
-            raise exception using message = 'project_number is immutable';
+            raise integrity_constraint_violation
+            using message = 'project_number is immutable';
         elsif OLD.project_group != NEW.project_group then
-            raise exception using message = 'project_group is immutable';
+            raise integrity_constraint_violation
+            using message = 'project_group is immutable';
         end if;
     return new;
     end;
