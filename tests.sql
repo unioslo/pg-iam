@@ -778,15 +778,21 @@ create or replace function test_capabilities_http()
         -- immutability
         begin
             update capabilities_http set row_id = '35b77cf9-0a6f-49d7-83df-e388d75c4b0b';
-            assert false;
-        exception when assert_failure then
-            raise notice 'capabilities_http: row_id immutable';
+            assert false, 'capabilities_http: row_id mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update capabilities_http set capability_id = '35b77cf9-0a6f-49d7-83df-e388d75c4b0b';
-            assert false;
-        exception when assert_failure then
-            raise notice 'capabilities_http: capability_id immutable';
+            assert false, 'capabilities_http: capability_id mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        begin
+            update capabilities_http set capability_name = 'lol';
+            assert false, 'capabilities_http: capability_name mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- uniqueness
         begin
@@ -803,8 +809,9 @@ create or replace function test_capabilities_http()
         begin
             update capabilities_http set capability_required_groups = '{self,self}'
                 where capability_name = 'admin';
-        exception when assert_failure then
-            raise notice 'capabilities_http: required groups are guaranteed unique';
+            assert false, 'capabilities_http: required groups are guaranteed unique';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- referential constraints
         begin
@@ -814,9 +821,9 @@ create or replace function test_capabilities_http()
             values ('admin2', '{api.com}', '{"role": "admin_user"}',
                     '{"admin2-group", "very-special-group"}', 'wildcard',
                     '123', 'bla', current_date);
-            assert false;
-        exception when assert_failure then
-            raise notice 'capabilities_http: group must exist to be referenced in new capability';
+            assert false, 'capabilities_http: optional group existence check not working';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- ability to override group references
         insert into capabilities_http (capability_name, capability_hostnames, capability_default_claims,
@@ -854,19 +861,31 @@ create or replace function test_capabilities_http()
         -- immutability
         begin
             update capabilities_http_grants set row_id = '35b77cf9-0a6f-49d7-83df-e388d75c4b0b';
-            assert false;
-        exception when assert_failure then
-            raise notice 'capabilities_http_grants: row_id immutable';
+            assert false, 'capabilities_http_grants: row_id mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update capabilities_http_grants set capability_grant_id = '35b77cf9-0a6f-49d7-83df-e388d75c4b0b';
-            assert false;
-        exception when assert_failure then
-            raise notice 'capabilities_http_grants: capability_grant_id immutable';
+            assert false, 'capabilities_http_grants: capability_grant_id immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- referential constraints
         begin
-            select capability_id from capabilities_http where capability_name = 'export' into cid;
+            insert into capabilities_http_grants (capability_names_allowed,
+                                                  capability_grant_hostnames, capability_grant_namespace,
+                                                  capability_grant_http_method, capability_grant_uri_pattern,
+                                                  capability_grant_required_groups)
+                                          values ('{i-do-not-exist}',
+                                                  '{api.com}', 'files',
+                                                  'GET', '/(.*)/admin',
+                                                  '{"p11-export-group"}');
+            assert false, 'possible to reference non-existent capability from grants';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        begin
             insert into capabilities_http_grants (capability_names_allowed,
                                                   capability_grant_hostnames, capability_grant_namespace,
                                                   capability_grant_http_method, capability_grant_uri_pattern,
@@ -875,8 +894,9 @@ create or replace function test_capabilities_http()
                                                   '{api.com}', 'files',
                                                   'GET', '/(.*)/admin',
                                                   '{"my-own-crazy-group"}');
-        exception when assert_failure then
-            raise notice 'capabilities_http_grants: required groups need to exist when referenced, by default';
+            assert false, 'capabilities_http_grants: required groups need to exist when referenced, by default';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- ability to override group references
         insert into capabilities_http_grants (capability_names_allowed,
@@ -932,16 +952,16 @@ create or replace function test_capabilities_http()
             and capability_grant_rank = 1 into grid;
         begin
             select capability_grant_rank_set(grid::text, -9) into ans;
-            assert false;
-        exception when others then
-            raise notice 'capabilities_http_grants: cannot set rank to negative - as expected';
+            assert false, 'capabilities_http_grants: can set rank to negative';
+        exception when check_violation then
+            raise notice '%', sqlerrm;
         end;
         -- monotonicity
         begin
             select capability_grant_rank_set(grid::text, 9) into ans;
-            assert false;
-        exception when assert_failure then
-            raise notice 'capabilities_http_grants: rank is monotonically increasing - as expected';
+            assert false, 'capabilities_http_grants: rank is not monotonically increasing';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         -- uniqueness
         begin
@@ -962,15 +982,16 @@ create or replace function test_capabilities_http()
         begin
             update capabilities_http_grants set capability_grant_required_groups = '{self,self}'
                 where capability_grant_id = grid;
-        exception when assert_failure then
-            raise notice 'capabilities_http_grants: groups are ensured to be unique';
+            assert false, 'capabilities_http_grants: groups are not ensured to be unique';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- reject if grant id not found
         begin
-            select capability_grant_rank_set(grid::text, 9) into ans;
-            assert false;
-        exception when assert_failure then
-            raise notice 'capabilities_http_grants: rank is monotonically increasing - as expected';
+            select capability_grant_rank_set('a7068767-752b-463d-9828-07badb675591', 9) into ans;
+            assert false, 'capabilities_http_grants: non-existent grant ID not rejected';
+        exception when invalid_parameter_value then
+            raise notice '%', sqlerrm;
         end;
         -- correct reorder
         select capability_grant_id from capabilities_http_grants
@@ -1051,8 +1072,9 @@ create or replace function test_capabilities_http()
             = array['admin'], 'capabilities_http_grants: automatic deletion of references to capability_name in grants does not work';
         begin
             delete from capabilities_http where capability_name = 'export';
-        exception when assert_failure then
-            raise notice 'capabilities_http_grants: protection against removing a capability_name, when grants refer only to that name works';
+            assert false,'capabilities_http_grants: protection against removing a capability_name, when grants refer only to that name does not works';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         return true;
     end;
@@ -1082,8 +1104,9 @@ create or replace function test_capability_instances()
         select capability_instance_get(iid::text) into instance;
         begin
             select capability_instance_get(iid::text) into instance;
-        exception when assert_failure then
-            raise notice 'automatic deletion of capability instances works';
+            assert false, 'automatic deletion of capability instances not working';
+        exception when invalid_parameter_value then
+            raise notice '%', sqlerrm;
         end;
         -- cannot use if expired
         insert into capabilities_http_instances
@@ -1094,8 +1117,9 @@ create or replace function test_capability_instances()
         select instance_id from capabilities_http_instances into iid;
         begin
             select capability_instance_get(iid::text) into instance;
-        exception when assert_failure then
-            raise notice 'cannot use expired capability instance - as expected';
+            assert false, 'expired capability instance usage not denied';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         delete from capabilities_http_instances where instance_id = iid;
         -- cannot use if not active yet
@@ -1107,27 +1131,31 @@ create or replace function test_capability_instances()
         select instance_id from capabilities_http_instances into iid;
         begin
             select capability_instance_get(iid::text) into instance;
-        exception when assert_failure then
-            raise notice 'cannot use capability instance before start time - as expected';
+            assert false, 'using capability instance before start time is possible';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         -- immutable cols
         begin
             update capabilities_http_instances set row_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
                 where instance_id = iid;
-        exception when assert_failure then
-            raise notice 'capabilities_http_instances: row_id immutable';
+            assert false, 'capabilities_http_instances: row_id immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update capabilities_http_instances set capability_name = 'parsley'
                 where instance_id = iid;
-        exception when assert_failure then
-            raise notice 'capabilities_http_instances: capability_name immutable';
+            assert false, 'capabilities_http_instances: capability_name immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update capabilities_http_instances set instance_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
                 where instance_id = iid;
-        exception when assert_failure then
-            raise notice 'capabilities_http_instances: instance_id immutable';
+            assert false, 'capabilities_http_instances: instance_id immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         return true;
     end;
