@@ -946,26 +946,43 @@ create or replace function group_moderators_check_dag_requirements()
     declare new_grp text;
     declare new_mod text;
     begin
-        response := NEW.group_name || ' is deactived - to use it in new group moderators it must be active';
-        assert (select group_activated from groups where group_name = NEW.group_name) = 't', response;
-        response := NEW.group_moderator_name || ' is deactived - to use it in new group moderators it must be active';
-        assert (select group_activated from groups where group_name = NEW.group_moderator_name) = 't', response;
-        response := NEW.group_name || ' has expired - to use it in new group moderators its expiry date must be later than the current date';
-        assert (select case when group_expiry_date is not null then group_expiry_date else current_date end
-                from groups where group_name = NEW.group_name) >= current_date, response;
-        response := NEW.group_moderator_name || ' has expired - to use it in new group moderators its expiry date must be later than the current date';
-        assert (select case when group_expiry_date is not null then group_expiry_date else current_date end
-                from groups where group_name = NEW.group_moderator_name) >= current_date, response;
-        response := NEW.group_name || ' is a primary group, and cannot be moderated';
-        assert (select group_class from groups where group_name = NEW.group_name) = 'secondary', response;
-        if NEW.group_moderator_name != NEW.group_name then
+        if (
+            (select group_activated from groups where group_name = NEW.group_name) = 'f'
+        ) then
+            raise integrity_constraint_violation
+                using message = NEW.group_name || ' is deactived - cannot manage moderators on it';
+        elsif (
+            (select group_activated from groups where group_name = NEW.group_moderator_name) = 'f'
+        ) then
+            raise integrity_constraint_violation
+            using message = NEW.group_moderator_name || ' is deactived - cannot be set as moderator';
+        elsif (
+            (select case when group_expiry_date is not null then group_expiry_date else current_date end
+             from groups where group_name = NEW.group_name) < current_date
+        ) then
+            raise integrity_constraint_violation
+            using message = NEW.group_name || ' has expired - cannot manage moderators on it';
+        elsif (
+            (select case when group_expiry_date is not null then group_expiry_date else current_date end
+             from groups where group_name = NEW.group_moderator_name) < current_date
+        ) then
+            raise integrity_constraint_violation
+            using message = NEW.group_moderator_name || ' has expired - cannot be set as moderator';
+        elsif (
+            (select group_class from groups where group_name = NEW.group_name) = 'primary'
+        ) then
+            raise integrity_constraint_violation
+            using message = NEW.group_name || ' is a primary group, and cannot be moderated';
+        elsif NEW.group_moderator_name != NEW.group_name then
             -- self-moderation is allowed
-            response := 'Making ' || NEW.group_name || ' a moderator of '
-                        || NEW.group_moderator_name || ' will create a cyclical graph - which is not allowed.';
-
-            assert (select count(*) from group_moderators
-                    where group_name = NEW.group_moderator_name
-                    and group_moderator_name = NEW.group_name) = 0, response;
+            if (select count(*) from group_moderators
+                where group_name = NEW.group_moderator_name
+                and group_moderator_name = NEW.group_name) > 0
+            then
+                raise integrity_constraint_violation
+                using message = 'Cyclical graphs not allowed: '
+                                 || NEW.group_moderator_name || ' already moderates '|| NEW.group_name;
+            end if;
         end if;
         return new;
     end;

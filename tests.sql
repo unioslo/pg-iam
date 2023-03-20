@@ -445,8 +445,6 @@ create or replace function test_group_memeberships_moderators()
             raise notice '%', sqlerrm;
         end;
 
-        -- safeguards in group_remove
-
         /* GROUP MODERATORS */
 
         insert into group_moderators (group_name, group_moderator_name)
@@ -489,9 +487,9 @@ create or replace function test_group_memeberships_moderators()
         begin
             insert into group_moderators (group_name, group_moderator_name)
                 values ('p11-special-group', 'p11-clinical-group');
-
-        exception when assert_failure then
-            raise notice 'group_moderators: cyclicality check works';
+            assert false, 'group_moderators: cyclicality check not working';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- new relations and group activation state
         begin
@@ -500,9 +498,9 @@ create or replace function test_group_memeberships_moderators()
             update groups set group_activated = 'f' where group_name = 'p11-lol-group';
             insert into group_moderators (group_name, group_moderator_name)
                 values ('p11-lol-group', 'p11-admin-group');
-
-        exception when assert_failure then
-            raise notice 'group_moderators: deactivated groups cannot be used';
+            assert false, 'group_moderators: deactivated groups can be used';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- new relations and group expiry
         begin
@@ -511,9 +509,9 @@ create or replace function test_group_memeberships_moderators()
             update groups set group_expiry_date = '2011-01-01' where group_name = 'p11-lol-group';
             insert into group_moderators (group_name, group_moderator_name)
                 values ('p11-lol-group', 'p11-admin-group');
-
-        exception when assert_failure then
-            raise notice 'group_moderators: expired groups cannot be used';
+            assert false, 'group_moderators: expired groups cannot be used';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         update groups set group_expiry_date = '2011-01-01' where group_name = 'p11-export-group';
         --delete from persons;
