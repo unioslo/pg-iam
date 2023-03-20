@@ -1326,29 +1326,29 @@ create or replace function test_institutions()
             update institutions set row_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
                 where institution_name = 'uil';
             assert false, 'institutions: row_id mutable';
-        exception when others then
-            raise notice 'institutions: row_id immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update institutions set institution_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
                 where institution_name = 'uil';
             assert false, 'institutions: institution_id mutable';
-        exception when others then
-            raise notice 'institutions: institution_id immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update institutions set institution_name = 'liu'
                 where institution_name = 'uil';
             assert false, 'institutions: institution_name mutable';
-        exception when others then
-            raise notice 'institutions: institution_name immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update institutions set institution_group = 'foo-group'
                 where institution_name = 'uil';
             assert false, 'institutions: institution_group mutable';
-        exception when others then
-            raise notice 'institutions: institution_group immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- groups
         select institution_group from institutions
@@ -1363,14 +1363,14 @@ create or replace function test_institutions()
         begin
             update groups set group_activated = 't' where group_name = grp;
             assert false, 'institution group activation mutable on groups';
-        exception when others then
-            raise notice 'institution group activation not mutable on groups';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update groups set group_expiry_date = '2020-01-01' where group_name = grp;
             assert false, 'institution group_expiry_date mutable on groups';
-        exception when others then
-            raise notice 'institution group_expiry_date not mutable on groups';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         return true;
     end;
@@ -1393,29 +1393,29 @@ create or replace function test_projects()
             update projects set row_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
                 where project_name = 'raka';
             assert false, 'projects: row_id mutable';
-        exception when others then
+        exception when integrity_constraint_violation then
             raise notice 'projects: row_id immutable';
         end;
         begin
             update projects set project_id = '44c23dc9-d759-4c1f-a72e-04e10dbe2523'
                 where project_name = 'raka';
             assert false, 'projects: project_id mutable';
-        exception when others then
-            raise notice 'projects: project_id immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update projects set project_number = 'lolcat'
                 where project_name = 'raka';
             assert false, 'projects: project_number mutable';
-        exception when others then
-            raise notice 'projects: project_number immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update projects set project_group = 'some-group'
                 where project_name = 'raka';
             assert false, 'projects: project_group mutable';
-        exception when others then
-            raise notice 'projects: project_group immutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
         end;
         -- groups
         select project_group from projects
@@ -1430,14 +1430,14 @@ create or replace function test_projects()
         begin
             update groups set group_activated = 't' where group_name = grp;
             assert false, 'project group activation mutable on groups';
-        exception when others then
-            raise notice 'project group activation not mutable on groups';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         begin
             update groups set group_expiry_date = '2020-01-01' where group_name = grp;
             assert false, 'project group_expiry_date mutable on groups';
-        exception when others then
-            raise notice 'project group_expiry_date not mutable on groups';
+        exception when restrict_violation then
+            raise notice '%', sqlerrm;
         end;
         return true;
     end;
