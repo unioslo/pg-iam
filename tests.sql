@@ -1211,36 +1211,152 @@ create or replace function test_funcs()
         select person_groups(pid::text) into data;
         err := 'person_groups issue';
         assert data->>'person_id' = pid::text, err;
+
         -- person_capabilities
         insert into capabilities_http (
-            capability_name, capability_hostnames, capability_default_claims,
-            capability_required_groups, capability_group_match_method,
-            capability_lifetime, capability_description, capability_expiry_date)
-            values ('p11-art', '{api.com}', '{"role": "p11_art_user"}',
-                    '{"p11-surrealist-group", "p11-admin-group"}', 'exact',
-                    '123', 'bla', current_date);
-        insert into capabilities_http_grants (capability_names_allowed,
-                                              capability_grant_hostnames, capability_grant_namespace,
-                                              capability_grant_http_method, capability_grant_uri_pattern,
-                                              capability_grant_required_groups)
-                                      values ('{export}',
-                                              '{api.com}', 'files',
-                                              'GET', '/(.*)/art',
-                                              '{surrealist-group}');
+            capability_name,
+            capability_hostnames,
+            capability_required_groups,
+            capability_group_match_method,
+            capability_lifetime,
+            capability_description,
+            capability_expiry_date
+        ) values (
+            'p11-art',
+            '{api.com}',
+            '{"p11-surrealist-group", "p11-admin-group"}',
+            'exact',
+            123,
+            'bla',
+            current_date
+        );
+        insert into capabilities_http (
+            capability_name,
+            capability_hostnames,
+            capability_required_groups,
+            capability_group_match_method,
+            capability_lifetime,
+            capability_description
+        ) values (
+            'anything',
+            '{api.com}',
+            null,
+            'exact',
+            60,
+            'a good capability'
+        );
+        insert into capabilities_http (
+            capability_name,
+            capability_hostnames,
+            capability_required_groups,
+            capability_group_match_method,
+            capability_lifetime,
+            capability_description
+        ) values (
+            'nothing',
+            '{api.com}',
+            '{surrealist-group}',
+            'wildcard',
+            60,
+            'a very good capability'
+        );
+        insert into capabilities_http_grants (
+            capability_names_allowed,
+            capability_grant_hostnames,
+            capability_grant_namespace,
+            capability_grant_http_method,
+            capability_grant_uri_pattern,
+            capability_grant_required_groups
+        ) values (
+            '{export,p11-art}',
+            '{api.com}',
+            'files',
+            'GET',
+            '/(.*)/art',
+            '{surrealist-group}'
+        );
+        insert into capabilities_http_grants (
+            capability_names_allowed,
+            capability_grant_hostnames,
+            capability_grant_namespace,
+            capability_grant_http_method,
+            capability_grant_uri_pattern,
+            capability_grant_required_groups
+        ) values (
+            '{anything}',
+            '{api.com}',
+            'things',
+            'PUT',
+            '/moar/.+',
+            null
+        );
+        insert into capabilities_http_grants (
+            capability_names_allowed,
+            capability_grant_hostnames,
+            capability_grant_namespace,
+            capability_grant_http_method,
+            capability_grant_uri_pattern,
+            capability_grant_required_groups
+        ) values (
+            '{nothing}',
+            '{api.com}',
+            'things',
+            'GET',
+            '/neither-perception-nor-non-perception',
+            null
+        );
+        insert into capabilities_http_grants (
+            capability_names_allowed,
+            capability_grant_hostnames,
+            capability_grant_namespace,
+            capability_grant_http_method,
+            capability_grant_uri_pattern,
+            capability_grant_required_groups
+        ) values (
+            '{nothing,anything}',
+            '{api.com}',
+            'things',
+            'GET',
+            '/anatta/.+',
+            '{self}'
+        );
+        insert into capabilities_http_grants (
+            capability_names_allowed,
+            capability_grant_hostnames,
+            capability_grant_namespace,
+            capability_grant_http_method,
+            capability_grant_uri_pattern,
+            capability_grant_required_groups
+        ) values (
+            '{nothing,anything}',
+            '{api.com}',
+            'things',
+            'GET',
+            '/groups/memberships/.+',
+            '{moderator,admin-group}'
+        );
         select person_capabilities(pid::text, 't') into data;
         err := 'person_capabilities issue';
         assert data->>'person_id' = pid::text, err;
         assert data->'person_capabilities'->0->>'group_name' = 'p11-surrealist-group', err;
+
         -- person_access
         err := 'person_access issue';
         select person_access(pid::text) into data;
         assert data->'person_group_access' is not null, err;
         assert data->'user_group_access' is null, err;
+        assert data->'groupless_access'->'capabilities_http'->>0 = 'anything', err || ' groupless_access';
+        assert json_array_length(data->'groupless_access'->'capabilities_http_grants') = 3, err || ' groupless_access';
+        assert json_array_length(
+                data->'person_group_access'->'person_capabilities'->0->'capabilities_http_grants'
+            ) = 4, err || ' person_group_access';
+
         -- group_member_add (with a user)
         insert into users (person_id, user_name, user_expiry_date)
             values (pid, 'p11-dali', '2040-12-01');
         select group_member_add('p11-surrealist-group', 'p11-dali') into ans;
         assert (select count(*) from group_memberships where group_member_name = 'p11-dali-group') = 1, 'group_member_add issue';
+
         -- user_groups
         select user_groups('p11-dali') into data;
         err := 'user_groups issue';
@@ -1249,12 +1365,14 @@ create or replace function test_funcs()
         assert data->'user_groups'->1->>'member_group' = 'p11-surrealist-group', err;
         assert data->'user_groups'->1->>'group_activated' = 'true', err;
         assert data->'user_groups'->1->>'group_expiry_date' is null, err;
+
         -- user_capabilities
         select user_capabilities('p11-dali', 't') into data;
         err := 'user_capabilities issue';
         assert data->>'user_name' = 'p11-dali', err;
         assert data->'user_capabilities'->0->>'group_name' = 'p11-surrealist-group', err;
-        assert data->'user_capabilities'->0->'group_capabilities_http'->>0 = 'p11-art', err;
+        assert data->'user_capabilities'->0->'capabilities_http'->>0 = 'p11-art', err;
+
         -- group_members
         insert into persons (full_name, person_expiry_date)
             values ('Andre Breton', '2050-10-01');
@@ -1281,27 +1399,31 @@ create or replace function test_funcs()
         assert data->'ultimate_members'->>0 = pid::text, err;
         assert data->'ultimate_members'->>1 = 'p11-abtn', err;
         assert data->'ultimate_members'->>2 = 'p11-dali', err;
+
         -- group_moderators
         insert into group_moderators values ('p11-surrealist-group', 'p11-painter-group');
         select group_moderators('p11-surrealist-group') into data;
         err := 'group_moderators issue';
         assert data->>'group_name' = 'p11-surrealist-group', err;
         assert data->'group_moderators' is not null, err;
+
         -- user_moderators
         select user_moderators('p11-abtn') into data;
         assert data->'user_moderators'->>0 = 'p11-surrealist-group', err;
         err := 'user_moderators issue';
+
         -- group_member_remove
         select group_member_remove('p11-surrealist-group', 'p11-dali') into ans;
         assert (select count(*) from group_memberships
                 where group_member_name = 'p11-dali-group'
                 and group_name = 'p11-surrealist-group') = 0,
             'group_member_remove issue';
+
         -- group_capabilities
         select group_capabilities('p11-surrealist-group') into data;
         err := 'group_capabilities issue';
         assert data->>'group_name' = 'p11-surrealist-group', err;
-        assert data->'group_capabilities_http'->>0 = 'p11-art', err;
+        assert data->'capabilities_http'->>0 = 'p11-art', err;
         return true;
     end;
 $$ language plpgsql;
