@@ -43,7 +43,11 @@ person_capabilities(person_id text, grants boolean)
     {person_id: '', person_capabilities: []}
 */
 
-person_access(person_id text)
+person_access(
+    person_id text,
+    filter_memberships boolean default 'false',
+    client_timestamp timestamptz default current_timestamp
+)
 /*
     Returns:
     {person_id: '', person_access: {person_group_access: [], users_groups_access: []}}
