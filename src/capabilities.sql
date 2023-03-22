@@ -565,9 +565,17 @@ create trigger capabilities_http_grants_channel_notify after update or insert or
 
 
 drop function if exists grp_cpbts(text, boolean) cascade;
-create or replace function grp_cpbts(grp text, grants boolean default 'f')
-    returns json as $$
-    declare ctype text;
+create or replace function grp_cpbts(
+    grp text,
+    grants boolean default 'f',
+    start_date timestamptz default null,
+    end_date timestamptz default null,
+    weekdays jsonb default null
+) returns json as $$
+    declare cname text;
+    declare cnames text[];
+    declare cmatch text;
+    declare hnames text[];
     declare cgrps text[];
     declare rgrp text;
     declare reg text;
@@ -576,56 +584,148 @@ create or replace function grp_cpbts(grp text, grants boolean default 'f')
     declare data json;
     declare grnt_grp text[];
     declare grnt_mthd text;
+    declare grnt_hosts text[];
     declare grnt_ptrn text;
+    declare grnt_name text;
+    declare grp_exp timestamptz;
+    declare grp_actived boolean;
     begin
-        if (select exists(select 1 from groups where group_name = grp)) = 'f' then
-            raise invalid_parameter_value
-            using message = 'group does not exist';
-        end if;
+        select group_expiry_date, group_activated from groups
+            where group_name = grp into grp_exp, grp_actived;
         create temporary table if not exists cpb(ct text unique not null) on commit drop;
         delete from cpb;
-        -- exact group matches
-        for ctype in select capability_name from capabilities_http
-            where capability_group_match_method = 'exact'
-            and array[grp] && capability_required_groups loop
-            insert into cpb values (ctype);
-        end loop;
-        -- wildcard group matches
-        for ctype, cgrps in select capability_name, capability_required_groups from capabilities_http
-            where capability_group_match_method = 'wildcard' loop
-            for rgrp in select unnest(cgrps) loop
-                reg := '.*' || rgrp || '.*';
-                if grp ~ reg then
-                    begin
-                        insert into cpb values (ctype);
-                    exception when unique_violation then
-                        null;
-                    end;
-                end if;
-            end loop;
+        -- collect information about which capabilities are available for the group
+        for cname, cgrps, cmatch in
+            select
+                capability_name,
+                capability_required_groups,
+                capability_group_match_method
+            from capabilities_http loop
+            if (
+                grp is not null
+                and cmatch = 'exact'
+                and array[grp] && cgrps
+            ) then
+                raise info 'exact, %: %', grp, cname;
+                insert into cpb values (cname);
+            elsif (
+                grp is not null
+                and cmatch = 'wildcard'
+            ) then
+                for rgrp in select unnest(cgrps) loop
+                    reg := '.*' || rgrp || '.*';
+                    if grp ~ reg then
+                        begin
+                            insert into cpb values (cname);
+                        exception when unique_violation then
+                            null;
+                        end;
+                    end if;
+                end loop;
+            elsif (
+                grp is null
+                and cgrps is null
+            ) then
+                insert into cpb values (cname);
+            end if;
         end loop;
         select json_agg(ct) from cpb into data;
+        -- optionally collect information about grants, for the (group, capabilities)
         if grants = 'f' then
-            return json_build_object('group_name', grp, 'group_capabilities_http', data);
+            return json_build_object(
+                'group_name', grp,
+                'group_expiry_date', grp_exp,
+                'group_activated', grp_actived,
+                'constraints', json_build_object(
+                    'start_date', start_date,
+                    'end_date', end_date,
+                    'weekdays', weekdays
+                ),
+                'capabilities_http', data,
+                'capabilities_http_grants', null
+            );
         else
-            create temporary table if not exists grnts(method text, pattern text,
-                unique (method, pattern)) on commit drop;
-            for grnt_grp, grnt_mthd, grnt_ptrn in
-                select capability_grant_required_groups, capability_grant_http_method, capability_grant_uri_pattern
+            create temporary table if not exists grnts(
+                caps text[],
+                method text,
+                hosts text[],
+                pattern text,
+                name text,
+                groups text[],
+                unique (method, pattern)
+            ) on commit drop;
+            delete from grnts;
+            for cnames, grnt_grp, grnt_mthd, grnt_hosts, grnt_ptrn, grnt_name in
+                select capability_names_allowed,
+                       capability_grant_required_groups,
+                       capability_grant_http_method,
+                       capability_grant_hostnames,
+                       capability_grant_uri_pattern,
+                       capability_grant_name
                 from capabilities_http_grants loop
-                    for rgrp in select unnest(grnt_grp) loop
-                        reg := '.*' || rgrp || '.*';
-                        if grp ~ reg then
-                            begin
-                                insert into grnts values (grnt_mthd, grnt_ptrn);
-                            exception when unique_violation then
-                                null;
-                            end;
-                        end if;
-                    end loop;
+                    if grnt_grp is not null then
+                        for rgrp in select unnest(grnt_grp) loop
+                            reg := '.*' || rgrp || '.*';
+                            if ((grp ~ reg or rgrp in ('self', 'moderator')) and cnames && (select array_agg(ct) from cpb)) then
+                                begin
+                                    insert into grnts values (
+                                        cnames, grnt_mthd, grnt_hosts, grnt_ptrn, grnt_name, grnt_grp
+                                    );
+                                exception when unique_violation then
+                                    null;
+                                end;
+                            end if;
+                        end loop;
+                    elsif (
+                        grnt_grp is null
+                        and cnames && (select array_agg(ct) from cpb)
+                        and grp is not null
+                        and grp not in ('self', 'moderator')
+                    ) then
+                        begin
+                            insert into grnts values (
+                                cnames, grnt_mthd, grnt_hosts, grnt_ptrn, grnt_name, grnt_grp
+                            );
+                        exception when unique_violation then
+                            null;
+                        end;
+                    elsif (
+                        grnt_grp is null
+                        and cnames && (select array_agg(ct) from cpb)
+                        and grp is null
+                    ) then
+                        begin
+                            insert into grnts values (
+                                cnames, grnt_mthd, grnt_hosts, grnt_ptrn, grnt_name, grnt_grp
+                            );
+                        exception when unique_violation then
+                            null;
+                        end;
+                    end if;
             end loop;
-            select json_agg(json_build_object('method', method, 'pattern', pattern)) from grnts into grant_data;
-            return json_build_object('group_name', grp, 'group_capabilities_http', data, 'grants', grant_data);
+            select json_agg(
+                json_build_object(
+                    'capability_names_allowed', caps,
+                    'capability_grant_http_method', method,
+                    'capability_grant_hostnames', hosts,
+                    'capability_grant_uri_pattern', pattern,
+                    'capability_grant_name', name,
+                    'capability_grant_required_groups', groups
+                )
+            ) from grnts into grant_data;
+
+            return json_build_object(
+                'group_name', grp,
+                'group_expiry_date', grp_exp,
+                'group_activated', grp_actived,
+                'constraints', json_build_object(
+                    'start_date', start_date,
+                    'end_date', end_date,
+                    'weekdays', weekdays
+                ),
+                'capabilities_http', data,
+                'capabilities_http_grants', grant_data
+            );
         end if;
     end;
 $$ language plpgsql;
@@ -644,7 +744,7 @@ create or replace function person_capabilities(
     begin
         pid := $1::uuid;
         select person_group from persons where persons.person_id = pid into pgrp;
-        select json_agg(grp_cpbts(member_group_name, grants))
+        select json_agg(grp_cpbts(member_group_name, grants, start_date, end_date, weekdays))
             from group_get_parents(pgrp, filter_memberships, client_timestamp) into data;
         return json_build_object('person_id', person_id, 'person_capabilities', data);
     end;
@@ -664,7 +764,7 @@ create or replace function user_capabilities(
     declare data json;
     begin
         select user_group from users where users.user_name = $1 into ugrp;
-        select json_agg(grp_cpbts(member_group_name, grants))
+        select json_agg(grp_cpbts(member_group_name, grants, start_date, end_date, weekdays))
             from group_get_parents(ugrp, filter_memberships, client_timestamp) into data;
         return json_build_object('user_name', user_name, 'user_capabilities', data);
     end;
@@ -681,6 +781,9 @@ create or replace function person_access(
     declare pid uuid;
     declare p_data json;
     declare u_data json;
+    declare a_data json;
+    declare s_data json;
+    declare m_data json;
     declare data json;
     begin
         pid := $1::uuid;
@@ -689,9 +792,13 @@ create or replace function person_access(
             from users, persons
             where users.person_id = persons.person_id
             and users.person_id = pid into u_data;
-        select json_build_object('person_id', person_id,
-                                 'person_group_access', p_data,
-                                 'users_groups_access', u_data) into data;
+        select group_capabilities(null, 't') into a_data;
+        select json_build_object(
+            'person_id', person_id,
+            'person_group_access', p_data,
+            'users_groups_access', u_data,
+            'groupless_access', a_data
+        ) into data;
         return data;
     end;
 $$ language plpgsql;
