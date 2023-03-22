@@ -21,6 +21,7 @@ Suppose we have three users: Salvador Dali, Andre Breton, and Juan Miro. We now 
 First we will create two persons, each with one account, and two groups which we will use to enforce access control policies.
 
 ```sql
+set session "session.identity" = 'tester';
 -- persons, users
 insert into persons (full_name, person_expiry_date)
     values ('Salvador Dali', '2050-10-01');
@@ -46,7 +47,7 @@ insert into groups (group_name, group_class, group_type)
 Each person has an automatically created person group, and is activated by default.
 
 ```txt
-tsd_idp=> select person_id, person_activated, person_expiry_date, person_group, full_name from persons;
+select person_id, person_activated, person_expiry_date, person_group, full_name from persons;
               person_id               | person_activated |   person_expiry_date   |                person_group                |   full_name
 --------------------------------------+------------------+------------------------+--------------------------------------------+---------------
  38d49b94-26ae-45cd-b654-52d4c455561f | t                | 2050-10-01 00:00:00+02 | 38d49b94-26ae-45cd-b654-52d4c455561f-group | Salvador Dali
@@ -68,7 +69,7 @@ tsd_idp=> select person_id, user_name, user_group, user_activated, user_expiry_d
 The automatically created groups are present in the `groups` table, while the group we created is also there. The person and user groups are `primary`, and have `group_primary_member`s, while the created groups are `secondary` and have no `group_primary_member`. In this case, neither have expiry dates set.
 
 ```txt
-tsd_idp=> select group_name, group_class, group_type, group_activated, group_expiry_date, group_primary_member from groups;
+select group_name, group_class, group_type, group_activated, group_expiry_date, group_primary_member from groups;
                  group_name                 | group_class | group_type | group_activated |   group_expiry_date    |         group_primary_member
 --------------------------------------------+-------------+------------+-----------------+------------------------+--------------------------------------
  38d49b94-26ae-45cd-b654-52d4c455561f-group | primary     | person     | t               | 2050-10-01 00:00:00+02 | 38d49b94-26ae-45cd-b654-52d4c455561f
@@ -189,7 +190,7 @@ If one is only interested in who the members are, regardless of the graph, then 
 We can also see the group moderators:
 
 ```txt
-tsd_idp=> select group_moderators('surrealist-group');
+select group_moderators('surrealist-group');
                 group_moderators
 -----------------------------------------
  {                                      +
@@ -203,7 +204,7 @@ tsd_idp=> select group_moderators('surrealist-group');
      ]                                  +
  }
 
-tsd_idp=> select group_moderators('art-group');
+select group_moderators('art-group');
                 group_moderators
 -----------------------------------------
  {                                      +
@@ -222,56 +223,132 @@ Which means that Juan Miro can administer all access, in addition to having thos
 
 ### Specify HTTP capabilities
 
-Suppose we have an HTTP API serving data from an art collection, containing surrealist works. We want to restrict what Dali can see to this part, and let Andre and Juan see everything. To do that we will create two capabilities, each requiring membership of different groups:
+Suppose we have an HTTP API serving data from an art collection, containing surrealist works. We want to restrict what Dali can see to this part, and let Andre and Juan see everything. At the same time anyone can create art works in the collection. To do that we will create three capabilities, each requiring membership of different groups (or none at all):
 
 ```sql
 insert into capabilities_http (
-    capability_name, capability_default_claims,
-    capability_required_groups, capability_group_match_method,
-    capability_lifetime, capability_description, capability_expiry_date)
-    values ('surrealism', '{"role": "surrealist_user"}',
-            '{"surrealist-group", "art-group", "admin-group"}', 'exact',
-            '30', 'surrealist art collection access', '2020-10-01');
+    capability_name,
+    capability_hostnames,
+    capability_required_groups,
+    capability_group_match_method,
+    capability_lifetime,
+    capability_description,
+    capability_expiry_date
+) values (
+    'surrealism',
+    '{api.com}',
+    '{"surrealist-group", "art-group", "admin-group"}',
+    'exact',
+    '30',
+    'surrealist art collection access',
+    '2020-10-01'
+);
 insert into capabilities_http (
-    capability_name, capability_default_claims,
-    capability_required_groups, capability_group_match_method,
-    capability_lifetime, capability_description, capability_expiry_date)
-    values ('art', '{"role": "art_user"}',
-            '{"art-group", "admin-group"}', 'exact',
-            '30', 'art collection access', '2030-10-01');
+    capability_name,
+    capability_hostnames,
+    capability_required_groups,
+    capability_group_match_method,
+    capability_lifetime,
+    capability_description,
+    capability_expiry_date
+) values (
+    'art',
+    '{api.com}',
+    '{"art-group", "admin-group"}',
+    'exact',
+    '30',
+    'art collection access',
+    '2030-10-01'
+);
+insert into capabilities_http (
+    capability_name,
+    capability_hostnames,
+    capability_required_groups,
+    capability_group_match_method,
+    capability_lifetime,
+    capability_description
+) values (
+    'maker',
+    '{api.com}',
+    null,
+    'exact',
+    '30',
+    'generic access for creating art works'
+);
 ```
 
 To get an overview:
 
 ```txt
-tsd_idp=> select capability_name, capability_required_groups, capability_lifetime, capability_expiry_date from capabilities_http;
+select capability_name, capability_required_groups, capability_lifetime, capability_expiry_date from capabilities_http;
  capability_name |        capability_required_groups        | capability_lifetime | capability_expiry_date
 -----------------+------------------------------------------+---------------------+------------------------
  surrealism      | {surrealist-group,art-group,admin-group} |                  30 | 2020-10-01
  art             | {art-group,admin-group}                  |                  30 | 2030-10-01
+ maker           |                                          |                  30 |
 ```
 
-Lastly, we need to connect access grant to these new capabilities:
+Lastly, we need to create grants tied to these new capabilities:
 
 ```sql
 insert into capabilities_http_grants (
-    capability_id, capability_name,
-    capability_http_method, capability_uri_pattern)
-    values ((select capability_id from capabilities_http where capability_name = 'surrealism'), 'surrealism', 'GET', '/art/surrealism/(.*)');
+    capability_names_allowed,
+    capability_grant_name,
+    capability_grant_namespace,
+    capability_grant_http_method,
+    capability_grant_hostnames,
+    capability_grant_uri_pattern
+) values (
+    '{surrealism}',
+    'get_surreal_things',
+    'art',
+    'GET',
+    '{api.com}',
+    '/art/surrealism/(.*)'
+);
 insert into capabilities_http_grants (
-    capability_id, capability_name,
-    capability_http_method, capability_uri_pattern)
-    values ((select capability_id from capabilities_http where capability_name = 'art'), 'art', 'GET', '/art/(.*)');
+    capability_names_allowed,
+    capability_grant_name,
+    capability_grant_namespace,
+    capability_grant_http_method,
+    capability_grant_hostnames,
+    capability_grant_uri_pattern
+) values (
+    '{art}',
+    'browse_art',
+    'art',
+    'GET',
+    '{api.com}',
+    '/art/(.*)'
+);
+insert into capabilities_http_grants (
+    capability_names_allowed,
+    capability_grant_name,
+    capability_grant_namespace,
+    capability_grant_http_method,
+    capability_grant_hostnames,
+    capability_grant_uri_pattern
+) values (
+    '{maker}',
+    'make_art',
+    'art',
+    'PUT',
+    '{api.com}',
+    '/art/works/.+'
+);
 ```
+
+Here we are specifying that the `surrealism` capability can perform a HTTP `GET` on any URI that matches the regex: `/art/surrealism/(.*)` on `api.com`, and so forth.
 
 To get an overview:
 
 ```txt
-tsd_idp=> select capability_name, capability_http_method, capability_uri_pattern from capabilities_http_grants;
- capability_name | capability_http_method | capability_uri_pattern
------------------+------------------------+------------------------
- surrealism      | GET                    | /art/surrealism/(.*)
- art             | GET                    | /art/(.*)
+select capability_names_allowed, capability_grant_http_method, capability_grant_uri_pattern from capabilities_http_grants;
+ capability_names_allowed | capability_grant_http_method | capability_grant_uri_pattern
+--------------------------+------------------------------+------------------------------
+ {surrealism}             | GET                          | /art/surrealism/(.*)
+ {art}                    | GET                          | /art/(.*)
+ {maker}                  | PUT                          | /art/works/.+
 ```
 
 In the authentication and authorization server, tokens can be issued to the identities based on their group memberships. The `user_groups` function would be helpful in that case. E.g.:
@@ -332,39 +409,113 @@ tsd_idp=> select user_groups('jm');
 
 It is also possible to apply filtering based on the membership constraints when calling the `user_groups` function. See `2-db-structure.md` for details of the function signature.
 
-When these tokens are used in subsequent requests for resource access, then the capabilities can be inspected to see if they allow the request to go ahead. In the the latter case, the `capability_grants` function would be useful. E.g.:
+When these tokens are used in subsequent requests for resource access, then the capabilities can be inspected to see if they allow the request to go ahead. It is also possible to get an overview of which URIs a person has access to, via their group memberships (mediated via their access to capabilities):
 
-```txt
-tsd_idp=> select capability_grants('art');
-----------------------------------------
- {                                     +
-     "capability_name": "art",         +
-     "capability_grants": [            +
-         {                             +
-             "http_method": "GET",     +
-             "uri_pattern": "/art/(.*)"+
-         }                             +
-     ]                                 +
+```
+select person_access((select person_id::text from users where user_name = 'dali'));
+
+----------------------------------------------------------------
+ {                                                                                  +
+     "person_id": "ca079e2b-5916-45da-904a-601dcb147957",                           +
+     "groupless_access": {                                                          +
+         "group_name": null,                                                        +
+         "constraints": {                                                           +
+             "end_date": null,                                                      +
+             "weekdays": null,                                                      +
+             "start_date": null                                                     +
+         },                                                                         +
+         "group_activated": null,                                                   +
+         "capabilities_http": [                                                     +
+             "maker"                                                                +
+         ],                                                                         +
+         "group_expiry_date": null,                                                 +
+         "capabilities_http_grants": [                                              +
+             {                                                                      +
+                 "capability_grant_name": "make_art",                               +
+                 "capability_names_allowed": [                                      +
+                     "maker"                                                        +
+                 ],                                                                 +
+                 "capability_grant_hostnames": [                                    +
+                     "api.com"                                                      +
+                 ],                                                                 +
+                 "capability_grant_http_method": "PUT",                             +
+                 "capability_grant_uri_pattern": "/art/works/.+",                   +
+                 "capability_grant_required_groups": null                           +
+             }                                                                      +
+         ]                                                                          +
+     },                                                                             +
+     "person_group_access": {                                                       +
+         "person_id": "ca079e2b-5916-45da-904a-601dcb147957",                       +
+         "person_capabilities": null                                                +
+     },                                                                             +
+     "users_groups_access": [                                                       +
+         {                                                                          +
+             "user_name": "dali",                                                   +
+             "user_capabilities": [                                                 +
+                 {                                                                  +
+                     "group_name": "surrealist-group",                              +
+                     "constraints": {                                               +
+                         "end_date": null,                                          +
+                         "weekdays": null,                                          +
+                         "start_date": null                                         +
+                     },                                                             +
+                     "group_activated": true,                                       +
+                     "capabilities_http": [                                         +
+                         "surrealism"                                               +
+                     ],                                                             +
+                     "group_expiry_date": null,                                     +
+                     "capabilities_http_grants": [                                  +
+                         {                                                          +
+                             "capability_grant_name": "get_surreal_things",         +
+                             "capability_names_allowed": [                          +
+                                 "surrealism"                                       +
+                             ],                                                     +
+                             "capability_grant_hostnames": [                        +
+                                 "api.com"                                          +
+                             ],                                                     +
+                             "capability_grant_http_method": "GET",                 +
+                             "capability_grant_uri_pattern": "/art/surrealism/(.*)",+
+                             "capability_grant_required_groups": null               +
+                         }                                                          +
+                     ]                                                              +
+                 }                                                                  +
+             ]                                                                      +
+         }                                                                          +
+     ]                                                                              +
  }
 ```
 
+Looking at `users_groups_access`, we see that `dali`'s membership to the `surrealist-group` gives him access to the `surrealism` capability, which allows `GET` on `/art/surrealism/(.*)` at `api.com`. Looking at `group_less_access`, we see that he (and potentially anyone) has access to the `maker` capability, which allows `PUT` on `/art/works/.+` at `api.com`. He has no access via `person_group_access` - that is, his person group is not a member of any group. For any group, the membership contraints are also displayed, along with the group activation status.
+
+In this way, group memberships can be used along with capabilities and grants to specify access control rules for HTTP APIs. The `person_access` function also accepts optional parameters for filtering group memberships based on temporal constraints. See `2-db-structure.md` for details of the function signature.
+
 # Use case 2: external user rights management
 
-What if another person needs access to our collection, but they do not have an account with us? We can simply create a person object for them and then add their person group to the appropriate group. If we have integrated with the external IdP, we can request ID information from them, and grant capabilities as access tokens.
+What if another person needs access to our collection, but they do not have an user account with us? We can simply create a person object for them and then add their person group to the appropriate group. If we have integrated with the external IdP, we can request ID information from them, and grant capabilities as access tokens.
 
 # Use case 3: Audit
 
 Identity, Authentication and Authorization information is sensitive, and having an audit trail for all changes is essential. What if, for example someone changed the scope of access associated with a narrow capability to a broad one?
 
 ```sql
-update capabilities_http_grants set capability_uri_pattern = '/art/(.*)' where capability_name = 'surrealism';
+update capabilities_http_grants set capability_grant_uri_pattern = '/art/(.*)' where capability_grant_name = 'get_surreal_things';
 ```
 
-Then using the audit log table, one can identify this case, and many others:
+Then using the audit log table, one can identify who made the change, and when:
 
 ```txt
-tsd_idp=> select * from audit_log_objects;
-          event_time           |        table_name        |                row_id                |      column_name       |       old_data       | new_data
--------------------------------+--------------------------+--------------------------------------+------------------------+----------------------+-----------
- 2019-07-25 15:43:35.868261+02 | capabilities_http_grants | d5d080e0-a324-445a-8565-21e4b056289d | capability_uri_pattern | /art/surrealism/(.*) | /art/(.*)
+select * from audit_log_objects where row_id = (select row_id from capabilities_http_grants where capability_grant_name = 'get_surreal_things') and operation = 'UPDATE';
+ identity | operation |          event_time           |        table_name        |                row_id                |         column_name          |       old_data       | new_data
+----------+-----------+-------------------------------+--------------------------+--------------------------------------+------------------------------+----------------------+-----------
+ tester   | UPDATE    | 2023-03-20 21:26:29.283853+01 | capabilities_http_grants | 83af4588-702b-417e-bd46-7c16770d5639 | capability_grant_uri_pattern | /art/surrealism/(.*) | /art/(.*)
  ```
+
+The `audit_log_relations` table shows all changes made to group members and moderators, e.g.:
+
+```txt
+select * from audit_log_relations;
+ identity | operation |          event_time           |    table_name     |      parent      |    child    |       start_date       |        end_date        |                  weekdays
+----------+-----------+-------------------------------+-------------------+------------------+-------------+------------------------+------------------------+---------------------------------------------
+ tester   | DELETE    | 2023-03-20 21:29:23.554206+01 | group_memberships | art-group        | admin-group | 2020-01-11 00:00:00+01 | 2030-10-01 00:00:00+02 |
+ tester   | INSERT    | 2023-03-20 21:29:30.534212+01 | group_memberships | art-group        | admin-group |                        |                        |
+```
