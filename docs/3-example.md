@@ -58,7 +58,7 @@ select person_id, person_activated, person_expiry_date, person_group, full_name 
 Users also have automatically created groups, activation statuses, and expiry dates have been set.
 
 ```txt
-tsd_idp=> select person_id, user_name, user_group, user_activated, user_expiry_date from users;
+select person_id, user_name, user_group, user_activated, user_expiry_date from users;
               person_id               | user_name | user_group | user_activated |    user_expiry_date
 --------------------------------------+-----------+------------+----------------+------------------------
  38d49b94-26ae-45cd-b654-52d4c455561f | dali      | dali-group | t              | 2040-12-01 00:00:00+01
@@ -354,7 +354,7 @@ select capability_names_allowed, capability_grant_http_method, capability_grant_
 In the authentication and authorization server, tokens can be issued to the identities based on their group memberships. The `user_groups` function would be helpful in that case. E.g.:
 
 ```txt
-tsd_idp=> select user_groups('jm');
+select user_groups('jm');
 --------------------------------------------------------------
  {                                                           +
      "user_name": "jm",                                      +

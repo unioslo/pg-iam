@@ -21,6 +21,12 @@ insert into groups (group_name, group_class, group_type)
 insert into groups (group_name, group_class, group_type)
     values ('admin-group', 'secondary', 'generic');
 
+select person_id, person_activated, person_expiry_date, person_group, full_name from persons;
+
+select person_id, user_name, user_group, user_activated, user_expiry_date from users;
+
+select group_name, group_class, group_type, group_activated, group_expiry_date, group_primary_member from groups;
+
 select group_member_add('surrealist-group', 'dali');
 select group_member_add('art-group', 'abtn', '2020-01-11', '2030-10-01', '{"mon": {"start": "08:00", "end": "17:00"}}'::jsonb);
 select group_member_add('admin-group', 'jm');
@@ -28,6 +34,10 @@ select group_member_add('surrealist-group', 'art-group');
 select group_member_add('art-group', 'admin-group', '2020-01-11', '2030-10-01');
 insert into group_moderators (group_name, group_moderator_name) values ('art-group', 'admin-group');
 insert into group_moderators (group_name, group_moderator_name) values ('surrealist-group', 'admin-group');
+
+select jsonb_pretty(group_members('surrealist-group')::jsonb);
+
+select jsonb_pretty(group_moderators('surrealist-group')::jsonb);
 
 insert into capabilities_http (
     capability_name,
@@ -122,4 +132,31 @@ insert into capabilities_http_grants (
     'PUT',
     '{api.com}',
     '/art/works/.+'
+);
+
+select capability_name, capability_required_groups, capability_lifetime, capability_expiry_date from capabilities_http;
+
+select capability_names_allowed, capability_grant_http_method, capability_grant_uri_pattern from capabilities_http_grants;
+
+select jsonb_pretty(user_groups('jm')::jsonb);
+
+select jsonb_pretty(person_access((select person_id::text from users where user_name = 'dali'))::jsonb);
+
+update capabilities_http_grants set capability_grant_uri_pattern = '/art/(.*)' where capability_grant_name = 'get_surreal_things';
+
+select * from audit_log_objects
+    where row_id = (select row_id from capabilities_http_grants where capability_grant_name = 'get_surreal_things')
+    and operation = 'UPDATE';
+
+select * from audit_log_relations;
+
+update groups set group_expiry_date = '2020-01-01' where group_name = 'surrealist-group';
+
+select jsonb_pretty(user_groups('jm')::jsonb);
+select jsonb_pretty(user_groups('jm', 't')::jsonb);
+
+select jsonb_pretty(
+    person_access(
+        (select person_id::text from users where user_name = 'jm'), 't'
+    )::jsonb
 );
