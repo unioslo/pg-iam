@@ -606,7 +606,6 @@ create or replace function grp_cpbts(
                 and cmatch = 'exact'
                 and array[grp] && cgrps
             ) then
-                raise info 'exact, %: %', grp, cname;
                 insert into cpb values (cname);
             elsif (
                 grp is not null
