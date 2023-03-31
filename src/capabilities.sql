@@ -565,12 +565,14 @@ create trigger capabilities_http_grants_channel_notify after update or insert or
 
 
 drop function if exists grp_cpbts(text, boolean) cascade;
+drop function if exists grp_cpbts(text, boolean, timestamptz, timestamptz, jsonb) cascade;
 create or replace function grp_cpbts(
     grp text,
     grants boolean default 'f',
     start_date timestamptz default null,
     end_date timestamptz default null,
-    weekdays jsonb default null
+    weekdays jsonb default null,
+    personal_identifier text default null
 ) returns json as $$
     declare cname text;
     declare cnames text[];
@@ -589,6 +591,8 @@ create or replace function grp_cpbts(
     declare grnt_name text;
     declare grp_exp timestamptz;
     declare grp_actived boolean;
+    declare id_grps text[];
+    declare id_grp text;
     begin
         select group_expiry_date, group_activated from groups
             where group_name = grp into grp_exp, grp_actived;
@@ -665,15 +669,28 @@ create or replace function grp_cpbts(
                     if grnt_grp is not null then
                         for rgrp in select unnest(grnt_grp) loop
                             reg := '.*' || rgrp || '.*';
-                            if ((grp ~ reg or rgrp in ('self', 'moderator')) and cnames && (select array_agg(ct) from cpb)) then
-                                begin
-                                    insert into grnts values (
-                                        cnames, grnt_mthd, grnt_hosts, grnt_ptrn, grnt_name, grnt_grp
-                                    );
-                                exception when unique_violation then
-                                    null;
-                                end;
+                            -- if person identifier is given, find groups, check for intersection
+                            -- because the group that gives access to the capability
+                            -- might be different from the one that gives access to the grant
+                            if personal_identifier is not null then
+                                select array_agg(member_group_name) from group_get_parents(personal_identifier) into id_grps;
+                            else
+                                id_grps = '{}';
                             end if;
+                            for id_grp in select unnest(array_append(id_grps, grp)) loop
+                                if (
+                                    (id_grp ~ reg
+                                     or rgrp in ('self', 'moderator')) and cnames && (select array_agg(ct) from cpb)
+                                ) then
+                                    begin
+                                        insert into grnts values (
+                                            cnames, grnt_mthd, grnt_hosts, grnt_ptrn, grnt_name, grnt_grp
+                                        );
+                                    exception when unique_violation then
+                                        null;
+                                    end;
+                                end if;
+                            end loop;
                         end loop;
                     elsif (
                         grnt_grp is null
@@ -743,7 +760,7 @@ create or replace function person_capabilities(
     begin
         pid := $1::uuid;
         select person_group from persons where persons.person_id = pid into pgrp;
-        select json_agg(grp_cpbts(member_group_name, grants, start_date, end_date, weekdays))
+        select json_agg(grp_cpbts(member_group_name, grants, start_date, end_date, weekdays, pgrp))
             from group_get_parents(pgrp, filter_memberships, client_timestamp) into data;
         return json_build_object('person_id', person_id, 'person_capabilities', data);
     end;
@@ -763,7 +780,7 @@ create or replace function user_capabilities(
     declare data json;
     begin
         select user_group from users where users.user_name = $1 into ugrp;
-        select json_agg(grp_cpbts(member_group_name, grants, start_date, end_date, weekdays))
+        select json_agg(grp_cpbts(member_group_name, grants, start_date, end_date, weekdays, ugrp))
             from group_get_parents(ugrp, filter_memberships, client_timestamp) into data;
         return json_build_object('user_name', user_name, 'user_capabilities', data);
     end;
