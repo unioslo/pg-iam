@@ -1206,8 +1206,11 @@ create or replace function test_funcs()
         select person_group from persons where full_name like '%Dali' into pgrp;
         insert into groups (group_name, group_class, group_type)
             values ('p11-surrealist-group', 'secondary', 'generic');
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-pointilism-group', 'secondary', 'generic');
         select person_id from persons where full_name like '%Dali' into pid;
         select group_member_add('p11-surrealist-group', pid::text) into ans;
+        select group_member_add('p11-pointilism-group', pid::text) into ans;
         select person_groups(pid::text) into data;
         err := 'person_groups issue';
         assert data->>'person_id' = pid::text, err;
@@ -1335,6 +1338,21 @@ create or replace function test_funcs()
             '/groups/memberships/.+',
             '{moderator,admin-group}'
         );
+        insert into capabilities_http_grants (
+            capability_names_allowed,
+            capability_grant_hostnames,
+            capability_grant_namespace,
+            capability_grant_http_method,
+            capability_grant_uri_pattern,
+            capability_grant_required_groups
+        ) values (
+            '{nothing}',
+            '{api.com}',
+            'things',
+            'GET',
+            '/lol/cats/.+',
+            '{pointilism-group}'
+        );
         select person_capabilities(pid::text, 't') into data;
         err := 'person_capabilities issue';
         assert data->>'person_id' = pid::text, err;
@@ -1349,7 +1367,7 @@ create or replace function test_funcs()
         assert json_array_length(data->'groupless_access'->'capabilities_http_grants') = 3, err || ' groupless_access';
         assert json_array_length(
                 data->'person_group_access'->'person_capabilities'->0->'capabilities_http_grants'
-            ) = 4, err || ' person_group_access';
+            ) = 5, err || ' person_group_access';
 
         -- group_member_add (with a user)
         insert into users (person_id, user_name, user_expiry_date)
