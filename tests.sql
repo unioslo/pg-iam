@@ -1451,8 +1451,8 @@ create or replace function test_institutions()
     returns boolean as $$
     declare grp text;
     begin
-        insert into institutions (institution_name, institution_long_name)
-            values ('uil', 'University of Leon');
+        insert into institutions (institution_name, institution_long_name, institution_expiry_date)
+            values ('uil', 'University of Leon', '2060-01-01');
         -- defaults
         assert (select institution_group from institutions
                 where institution_name = 'uil') = 'uil-group',
@@ -1496,6 +1496,9 @@ create or replace function test_institutions()
             'institution group not generated correctly';
         assert (select group_type from groups where group_name = grp) = 'web',
             'institution group generated with incorrect type';
+        -- syncing exp dates
+        assert (select group_expiry_date from groups where group_name = grp) = '2060-01-01',
+            'institution_expiry_date not being synced to groups on creation';
         update institutions set institution_activated = 'f' where institution_name = 'uil';
         assert (select group_activated from groups where group_name = grp) = 'f',
             'institution group activation status management not working';
@@ -1563,6 +1566,8 @@ create or replace function test_projects()
             'project group generation not working';
         assert (select group_type from groups where group_name = grp) = 'web',
             'project group generated with incorrect type';
+        assert (select group_expiry_date from groups where group_name = grp) = '2050-01-01',
+            'project_end_date not being synced to groups on creation';
         update projects set project_activated = 'f' where project_group = grp;
         assert (select group_activated from groups where group_name = grp) = 'f',
             'project group management not working';
@@ -1639,6 +1644,7 @@ select test_capability_instances();
 select test_funcs();
 select test_institutions();
 select test_projects();
+select test_organisations();
 select test_cascading_deletes(:keep_test);
 
 drop function if exists check_no_data(boolean);
@@ -1650,4 +1656,5 @@ drop function if exists test_audit();
 drop function if exists test_funcs();
 drop function if exists test_institutions();
 drop function if exists test_projects();
+drop function if exists test_organisations;
 drop function if exists test_cascading_deletes(boolean);
