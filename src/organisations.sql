@@ -64,8 +64,8 @@ create or replace function institution_management()
             new_grp := NEW.institution_name || '-group';
             update institutions set institution_group = new_grp
                 where institution_name = NEW.institution_name;
-            insert into groups (group_name, group_class, group_type, group_description)
-                values (new_grp, 'secondary', 'web', 'institution group');
+            insert into groups (group_name, group_class, group_type, group_expiry_date, group_description)
+                values (new_grp, 'secondary', 'web', NEW.institution_expiry_date, 'institution group');
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.institution_group;
         elsif (TG_OP = 'UPDATE') then
@@ -138,8 +138,8 @@ create or replace function project_management()
             new_grp := NEW.project_number || '-group';
             update projects set project_group = new_grp
                 where project_number = NEW.project_number;
-            insert into groups (group_name, group_class, group_type, group_description)
-                values (new_grp, 'secondary', 'web', 'project group');
+            insert into groups (group_name, group_class, group_type, group_expiry_date, group_description)
+                values (new_grp, 'secondary', 'web', NEW.project_end_date, 'project group');
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.project_group;
         elsif (TG_OP = 'UPDATE') then
