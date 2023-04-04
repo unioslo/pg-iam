@@ -347,20 +347,29 @@ create trigger groups_audit after update or insert or delete on groups
 drop function if exists group_deletion() cascade;
 create or replace function group_deletion()
     returns trigger as $$
-    declare amount int;
+    declare msg text;
     begin
-        if OLD.group_type = 'person' then
-            select count(*) from persons where person_group = OLD.group_name into amount;
-            if amount = 1 then
-                raise restrict_violation using
-                message = 'person groups are automatically created and deleted based on person objects';
-            end if;
-        elsif OLD.group_type = 'user' then
-            select count(*) from users where user_group = OLD.group_name into amount;
-            if amount = 1 then
-                raise restrict_violation using
-                message = 'user groups are automatically created and deleted based on user objects';
-            end if;
+        msg = ' groups are automatically created and deleted';
+        if (
+            OLD.group_type = 'person'
+            and OLD.group_name in (select person_group from persons)
+        ) then
+            raise restrict_violation using message = 'person' || msg;
+        elsif (
+            OLD.group_type = 'user'
+            and OLD.group_name in (select user_group from users)
+        ) then
+            raise restrict_violation using message = 'user' || msg;
+        elsif (
+            OLD.group_type = 'project'
+            and OLD.group_name in (select project_group from projects)
+        ) then
+            raise restrict_violation using message = 'project' || msg;
+        elsif (
+            OLD.group_type = 'institution'
+            and OLD.group_name in (select institution_group from institutions)
+        ) then
+            raise restrict_violation using message = 'institution' || msg;
         end if;
     return old;
     end;
