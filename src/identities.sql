@@ -296,7 +296,7 @@ create table if not exists groups(
     group_expiry_date timestamptz,
     group_name text unique not null primary key,
     group_class text check (group_class in ('primary', 'secondary')),
-    group_type text check (group_type in ('person', 'user', 'generic', 'web')),
+    group_type text check (group_type in ('person', 'user', 'generic', 'web', 'project', 'institution')),
     group_primary_member text,
     group_description text,
     group_posix_gid int unique check (group_posix_gid > 999),
@@ -1035,28 +1035,33 @@ create or replace function find_group(member text)
     returns text as $$
     declare mem text;
     begin
-        -- try map the member parameter to an existing: group, person, or user
+        -- map from (person_id, user_name, project_number, institution_name) to group
         if member in (select groups.group_name from groups) then
             mem := member;
         else
             begin
                 mem := member::uuid;
-                if (
-                    (select exists(select 1 from persons where persons.person_id = member::uuid)) = 'f'
-                ) then
+                select person_group from persons where persons.person_id = member::uuid into mem;
+                if mem is null then
                     raise invalid_parameter_value
                         using message = 'person_id: ' || member || ' does not exist';
                 end if;
-                select person_group from persons where persons.person_id = member::uuid into mem;
             exception when invalid_text_representation then
                 begin
-                    if (
-                        (select exists(select 1 from users where users.user_name = member)) = 'f'
-                    ) then
+                    if member in (select user_name from users) then
+                        select user_group from users
+                            where users.user_name = member into mem;
+                    elsif member in (select institution_name from institutions) then
+                        select institution_group from institutions
+                            where institution_name = member into mem;
+                    elsif member in (select project_number from projects) then
+                        select project_group from projects
+                            where project_number = member into mem;
+                    else
                         raise invalid_parameter_value
                             using message = member || ' does not exist';
                     end if;
-                    select user_group from users where users.user_name = member into mem;
+
                 end;
             end;
         end if;
