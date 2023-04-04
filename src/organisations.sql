@@ -64,8 +64,19 @@ create or replace function institution_management()
             new_grp := NEW.institution_name || '-group';
             update institutions set institution_group = new_grp
                 where institution_name = NEW.institution_name;
-            insert into groups (group_name, group_class, group_type, group_expiry_date, group_description)
-                values (new_grp, 'secondary', 'web', NEW.institution_expiry_date, 'institution group');
+            insert into groups (
+                group_name,
+                group_class,
+                group_type,
+                group_expiry_date,
+                group_description
+            ) values (
+                new_grp,
+                'secondary',
+                'institution',
+                NEW.institution_expiry_date,
+                'institution group'
+            );
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.institution_group;
         elsif (TG_OP = 'UPDATE') then
@@ -87,6 +98,58 @@ create trigger institution_group_trigger after insert or delete or update on ins
 
 create trigger institutions_channel_notify after update or insert or delete on institutions
     for each row execute procedure notify_listeners();
+
+
+drop function if exists institution_member_add(text, text);
+create or replace function institution_member_add(
+    institution text,
+    member text
+) returns json as $$
+    declare inst_group text;
+    declare mem_group text;
+    begin
+        inst_group := find_group(institution);
+        mem_group := find_group(member);
+        insert into group_memberships(
+            group_name, group_member_name
+        ) values (
+            inst_group, mem_group
+        );
+        return json_build_object(
+            'message', 'added ' || member || ' to ' || institution
+        );
+    end;
+$$ language plpgsql;
+
+
+drop function if exists institution_member_remove(text, text);
+create or replace function institution_member_remove(
+    institution text,
+    member text
+) returns json as $$
+    declare inst_group text;
+    declare mem_group text;
+    begin
+        inst_group := find_group(institution);
+        mem_group := find_group(member);
+        delete from group_memberships
+            where group_name = inst_group
+            and group_member_name = mem_group;
+        return json_build_object(
+            'message', 'removed ' || member || ' from ' || institution
+        );
+    end;
+$$ language plpgsql;
+
+
+drop function if exists institution_members(text);
+create or replace function institution_members(
+    institution text
+) returns json as $$
+    begin
+        return group_members(find_group(institution));
+    end;
+$$ language plpgsql;
 
 
 create table if not exists projects(
@@ -138,8 +201,21 @@ create or replace function project_management()
             new_grp := NEW.project_number || '-group';
             update projects set project_group = new_grp
                 where project_number = NEW.project_number;
-            insert into groups (group_name, group_class, group_type, group_expiry_date, group_description)
-                values (new_grp, 'secondary', 'web', NEW.project_end_date, 'project group');
+            insert into groups (
+                group_name,
+                group_class,
+                group_type,
+                group_primary_member,
+                group_expiry_date,
+                group_description
+            ) values (
+                new_grp,
+                'primary',
+                'project',
+                NEW.project_number,
+                NEW.project_end_date,
+                'project group'
+            );
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.project_group;
         elsif (TG_OP = 'UPDATE') then
