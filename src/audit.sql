@@ -62,6 +62,8 @@ create table if not exists audit_log_relations_group_memberships
     partition of audit_log_relations for values in ('group_memberships');
 create table if not exists audit_log_relations_group_moderators
     partition of audit_log_relations for values in ('group_moderators');
+create table if not exists audit_log_relations_group_affiliations
+    partition of audit_log_relations for values in ('group_affiliations');
 
 
 drop function if exists update_audit_log_objects() cascade;
@@ -125,6 +127,9 @@ create or replace function update_audit_log_relations()
             elsif table_name = 'group_moderators' then
                 parent := NEW.group_name;
                 child := NEW.group_moderator_name;
+            elsif table_name = 'group_affiliations' then
+                parent := NEW.parent_group;
+                child := NEW.child_group;
             end if;
         elsif TG_OP = 'DELETE' then
             if table_name = 'group_memberships' then
@@ -136,6 +141,9 @@ create or replace function update_audit_log_relations()
             elsif table_name = 'group_moderators' then
                 parent := OLD.group_name;
                 child := OLD.group_moderator_name;
+            elsif table_name = 'group_affiliations' then
+                parent := OLD.parent_group;
+                child := OLD.child_group;
             end if;
         end if;
         insert into audit_log_relations(
