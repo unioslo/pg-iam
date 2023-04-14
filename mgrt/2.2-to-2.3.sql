@@ -98,3 +98,7 @@ create or replace function group_immutability()
     return new;
     end;
 $$ language plpgsql;
+
+-- audit
+create table if not exists audit_log_relations_group_moderators
+    partition of audit_log_relations for values in ('group_affiliations');
