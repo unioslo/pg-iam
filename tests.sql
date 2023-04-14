@@ -1494,7 +1494,7 @@ create or replace function test_institutions()
             where institution_name = 'uil' into grp;
         assert (select count(*) from groups where group_name = grp) = 1,
             'institution group not generated correctly';
-        assert (select group_type from groups where group_name = grp) = 'web',
+        assert (select group_type from groups where group_name = grp) = 'institution',
             'institution group generated with incorrect type';
         -- syncing exp dates
         assert (select group_expiry_date from groups where group_name = grp) = '2060-01-01',
@@ -1564,7 +1564,7 @@ create or replace function test_projects()
             where project_number = 'p11' into grp;
         assert (select count(*) from groups where group_name = grp) = 1,
             'project group generation not working';
-        assert (select group_type from groups where group_name = grp) = 'web',
+        assert (select group_type from groups where group_name = grp) = 'project',
             'project group generated with incorrect type';
         assert (select group_expiry_date from groups where group_name = grp) = '2050-01-01',
             'project_end_date not being synced to groups on creation';
@@ -1583,6 +1583,196 @@ create or replace function test_projects()
         exception when restrict_violation then
             raise notice '%', sqlerrm;
         end;
+        return true;
+    end;
+$$ language plpgsql;
+
+
+create or replace function test_organisations()
+    returns boolean as $$
+    declare data json;
+    begin
+        insert into institutions(
+            institution_name, institution_long_name, institution_expiry_date
+        ) values (
+            'corp', 'abstract tech', '3000-01-01'
+        );
+        insert into institutions(
+            institution_name, institution_long_name, institution_expiry_date
+        ) values (
+            'megacorp', 'initech', '2050-10-11'
+        );
+        insert into projects(
+            project_number, project_name, project_start_date, project_end_date
+        ) values (
+            'p99', 'project 99', '2000-12-01', '2080-01-01'
+        );
+        insert into projects(
+            project_number, project_name, project_start_date, project_end_date
+        ) values (
+            'p100', 'project 100', '2002-05-18', '2080-01-01'
+        );
+        insert into groups (
+            group_name, group_class, group_type
+        ) values (
+            'megacorp-admin-group', 'secondary', 'web'
+        );
+        insert into groups (
+            group_name, group_class, group_type
+        ) values (
+            'p99-admin-group', 'secondary', 'generic'
+        );
+        insert into groups (
+            group_name, group_class, group_type
+        ) values (
+            'p99-weirdo-group', 'secondary', 'generic'
+        );
+        insert into groups (
+            group_name, group_class, group_type
+        ) values (
+            'p100-admin-group', 'secondary', 'generic'
+        );
+
+        -- institutional hierarchies
+        perform institution_member_add('corp', 'megacorp');
+        perform institution_member_add('megacorp', 'p99');
+        perform institution_member_add('megacorp', 'p100');
+        select institution_members('corp') into data;
+        assert data->>'group_name' = 'corp-group';
+        assert data->'transitive_members'->0->>'group_member' = 'p100-group';
+        assert json_array_length(data->'ultimate_members') = 2;
+
+        -- institutional groups, adding
+        perform institution_group_add('megacorp', 'megacorp-admin-group');
+        select institution_groups('megacorp') into data;
+        assert json_array_length(data->'group_affiliates') = 1;
+
+        -- projects, adding
+        perform project_group_add('p99', 'p99-admin-group');
+        perform project_group_add('p99', 'p99-weirdo-group');
+        perform project_group_add('p100', 'p100-admin-group');
+        select project_groups('p99') into data;
+        assert json_array_length(data->'group_affiliates') = 2;
+        select project_institutions('p99') into data;
+        assert json_array_length(data->'institutions') = 2;
+
+        -- group affiliations
+        -- adding
+        insert into group_affiliations values ('megacorp-admin-group', 'p99-admin-group');
+        insert into group_affiliations values ('megacorp-admin-group', 'p100-admin-group');
+        select group_affiliates('megacorp-admin-group') into data;
+        assert json_array_length(data->'group_affiliates') = 2, 'issue: group_affiliates';
+        select group_affiliations('p99-admin-group') into data;
+        assert json_array_length(data->'group_affiliations') = 2, 'issue: group_affiliations';
+        -- removing
+        delete from group_affiliations
+            where parent_group = 'megacorp-admin-group'
+            and child_group = 'p100-admin-group';
+        select group_affiliates('megacorp-admin-group') into data;
+        assert json_array_length(data->'group_affiliates') = 1, 'issue: group_affiliates';
+        select group_affiliations('p100-admin-group') into data;
+        assert json_array_length(data->'group_affiliations') = 1, 'issue: group_affiliations';
+
+        -- projects groups, removing
+        perform project_group_remove('p99', 'p99-weirdo-group');
+        select project_groups('p99') into data;
+        assert json_array_length(data->'group_affiliates') = 1;
+
+        -- institutional groups, removing
+        perform institution_group_remove('megacorp', 'megacorp-admin-group');
+        select institution_groups('megacorp') into data;
+        assert data->>'group_affiliates' is null;
+
+        -- institutions, remove projects
+        perform institution_member_remove('megacorp', 'p100');
+        select institution_members('megacorp') into data;
+        assert json_array_length(data->'ultimate_members') = 1;
+
+        -- presence in audit tables
+        assert (select count(*) from audit_log_relations
+                where table_name = 'group_affiliations') > 0,
+            'affiliations - audit issue ';
+
+        -- group_affiliations table constraints
+        -- with itself
+        begin
+            insert into group_affiliations values ('p99-admin-group', 'p99-admin-group');
+            assert false, 'possible to affiliate a group with itself';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        -- inactive
+        begin
+            update groups set group_activated = 'f'
+                where group_name = 'p99-admin-group';
+            insert into group_affiliations values ('p99-admin-group', 'p99-weirdo-group');
+            assert false, 'possible to use inactive group as parent in affiliation';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        begin
+            update groups set group_activated = 'f'
+                where group_name = 'p99-admin-group';
+            insert into group_affiliations values ('p99-weirdo-group', 'p99-admin-group');
+            assert false, 'possible to use inactive group as child in affiliation';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        -- expired
+        begin
+            update groups set group_expiry_date = '2000-01-01'
+                where group_name = 'p99-admin-group';
+            insert into group_affiliations values ('p99-admin-group', 'p99-weirdo-group');
+            assert false, 'possible to use expired group as parent in affiliation';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        begin
+            update groups set group_expiry_date = '2000-01-01'
+                where group_name = 'p99-admin-group';
+            insert into group_affiliations values ('p99-weirdo-group', 'p99-admin-group');
+            assert false, 'possible to use expired group as child in affiliation';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        -- circular
+        begin
+            insert into group_affiliations values ('p99-weirdo-group', 'p99-admin-group');
+            insert into group_affiliations values ('p99-admin-group', 'p99-weirdo-group');
+            assert false, 'can create circular affiliations';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        -- immutable
+        begin
+            insert into group_affiliations values ('p100-admin-group', 'p99-admin-group');
+            update group_affiliations set parent_group = 'p99-weirdo-group'
+                where parent_group = 'p100-admin-group'
+                and child_group = 'p99-admin-group';
+            assert false, 'parent_group is mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        begin
+            insert into group_affiliations values ('p100-admin-group', 'p99-admin-group');
+            update group_affiliations set child_group = 'p99-weirdo-group'
+                where parent_group = 'p100-admin-group'
+                and child_group = 'p99-admin-group';
+            assert false, 'child_group is mutable';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+        -- group existence
+        begin
+            insert into group_affiliations values ('lolcat', 'lol');
+            assert false, 'non-existent groups can be used in affiliations';
+        exception when integrity_constraint_violation then
+            raise notice '%', sqlerrm;
+        end;
+
+        delete from institutions where institution_name like 'mega%';
+        delete from projects where project_number in ('p99', 'p100');
+        delete from groups where group_name like 'p99-%' or group_name like 'p100-%' or group_name = 'megacorp-admin-group';
         return true;
     end;
 $$ language plpgsql;
