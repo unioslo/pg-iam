@@ -1846,5 +1846,5 @@ drop function if exists test_audit();
 drop function if exists test_funcs();
 drop function if exists test_institutions();
 drop function if exists test_projects();
-drop function if exists test_organisations;
+drop function if exists test_organisations();
 drop function if exists test_cascading_deletes(boolean);
