@@ -5,8 +5,8 @@
 Persons -----> Users ----> Groups (class:primary,   type:user)
   -----------------------> Groups (class:primary,   type:person)
                         -> Groups (class:secondary type:generic,web)
-                            -> Groups (class:primary,secondary,web
-                                       relations: members, moderators)
+                            -> Groups (class:primary, secondary
+                                       relations: members, moderators, affiliates)
 
 Capabilities
   -> Name
@@ -24,17 +24,25 @@ Capability Grants
  -> HTTP method
  -> URI pattern
 
-Institutions -> Groups (class:secondary type:generic,web)
-Projects     -> Groups (class:secondary type:generic,web)
+Institutions -> Group (class:secondary type:institution)
+    -> Groups (class:primary, secondary
+               relations: members, affiliates)
+Projects     -> Group (class:primay type:project)
+    - Groups (class:primary, secondary
+              relation: affiliates)
 ```
 
 - `Persons`: root objects
 - `Users`: owned by `Persons`
 - `Groups`:
-    - `person` groups, class: `primary`, type: `person` and
-    - `user` groups, class: `primary`, type: `user` , automatically created, updated, deleted
-    - `generic` groups, class: `secondary`, type: `generic`
-    - `generic` groups, class: `secondary`, type: `web`, no posix ids
+    - class: `primary`, owned by other objects
+        - type: `person`, automatically created, updated, deleted
+        - type: `user`, automatically created, updated, deleted
+        - type: `project`, automatically created, updated, deleted
+    - class: `secondary`
+        - type: `institution`, automatically created, updated, deleted
+        - type: `generic`, assigned POSIX ID
+        - type: `web`, no posix ids
 - Group-to-group relations:
     - member
         - groups can be members of other groups
@@ -46,6 +54,9 @@ Projects     -> Groups (class:secondary type:generic,web)
             - can be limited to being active between specific hours on a specific day of the week
     - moderator
         - groups can moderate other groups, but not transitively or cyclically
+    - affiliates
+        - any group can be affiliated with another group
+        - not transitive
 - Activation
     - `persons`
         - a person's activation status determines their person group's status
@@ -84,9 +95,12 @@ Projects     -> Groups (class:secondary type:generic,web)
         - end date
         - maximum number of usages
 - `Institutions`
-    - generates an automatically managed secondary web group
+    - generates an automatically managed secondary institution group
+    - can have other groups as members
+    - can be have other groups as affiliates
 - `Projects`
-    - generates an automatically managed secondary web group
+    - generates an automatically managed primary project group
+    - can be have other groups as affiliates
 
 # Group membership graphs
 

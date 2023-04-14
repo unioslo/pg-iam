@@ -13,6 +13,7 @@ users
 groups
 group_memberships
 group_moderators
+group_affiliations
 capabilities_http
 capabilities_http_instances
 capabilities_http_grants
@@ -115,6 +116,18 @@ group_capabilities(group_name text)
     {group_name: '', group_capabilities: []}
 */
 
+group_affiliations(group_name text)
+/*
+    Returns:
+    {group_name: '', group_affiliations: []}
+*/
+
+group_affiliates(group_name text)
+/*
+    Returns:
+    {group_name: '', group_affiliates: []}
+*/
+
 capability_grant_rank_set(grant_id text, new_grant_rank int)
 /*
     Returns:
@@ -143,5 +156,65 @@ capability_grant_group_remove(grant_reference text, group_name text)
 /*
     Returns
     boolean
+*/
+
+institution_member_add(institution text, member text)
+/*
+    Returns
+    {message: ''}
+*/
+
+institution_member_remove(institution text, member text)
+/*
+    Returns
+    {message: ''}
+*/
+
+institution_members(institution text)
+/*
+    Returns
+    {group_name, ', group_members: []}
+*/
+
+institution_group_add(institution text, group_name text)
+/*
+    Returns
+    {message: ''}
+*/
+
+institution_group_remove(institution text, group_name text)
+/*
+    Returns
+    {message: ''}
+*/
+
+institution_groups(institution text)
+/*
+    Returns
+    {group_name: '', group_affiliates: []}
+*/
+
+project_group_add(project text, group_name text)
+/*
+    Returns
+    {message: ''}
+*/
+
+project_group_remove(project text, group_name text)
+/*
+    Returns
+    {message: ''}
+*/
+
+project_groups(proj)
+/*
+    Returns
+    {group_name: '', group_affiliates: []}
+*/
+
+project_institutions(proj)
+/*
+    Returns
+    {project: '', institutions: []}
 */
 ```
