@@ -9,8 +9,10 @@ This example will demonstrate all the features mentioned in the `README`:
 - create capabilities, specify criteria for obtaining them
 - specify the scope of the capabilities
 - data integrity and consistency, immutable columns wherever possible
-- audit log on all updates
 - use SQL functions to get authorization related information for application development
+- audit log on all updates
+- create organisational hierarchies with institutions and projects
+- affiliate groups with organisational units, and with each other
 
 # Use case 1: user access control
 
@@ -519,3 +521,200 @@ select * from audit_log_relations;
  tester   | DELETE    | 2023-03-20 21:29:23.554206+01 | group_memberships | art-group        | admin-group | 2020-01-11 00:00:00+01 | 2030-10-01 00:00:00+02 |
  tester   | INSERT    | 2023-03-20 21:29:30.534212+01 | group_memberships | art-group        | admin-group |                        |                        |
 ```
+
+# Use case 4: organisational units, and affiliations
+
+Suppose we want to organise persons, users and groups into projects, and project into institutions.
+
+We start by creating institutions and projects, and groups:
+```sql
+insert into institutions(
+    institution_name, institution_long_name, institution_expiry_date
+) values (
+    'emanate', 'emanate - from which all creativity flows', '3000-01-01'
+);
+insert into institutions(
+    institution_name, institution_long_name, institution_expiry_date
+) values (
+    'surrealism-inc', 'surrealism incorporated - commoditising your dreams', '2050-10-11'
+);
+insert into projects(
+    project_number, project_name, project_start_date, project_end_date
+) values (
+    'p0', 'project zero', '2000-12-01', '2080-01-01'
+);
+insert into projects(
+    project_number, project_name, project_start_date, project_end_date
+) values (
+    'p1', 'project one', '2002-05-18', '2080-01-01'
+);
+insert into groups (
+    group_name, group_class, group_type
+) values (
+    'surrealism-inc-admin-group', 'secondary', 'web'
+);
+insert into groups (
+    group_name, group_class, group_type
+) values (
+    'p0-admin-group', 'secondary', 'generic'
+);
+insert into groups (
+    group_name, group_class, group_type
+) values (
+    'p0-weirdo-group', 'secondary', 'generic'
+);
+```
+
+Now we can set up the institutional hierarchy:
+```sql
+select institution_member_add('emanate', 'surrealism-inc');
+select institution_member_add('surrealism-inc', 'p0');
+select institution_member_add('surrealism-inc', 'p1');
+```
+
+One can inspect the hierarchy as such:
+```txt
+select institution_members('emanate');
+
+---------------------------------------------------------
+ {                                                      +
+     "group_name": "emanate-group",                     +
+     "direct_members": [                                +
+         {                                              +
+             "group": "emanate-group",                  +
+             "activated": true,                         +
+             "constraints": {                           +
+                 "end_date": null,                      +
+                 "weekdays": null,                      +
+                 "start_date": null                     +
+             },                                         +
+             "expiry_date": "3000-01-01T00:00:00+01:00",+
+             "group_member": "surrealism-inc-group",    +
+             "primary_member": null                     +
+         }                                              +
+     ],                                                 +
+     "ultimate_members": [                              +
+         "p0",                                          +
+         "p1"                                           +
+     ],                                                 +
+     "transitive_members": [                            +
+         {                                              +
+             "group": "surrealism-inc-group",           +
+             "activated": true,                         +
+             "constraints": {                           +
+                 "end_date": null,                      +
+                 "weekdays": null,                      +
+                 "start_date": null                     +
+             },                                         +
+             "expiry_date": "2050-10-11T00:00:00+02:00",+
+             "group_member": "p0-group",                +
+             "primary_member": "p0"                     +
+         },                                             +
+         {                                              +
+             "group": "surrealism-inc-group",           +
+             "activated": true,                         +
+             "constraints": {                           +
+                 "end_date": null,                      +
+                 "weekdays": null,                      +
+                 "start_date": null                     +
+             },                                         +
+             "expiry_date": "2050-10-11T00:00:00+02:00",+
+             "group_member": "p1-group",                +
+             "primary_member": "p1"                     +
+         }                                              +
+     ]                                                  +
+ }
+```
+
+We can now affiliate groups to the institutions, and projects:
+```sql
+select institution_group_add('surrealism-inc', 'surrealism-inc-admin-group')
+select project_group_add('p0', 'p0-admin-group');
+select project_group_add('p0', 'p0-weirdo-group');
+```
+
+One can query for an overview of institution groups as such:
+```txt
+select institution_groups('surrealism-inc');
+--------------------------------------------------------
+ {                                                     +
+     "group_name": "surrealism-inc-group",             +
+     "group_affiliates": [                             +
+          {                                             +
+             "activated": true,                        +
+             "affiliate": "surrealism-inc-admin-group",+
+             "expiry_date": null                       +
+         }                                             +
+     ]                                                 +
+ }
+```
+
+One can query for an overview of project groups as such:
+```txt
+select project_groups('p0');
+---------------------------------------------
+ {                                          +
+     "group_name": "p0-group",              +
+     "group_affiliates": [                  +
+         {                                  +
+             "activated": true,             +
+             "affiliate": "p0-admin-group", +
+             "expiry_date": null            +
+         },                                 +
+         {                                  +
+             "activated": true,             +
+             "affiliate": "p0-weirdo-group",+
+             "expiry_date": null            +
+         }                                  +
+     ]                                      +
+ }
+```
+
+Suppose now we wanted to encode some relationship between two groups, such as the `surrealism-inc-admin-group` and `p0-admin-group`. The semantics of the asociation is not specified in the database (left to the application to decide). One could then affiliate them as such:
+
+```sql
+insert into group_affiliations (
+    parent_group, child_group
+) values (
+    'surrealism-inc-admin-group', 'p0-admin-group'
+);
+```
+
+It is then possible to ask for a group's affiliates as such:
+```txt
+select group_affiliates('surrealism-inc-admin-group');
+-------------------------------------------------
+ {                                              +
+     "group_name": "surrealism-inc-admin-group",+
+     "group_affiliates": [                      +
+         {                                      +
+             "activated": true,                 +
+             "affiliate": "p0-admin-group",     +
+             "expiry_date": null                +
+         }                                      +
+     ]                                          +
+ }
+```
+
+And for a group's affiliations as such:
+```txt
+select group_affiliations('p0-admin-group');
+----------------------------------------------------------
+ {                                                       +
+     "group_name": "p0-admin-group",                     +
+     "group_affiliations": [                             +
+         {                                               +
+             "activated": true,                          +
+             "affiliation": "p0-group",                  +
+             "expiry_date": "2080-01-01T00:00:00+01:00"  +
+         },                                              +
+         {                                               +
+             "activated": true,                          +
+             "affiliation": "surrealism-inc-admin-group",+
+             "expiry_date": null                         +
+         }                                               +
+     ]                                                   +
+ }
+```
+
+See `2-db-structure.md` for more functions related to institutions, and group affiliations.

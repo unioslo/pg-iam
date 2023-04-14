@@ -160,3 +160,61 @@ select jsonb_pretty(
         (select person_id::text from users where user_name = 'jm'), 't'
     )::jsonb
 );
+
+insert into institutions(
+    institution_name, institution_long_name, institution_expiry_date
+) values (
+    'emanate', 'emanate - from which all creativity flows', '3000-01-01'
+);
+insert into institutions(
+    institution_name, institution_long_name, institution_expiry_date
+) values (
+    'surrealism-inc', 'surrealism incorporated - commoditising your dreams', '2050-10-11'
+);
+insert into projects(
+    project_number, project_name, project_start_date, project_end_date
+) values (
+    'p0', 'project zero', '2000-12-01', '2080-01-01'
+);
+insert into projects(
+    project_number, project_name, project_start_date, project_end_date
+) values (
+    'p1', 'project one', '2002-05-18', '2080-01-01'
+);
+insert into groups (
+    group_name, group_class, group_type
+) values (
+    'surrealism-inc-admin-group', 'secondary', 'web'
+);
+insert into groups (
+    group_name, group_class, group_type
+) values (
+    'p0-admin-group', 'secondary', 'generic'
+);
+insert into groups (
+    group_name, group_class, group_type
+) values (
+    'p0-weirdo-group', 'secondary', 'generic'
+);
+
+select institution_member_add('emanate', 'surrealism-inc');
+select institution_member_add('surrealism-inc', 'p0');
+select institution_member_add('surrealism-inc', 'p1');
+
+select jsonb_pretty(institution_members('emanate')::jsonb);
+
+select institution_group_add('surrealism-inc', 'surrealism-inc-admin-group');
+select project_group_add('p0', 'p0-admin-group');
+select project_group_add('p0', 'p0-weirdo-group');
+
+select jsonb_pretty(institution_groups('surrealism-inc')::jsonb);
+select jsonb_pretty(project_groups('p0')::jsonb);
+
+insert into group_affiliations (
+    parent_group, child_group
+) values (
+    'surrealism-inc-admin-group', 'p0-admin-group'
+);
+
+select jsonb_pretty(group_affiliates('surrealism-inc-admin-group')::jsonb);
+select jsonb_pretty(group_affiliations('p0-admin-group')::jsonb);
