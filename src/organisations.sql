@@ -152,6 +152,55 @@ create or replace function institution_members(
 $$ language plpgsql;
 
 
+drop function if exists institution_group_add(text, text);
+create or replace function institution_group_add(
+    institution text,
+    group_name text
+) returns json as $$
+    declare inst_group text;
+    begin
+        inst_group := find_group(institution);
+        perform find_group(group_name);
+        insert into group_affiliations(
+            parent_group, child_group
+        ) values (
+            inst_group, group_name
+        );
+        return json_build_object(
+            'message', 'added ' || group_name || ' to ' || institution
+        );
+    end;
+$$ language plpgsql;
+
+
+drop function if exists institution_group_remove(text, text);
+create or replace function institution_group_remove(
+    institution text,
+    group_name text
+) returns json as $$
+    declare inst_group text;
+    begin
+        inst_group := find_group(institution);
+        perform find_group(group_name);
+        delete from group_affiliations
+            where parent_group = inst_group
+            and child_group = group_name;
+        return json_build_object(
+            'message', 'removed ' || group_name || ' from ' || institution
+        );
+    end;
+$$ language plpgsql;
+
+
+drop function if exists institution_groups(text) cascade;
+create or replace function institution_groups(institution text)
+    returns json as $$
+    begin
+        return group_affiliates(find_group(institution));
+    end;
+$$ language plpgsql;
+
+
 create table if not exists projects(
     row_id uuid unique not null default gen_random_uuid(),
     project_id uuid unique not null default gen_random_uuid(),
@@ -236,3 +285,70 @@ create trigger project_group_trigger after insert or delete or update on project
 
 create trigger projects_channel_notify after update or insert or delete on projects
     for each row execute procedure notify_listeners();
+
+
+drop function if exists project_group_add(text, text) cascade;
+create or replace function project_group_add(
+    project text,
+    group_name text
+) returns json as $$
+    declare project_group text;
+    begin
+        project_group = find_group(project);
+        perform find_group(group_name);
+        insert into group_affiliations values (project_group, group_name);
+        return json_build_object(
+            'message', 'added ' || group_name || ' to ' || project
+        );
+    end;
+$$ language plpgsql;
+
+
+drop function if exists project_group_remove(text, text) cascade;
+create or replace function project_group_remove(
+    project text,
+    group_name text
+) returns json as $$
+    declare project_group text;
+    begin
+        project_group = find_group(project);
+        perform find_group(group_name);
+        delete from group_affiliations
+            where parent_group = project_group
+            and child_group = group_name;
+        return json_build_object(
+            'message', 'removed ' || group_name || ' from ' || project
+        );
+    end;
+$$ language plpgsql;
+
+
+drop function if exists project_institutions(text) cascade;
+create or replace function project_institutions(project text)
+    returns json as $$
+    declare project_group text;
+    declare data json;
+    begin
+        project_group = find_group(project);
+        select json_agg(
+            json_build_object(
+                'institution', institution_name,
+                'institution_group', member_group_name,
+                'member', member_name
+            )
+        ) from group_get_parents(project_group)
+        left join institutions on member_group_name = institution_group into data;
+        return json_build_object('project', project, 'institutions', data);
+    end;
+$$ language plpgsql;
+
+
+drop function if exists project_groups(text) cascade;
+create or replace function project_groups(project text)
+    returns json as $$
+    declare project_group text;
+    begin
+        project_group = find_group(project);
+        return group_affiliates(project_group);
+    end;
+$$ language plpgsql;
