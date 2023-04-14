@@ -13,6 +13,7 @@ create or replace function drop_tables(drop_table_flag boolean default 'true')
             drop table if exists groups cascade;
             drop table if exists group_memberships cascade;
             drop table if exists group_moderators cascade;
+            drop table if exists group_affiliations cascade;
         else
             raise notice 'NOT dropping identities tables - only functions will be replaced';
         end if;
@@ -1004,6 +1005,78 @@ create trigger group_moderators_channel_notify after update or insert or delete 
     for each row execute procedure notify_listeners();
 
 
+create table if not exists group_affiliations(
+    parent_group text not null references groups (group_name) on delete cascade,
+    child_group text not null references groups (group_name) on delete cascade,
+    unique (parent_group, child_group)
+);
+
+drop function if exists group_affiliations_immutability() cascade;
+create or replace function group_affiliations_immutability()
+    returns trigger as $$
+    begin
+        if OLD.parent_group != NEW.parent_group then
+            raise integrity_constraint_violation
+                using message = 'parent_group is immutable';
+        elsif OLD.child_group != NEW.child_group then
+            raise integrity_constraint_violation
+                using message = 'child_group is immutable';
+        end if;
+    return new;
+    end;
+$$ language plpgsql;
+create trigger ensure_group_affiliations_immutability before update on group_affiliations
+    for each row execute procedure group_affiliations_immutability();
+
+
+drop function if exists group_affiliations_management() cascade;
+create or replace function group_affiliations_management()
+    returns trigger as $$
+    declare parent_active boolean;
+    declare parent_exp timestamptz;
+    declare child_active boolean;
+    declare child_exp timestamptz;
+    begin
+        select group_activated, group_expiry_date from groups
+            where group_name = NEW.parent_group into parent_active, parent_exp;
+        select group_activated, group_expiry_date from groups
+            where group_name = NEW.child_group into child_active, child_exp;
+        if NEW.parent_group = NEW.child_group then
+            raise integrity_constraint_violation
+            using message = 'cannot affiliate a group to itself';
+        elsif parent_active = 'f' then
+            raise integrity_constraint_violation
+            using message = 'parent group ' || NEW.parent_group || ' is inactive';
+        elsif parent_exp is not null and (parent_exp < current_date) then
+            raise integrity_constraint_violation
+            using message = 'parent group ' || NEW.parent_group || ' expired: ' || parent_exp::text;
+        elsif child_active = 'f' then
+            raise integrity_constraint_violation
+            using message = 'child group ' || NEW.child_group || ' is inactive';
+        elsif child_exp is not null and (child_exp < current_date) then
+            raise integrity_constraint_violation
+            using message = 'child group ' || NEW.child_group || ' expired: ' || child_exp::text;
+        elsif (select count(*) from group_affiliations
+               where parent_group = NEW.child_group
+               and child_group = NEW.parent_group) > 0 then
+            raise integrity_constraint_violation
+            using message = NEW.parent_group || ' is already affiliated with ' || NEW.child_group;
+        end if;
+    return new;
+    end;
+$$ language plpgsql;
+create trigger group_affiliations_management_trigger before insert or update on group_affiliations
+    for each row execute procedure group_affiliations_management();
+
+
+create trigger group_affiliations_audit after update or insert or delete on group_affiliations
+    for each row execute procedure update_audit_log_relations();
+
+
+create trigger group_affiliations_channel_notify after update or insert or delete on group_affiliations
+    for each row execute procedure notify_listeners();
+
+
 drop function if exists get_memberships(text) cascade;
 drop function if exists get_memberships(text, text) cascade;
 drop function if exists get_memberships(text, text, boolean) cascade;
@@ -1293,5 +1366,45 @@ create or replace function group_moderators(group_name text)
         (select g.group_name, g.group_activated, g.group_expiry_date
             from groups g)b on a.group_name = b.group_name into data;
         return json_build_object('group_name', group_name, 'group_moderators', data);
+    end;
+$$ language plpgsql;
+
+
+drop function if exists group_affiliates(text) cascade;
+create or replace function group_affiliates(group_name text)
+    returns json as $$
+    declare data json;
+    begin
+        select json_agg(
+            json_build_object(
+                'affiliate', child_group,
+                'activated', group_activated,
+                'expiry_date', group_expiry_date
+            )
+        ) from
+            (select parent_group, child_group, group_activated, group_expiry_date
+             from group_affiliations ga left join groups g on ga.child_group = g.group_name)a
+        where parent_group = group_name into data;
+        return json_build_object('group_name', group_name,  'group_affiliates', data);
+    end;
+$$ language plpgsql;
+
+
+drop function if exists group_affiliations(text) cascade;
+create or replace function group_affiliations(group_name text)
+    returns json as $$
+    declare data json;
+    begin
+        select json_agg(
+            json_build_object(
+                'affiliation', parent_group,
+                'activated', group_activated,
+                'expiry_date', group_expiry_date
+            )
+        ) from
+            (select parent_group, child_group, group_activated, group_expiry_date
+             from group_affiliations ga left join groups g on ga.parent_group = g.group_name)a
+        where child_group = group_name into data;
+        return json_build_object('group_name', group_name,  'group_affiliations', data);
     end;
 $$ language plpgsql;
