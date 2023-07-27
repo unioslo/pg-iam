@@ -1,5 +1,8 @@
 #!/bin/bash
 
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+PG_IAM_DIR="$(dirname ${BASH_SOURCE[0]})"
+
 if [ $# -lt 1 ]; then
     echo "Missing arguments, exiting"
     echo "For help do: ./install.sh --guide"
@@ -85,11 +88,11 @@ count_rows_in_table() {
 }
 
 fresh_install() {
-    exec_sql_file ./src/notifications.sql
-    exec_sql_file ./src/audit.sql
-    exec_sql_file ./src/identities.sql
-    exec_sql_file ./src/capabilities.sql
-    exec_sql_file ./src/organisations.sql
+    exec_sql_file $PG_IAM_DIR/src/notifications.sql
+    exec_sql_file $PG_IAM_DIR/src/audit.sql
+    exec_sql_file $PG_IAM_DIR/src/identities.sql
+    exec_sql_file $PG_IAM_DIR/src/capabilities.sql
+    exec_sql_file $PG_IAM_DIR/src/organisations.sql
     exit 0
 }
 
@@ -102,24 +105,24 @@ setup() {
 
     if [[ $FORCE == "true" ]]; then fresh_install; fi
 
-    exec_sql_file ./src/notifications.sql
+    exec_sql_file $PG_IAM_DIR/src/notifications.sql
 
     show_count "audit_log_objects"
     show_count "audit_log_relations"
-    prompt "audit" ./src/audit.sql
+    prompt "audit" $PG_IAM_DIR/src/audit.sql
 
     show_count "persons"
     show_count "users"
     show_count "groups"
-    prompt "identities" ./src/identities.sql
+    prompt "identities" $PG_IAM_DIR/src/identities.sql
 
     show_count "capabilities_http"
     show_count "capabilities_http_grants"
-    prompt "capabilities" ./src/capabilities.sql
+    prompt "capabilities" $PG_IAM_DIR/src/capabilities.sql
 
     show_count "institutions"
     show_count "projects"
-    prompt "organisations" ./src/organisations.sql
+    prompt "organisations" $PG_IAM_DIR/src/organisations.sql
 }
 
 sqltest() {
@@ -128,7 +131,7 @@ sqltest() {
 
 make_backup() {
     echo "backing up data to schema: $BU_SCHEMA"
-    exec_sql_file ./src/backup.sql
+    exec_sql_file $PG_IAM_DIR/src/backup.sql
 }
 
 export DELETE_EXISTING_DATA=false
