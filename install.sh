@@ -21,7 +21,7 @@ _guide="\
     export SUPERUSER=db-super-user-name
     export DBOWNER=db-owner-user-name
     export DBNAME=db-name
-    export DBHOST=db-host-name
+    export PGHOST=db-host-name
 
     Create a .pgpass file so you can connect to the DB.
 
@@ -77,11 +77,11 @@ prompt() {
 }
 
 exec_sql_file() {
-    psql -h $DBHOST -U $DBOWNER -d $DBNAME -1 -f $1
+    psql -U $DBOWNER -d $DBNAME -1 -f $1
 }
 
 count_rows_in_table() {
-    psql -h $DBHOST -U $DBOWNER -d $DBNAME -c "select count(*) from $1" -At
+    psql -U $DBOWNER -d $DBNAME -c "select count(*) from $1" -At
 }
 
 fresh_install() {
@@ -98,7 +98,7 @@ show_count() {
 }
 
 setup() {
-    psql -h $DBHOST -U $SUPERUSER -d $DBNAME -c "create extension pgcrypto"
+    psql -U $SUPERUSER -d $DBNAME -c "create extension pgcrypto"
 
     if [[ $FORCE == "true" ]]; then fresh_install; fi
 
