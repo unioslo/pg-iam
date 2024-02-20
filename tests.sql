@@ -10,6 +10,7 @@ create or replace function test_persons_users_groups()
     declare uid int;
     declare gid int;
     declare pgrp text;
+    declare exp timestamptz;
     begin
         insert into persons (full_name, person_expiry_date)
             values ('Sarah Conner', '2020-10-01');
@@ -176,6 +177,9 @@ create or replace function test_persons_users_groups()
 
         -- activation status
         update persons set person_activated = 'f';
+        select person_group from persons where person_id = pid into pgrp;
+        assert (select group_activated from groups where group_name = pgrp) = 'f',
+            'person activation status does not propagate to person groups';
         assert (select count(*) from users where user_activated = 't') = 0,
             'person state changes not propagating to users';
         assert (select count(*) from groups where group_activated = 't') = 0,
@@ -197,7 +201,17 @@ create or replace function test_persons_users_groups()
 
         -- expiry dates
         update persons set person_expiry_date = '2019-09-09';
+        -- expiry person group
+        select group_expiry_date from groups where group_name = pgrp into exp;
+        assert exp = '2019-09-09', 'person expiry not propagating to person group';
+        -- expiry from person to users
+        for exp in select user_expiry_date from users where person_id = pid loop
+            assert exp = '2019-09-09', 'person expiry not propagating to its users';
+        end loop;
+
         update users set user_expiry_date = '2000-08-08' where user_name like 'p11-%';
+        -- user exp restrictions
+        -- user group status
         begin
             update groups set group_expiry_date = '2000-01-01'
                 where group_primary_member = 'p11-sconne';
