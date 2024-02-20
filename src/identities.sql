@@ -258,10 +258,14 @@ create or replace function user_management()
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.user_group;
         elsif (TG_OP = 'UPDATE') then
-            if OLD.user_activated != NEW.user_activated then
+            if OLD.user_activated != NEW.user_activated or
+                (OLD.user_activated is null and NEW.user_activated is not null)
+            then
                 update groups set group_activated = NEW.user_activated where group_name = OLD.user_group;
             end if;
-            if OLD.user_expiry_date != NEW.user_expiry_date then
+            if OLD.user_expiry_date != NEW.user_expiry_date or
+                (OLD.user_expiry_date is null and NEW.user_expiry_date is not null)
+            then
                 select person_expiry_date from persons where person_id = NEW.person_id into person_exp;
                 if NEW.user_expiry_date > person_exp then
                     raise integrity_constraint_violation

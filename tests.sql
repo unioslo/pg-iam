@@ -211,7 +211,11 @@ create or replace function test_persons_users_groups()
 
         update users set user_expiry_date = '2000-08-08' where user_name like 'p11-%';
         -- user exp restrictions
-        -- user group status
+        select group_expiry_date from groups where group_name = (
+            select user_group from users where user_name = 'p11-sconne'
+        ) into exp;
+        assert exp = '2000-08-08', 'user expiry not propagating to user group';
+
         begin
             update groups set group_expiry_date = '2000-01-01'
                 where group_primary_member = 'p11-sconne';
