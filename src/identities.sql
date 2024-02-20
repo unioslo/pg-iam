@@ -104,11 +104,15 @@ create or replace function person_management()
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.person_group;
         elsif (TG_OP = 'UPDATE') then
-            if OLD.person_activated != NEW.person_activated then
+            if OLD.person_activated != NEW.person_activated or
+                (OLD.person_activated is null and NEW.person_activated is not null)
+            then
                 update users set user_activated = NEW.person_activated where person_id = OLD.person_id;
                 update groups set group_activated = NEW.person_activated where group_name = OLD.person_group;
             end if;
-            if OLD.person_expiry_date != NEW.person_expiry_date then
+            if OLD.person_expiry_date != NEW.person_expiry_date or
+                (OLD.person_expiry_date is null and NEW.person_expiry_date is not null)
+            then
                 new_pgrp := NEW.person_id || '-group';
                 update groups set group_expiry_date = NEW.person_expiry_date where group_name = new_pgrp;
                 for exp, unam in select user_expiry_date, user_name from users where person_id = NEW.person_id loop
