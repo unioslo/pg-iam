@@ -1791,13 +1791,13 @@ create or replace function test_cascading_deletes(keep_data boolean default 'fal
         -- otherwise we delete all of it, and check test_cascading_deletes
         raise info 'deleting existing data';
         delete from persons;
+        delete from institutions;
+        delete from projects;
         delete from groups;
         delete from audit_log_objects;
         delete from audit_log_relations;
         delete from capabilities_http_grants;
         delete from capabilities_http;
-        delete from institutions;
-        delete from projects;
         return true;
     end;
 $$ language plpgsql;
