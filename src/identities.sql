@@ -34,7 +34,10 @@ create table if not exists persons(
     password text,
     otp_secret text,
     email text,
-    person_metadata jsonb
+    person_metadata jsonb,
+    email_verified boolean default 'f',
+    birth_date date,
+    password_expiry timestamptz
 );
 
 
