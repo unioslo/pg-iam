@@ -1,4 +1,19 @@
 
+/*
+Migration:
+
+export SUPERUSER=
+export DBOWNER=
+export DBNAME=
+export DBHOST=
+
+./install.sh --only-replace-functions --setup
+# saying yes to all
+
+psql -U $DBOWNER -h $DBHOST -d $DBNAME -f mgrt/2.2-to-2.6.sql
+
+*/
+
 set session "session.identity" = 'db-migration';
 
 alter table group_memberships add column if not exists start_date timestamptz;
