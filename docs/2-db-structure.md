@@ -206,13 +206,13 @@ project_group_remove(project text, group_name text)
     {message: ''}
 */
 
-project_groups(proj)
+project_groups(project text)
 /*
     Returns
     {group_name: '', group_affiliates: []}
 */
 
-project_institutions(proj)
+project_institutions(project text)
 /*
     Returns
     {project: '', institutions: []}
