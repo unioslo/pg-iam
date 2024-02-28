@@ -80,11 +80,11 @@ create or replace function institution_management()
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.institution_group;
         elsif (TG_OP = 'UPDATE') then
-            if OLD.institution_activated != NEW.institution_activated then
+            if is_different(OLD.institution_activated, NEW.institution_activated) then
                 update groups set group_activated = NEW.institution_activated
                     where group_name = OLD.institution_group;
             end if;
-            if OLD.institution_expiry_date != NEW.institution_expiry_date then
+            if is_different(OLD.institution_expiry_date, NEW.institution_expiry_date) then
                 update groups set group_expiry_date = NEW.institution_expiry_date
                     where group_name = OLD.institution_group;
             end if;
@@ -268,11 +268,11 @@ create or replace function project_management()
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.project_group;
         elsif (TG_OP = 'UPDATE') then
-            if OLD.project_activated != NEW.project_activated then
+            if is_different(OLD.project_activated, NEW.project_activated) then
                 update groups set group_activated = NEW.project_activated
                     where group_name = OLD.project_group;
             end if;
-            if OLD.project_end_date != NEW.project_end_date then
+            if is_different(OLD.project_end_date, NEW.project_end_date) then
                 update groups set group_expiry_date = NEW.project_end_date
                     where group_name = OLD.project_group;
             end if;

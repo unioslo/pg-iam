@@ -23,6 +23,22 @@ $$ language plpgsql;
 select drop_tables(:drop_table_flag);
 
 
+create or replace function is_different(old anyelement, new anyelement)
+    returns boolean as $$
+    begin
+        if
+            (old is null and new is not null) or
+            (old is not null and new is null) or
+            (old != new)
+        then
+            return true;
+        else
+            return false;
+        end if;
+    end;
+$$ language plpgsql;
+
+
 create table if not exists persons(
     row_id uuid unique not null default gen_random_uuid(),
     person_id uuid unique not null primary key default gen_random_uuid(),
@@ -107,15 +123,11 @@ create or replace function person_management()
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.person_group;
         elsif (TG_OP = 'UPDATE') then
-            if OLD.person_activated != NEW.person_activated or
-                (OLD.person_activated is null and NEW.person_activated is not null)
-            then
+            if is_different(OLD.person_activated, NEW.person_activated) then
                 update users set user_activated = NEW.person_activated where person_id = OLD.person_id;
                 update groups set group_activated = NEW.person_activated where group_name = OLD.person_group;
             end if;
-            if OLD.person_expiry_date != NEW.person_expiry_date or
-                (OLD.person_expiry_date is null and NEW.person_expiry_date is not null)
-            then
+            if is_different(OLD.person_expiry_date, NEW.person_expiry_date) then
                 new_pgrp := NEW.person_id || '-group';
                 update groups set group_expiry_date = NEW.person_expiry_date where group_name = new_pgrp;
                 for exp, unam in select user_expiry_date, user_name from users where person_id = NEW.person_id loop
@@ -261,14 +273,10 @@ create or replace function user_management()
         elsif (TG_OP = 'DELETE') then
             delete from groups where group_name = OLD.user_group;
         elsif (TG_OP = 'UPDATE') then
-            if OLD.user_activated != NEW.user_activated or
-                (OLD.user_activated is null and NEW.user_activated is not null)
-            then
+            if is_different(OLD.user_activated, NEW.user_activated) then
                 update groups set group_activated = NEW.user_activated where group_name = OLD.user_group;
             end if;
-            if OLD.user_expiry_date != NEW.user_expiry_date or
-                (OLD.user_expiry_date is null and NEW.user_expiry_date is not null)
-            then
+            if is_different(OLD.user_expiry_date, NEW.user_expiry_date) then
                 select person_expiry_date from persons where person_id = NEW.person_id into person_exp;
                 if NEW.user_expiry_date > person_exp then
                     raise integrity_constraint_violation
@@ -433,8 +441,7 @@ create or replace function group_management()
     declare curr_exp timestamptz;
     declare msg text;
     begin
-        if OLD.group_activated != NEW.group_activated or
-            (OLD.group_activated is null and NEW.group_activated is not null) then
+        if is_different(OLD.group_activated, NEW.group_activated) then
             msg := 'group activation status is managed via';
             if OLD.group_type = 'person' then
                 select person_activated from persons
@@ -469,8 +476,7 @@ create or replace function group_management()
                         using message = 'project ' || msg || ' projects';
                 end if;
             end if;
-        elsif OLD.group_expiry_date != NEW.group_expiry_date or
-            (OLD.group_expiry_date is null and NEW.group_expiry_date is not null) then
+        elsif is_different(OLD.group_expiry_date, NEW.group_expiry_date) then
             msg := 'group dates are modified via modifications on';
             if OLD.group_type = 'person' then
                 select person_expiry_date from persons
