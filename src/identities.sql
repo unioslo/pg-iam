@@ -482,7 +482,7 @@ create or replace function group_management()
                 select person_expiry_date from persons
                     where person_id = OLD.group_primary_member::uuid
                     into curr_exp;
-                if NEW.group_expiry_date != curr_exp or (curr_exp is null and NEW.group_expiry_date is not null)then
+                if NEW.group_expiry_date != curr_exp or (curr_exp is null and NEW.group_expiry_date is not null) then
                     raise restrict_violation
                         using message = 'person ' || msg || ' persons';
                 end if;
