@@ -482,7 +482,7 @@ create or replace function group_management()
                 select person_expiry_date from persons
                     where person_id = OLD.group_primary_member::uuid
                     into curr_exp;
-                if NEW.group_expiry_date != curr_exp or curr_exp is null then
+                if NEW.group_expiry_date != curr_exp or (curr_exp is null and NEW.group_expiry_date is not null)then
                     raise restrict_violation
                         using message = 'person ' || msg || ' persons';
                 end if;
@@ -490,7 +490,7 @@ create or replace function group_management()
                 select user_expiry_date from users
                     where user_name = OLD.group_primary_member
                     into curr_exp;
-                if NEW.group_expiry_date != curr_exp or curr_exp is null then
+                if NEW.group_expiry_date != curr_exp or (curr_exp is null and NEW.group_expiry_date is not null) then
                     raise restrict_violation
                         using message = 'user ' || msg || ' users';
                 end if;
@@ -498,7 +498,7 @@ create or replace function group_management()
                 select institution_expiry_date from institutions
                     where institution_group = OLD.group_name
                     into curr_exp;
-                if NEW.group_expiry_date != curr_exp or curr_exp is null then
+                if NEW.group_expiry_date != curr_exp or (curr_exp is null and NEW.group_expiry_date is not null) then
                     raise restrict_violation
                         using message = 'institution ' || msg || ' institutions';
                 end if;
@@ -506,7 +506,7 @@ create or replace function group_management()
                 select project_end_date from projects
                     where project_group = OLD.group_name
                     into curr_exp;
-                if NEW.group_expiry_date != curr_exp or curr_exp is null then
+                if NEW.group_expiry_date != curr_exp or (curr_exp is null and NEW.group_expiry_date is not null) then
                     raise restrict_violation
                         using message = 'project ' || msg || ' projects';
                 end if;
