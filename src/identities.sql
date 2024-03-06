@@ -157,8 +157,8 @@ create or replace function generate_new_posix_id(table_name text, colum_name tex
     declare current_max_id int;
     declare new_id int;
     begin
-        execute format('select max(%I) from %I',
-            quote_ident(colum_name), quote_ident(table_name))
+        execute format('select max(new_data::int) from %I where column_name = %s',
+            quote_ident(table_name), quote_literal(colum_name))
             into current_max_id;
         if current_max_id is null then
             new_id := 1000;
@@ -179,7 +179,7 @@ create or replace function generate_new_posix_uid()
     returns int as $$
     declare new_uid int;
     begin
-        select generate_new_posix_id('users', 'user_posix_uid') into new_uid;
+        select generate_new_posix_id('audit_log_objects_users', 'user_posix_uid') into new_uid;
         return new_uid;
     end;
 $$ language plpgsql;
@@ -299,7 +299,7 @@ create or replace function generate_new_posix_gid()
     returns int as $$
     declare new_gid int;
     begin
-        select generate_new_posix_id('groups', 'group_posix_gid') into new_gid;
+        select generate_new_posix_id('audit_log_objects_groups', 'group_posix_gid') into new_gid;
         return new_gid;
     end;
 $$ language plpgsql;
