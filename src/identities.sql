@@ -328,7 +328,7 @@ drop function if exists posix_gid() cascade;
 create or replace function posix_gid()
     returns trigger as $$
     begin
-        if NEW.group_type not in ('person', 'web') then
+        if NEW.group_type not in ('person', 'web', 'project', 'institution') then
             if NEW.group_posix_gid is null then
                 -- only auto select if nothing is provided
                 -- to enable the transition historical data
