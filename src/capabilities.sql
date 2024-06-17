@@ -502,10 +502,6 @@ create or replace function capability_grant_group_add(grant_reference text, grou
             perform grant_reference::uuid;
             select capability_grant_required_groups from capabilities_http_grants
                 where capability_grant_id = grant_reference::uuid into current;
-            if current is null then
-                raise invalid_parameter_value
-                using message = 'not found: ' || grant_reference;
-            end if;
             select array_append(current, group_name) into new;
             update capabilities_http_grants set capability_grant_required_groups = new
                 where capability_grant_id = grant_reference::uuid;
@@ -535,10 +531,6 @@ create or replace function capability_grant_group_remove(grant_reference text, g
             perform grant_reference::uuid;
             select capability_grant_required_groups from capabilities_http_grants
                 where capability_grant_id = grant_reference::uuid into current;
-            if current is null then
-                raise invalid_parameter_value
-                using message = 'not found: ' || grant_reference;
-            end if;
             select array_remove(current, group_name) into new;
             if cardinality(new) = 0 then new := null; end if;
             update capabilities_http_grants set capability_grant_required_groups = new
