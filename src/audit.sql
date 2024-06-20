@@ -90,7 +90,11 @@ create or replace function update_audit_log_objects()
         loop
             execute format('select ($1).%s::text', colname) using OLD into old_data;
             execute format('select ($1).%s::text', colname) using NEW into new_data;
-            if old_data != new_data or (old_data is null and new_data is not null) then
+            if
+                old_data != new_data
+                or (old_data is null and new_data is not null)
+                or (new_data is null and old_data is not null)
+            then
                 insert into audit_log_objects (identity, operation, table_name, row_id, column_name, old_data, new_data)
                     values (session_identity, TG_OP, table_name, NEW.row_id, colname, old_data, new_data);
             end if;
