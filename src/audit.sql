@@ -93,7 +93,7 @@ create or replace function update_audit_log_objects()
             if
                 old_data != new_data
                 or (old_data is null and new_data is not null)
-                or (new_data is null and old_data is not null)
+                or (new_data is null and old_data is not null and TG_OP != 'DELETE')
             then
                 insert into audit_log_objects (identity, operation, table_name, row_id, column_name, old_data, new_data)
                     values (session_identity, TG_OP, table_name, NEW.row_id, colname, old_data, new_data);
