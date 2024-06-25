@@ -68,7 +68,18 @@ create or replace function notify_listeners()
                 subject = operation || ':' || OLD.*;
             end if;
         end if;
-        perform pg_notify(channel_name, subject);
+        begin
+            perform pg_notify(channel_name, subject);
+        exception when invalid_parameter_value then
+            -- len(payload) > 8000 (default char limit for notify)
+            raise notice 'payload too large: %', subject;
+            if operation in ('INSERT', 'UPDATE') then
+                subject = operation || ':' || NEW.row_id;
+            else
+                subject = operation || ':' || OLD.row_id;
+            end if;
+            perform pg_notify(channel_name, subject);
+        end;
         return new;
     end;
 $$ language plpgsql;
