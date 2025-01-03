@@ -271,6 +271,64 @@ create or replace function test_persons_users_groups()
     end;
 $$ language plpgsql;
 
+create or replace function test_posix_with_missing_audit_log()
+    returns boolean as $$
+    declare
+        pid uuid;
+        uid int;
+        gid int;
+        next_uid int;
+        next_gid int;
+    begin
+        -- Insert a new person
+        insert into persons (full_name)
+            values ('Rumpus McFowl') returning person_id into pid;
+
+        -- Insert a user for this person
+        insert into users (person_id, user_name)
+            values (pid, 'p11-jubalon')
+            returning user_posix_uid into uid;
+
+        -- Insert user primary group ID into gid variable
+        select user_group_posix_gid from users where person_id = pid into gid;
+
+        -- Debug output
+        raise notice 'Create user for % with uid = %, gid = %', pid, uid, gid;
+
+        -- Retrieve the next available POSIX UID
+        select generate_new_posix_uid() into next_uid;
+        assert next_uid = (uid + 1);
+
+        -- Delete the corresponding audit log entry
+        delete from audit_log_objects_users where new_data = uid::text;
+
+        -- Assert that the generated UID is as expected
+        if (select generate_new_posix_uid() != next_uid) then
+            raise exception 'UID generation not verifying whether ID in use';
+        end if;
+
+        -- Output the results
+        raise notice 'Test passed: uid = %, new_posix_uid = %', uid, generate_new_posix_uid();
+
+
+        -- Retrieve the next available POSIX GID
+        select generate_new_posix_gid() into next_gid;
+        assert next_gid = (gid + 1);
+
+        -- Delete the corresponding audit log entry
+        delete from audit_log_objects_groups where new_data = gid::text;
+
+        -- Assert that the generated UID is as expected
+        if (select generate_new_posix_gid() != next_gid) then
+            raise exception 'GID generation not verifying whether ID in use';
+        end if;
+
+        -- Output the results
+        raise notice 'Test passed: gid = %, new_posix_gid = %', gid, generate_new_posix_gid();
+
+        return true;
+    end;
+$$ language plpgsql;
 
 create or replace function test_group_memeberships_moderators()
     returns boolean as $$
@@ -1844,6 +1902,7 @@ $$ language plpgsql;
 
 select check_no_data(:del_data);
 select test_persons_users_groups();
+select test_posix_with_missing_audit_log();
 select test_group_memeberships_moderators();
 select test_group_membership_constraints();
 select test_capabilities_http();
