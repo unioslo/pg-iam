@@ -155,11 +155,13 @@ create trigger persons_channel_notify after insert or delete or update on person
 create or replace function generate_new_posix_id(
     table_name text,
     colum_name text,
+    objects_table text,
     start_id int default 1000
 )
     returns int as $$
     declare current_max_id int;
     declare new_id int;
+    declare column_exists boolean;
     begin
         execute format('select max(new_data::int) from %I where column_name = %s',
             quote_ident(table_name), quote_literal(colum_name))
@@ -171,7 +173,16 @@ create or replace function generate_new_posix_id(
         else
             new_id := current_max_id + 1;
         end if;
-        return new_id;
+        loop
+            execute format('select 1 from %I where %I = %s',
+                quote_ident(objects_table), quote_ident(colum_name), quote_literal(new_id))
+                into column_exists;
+            if column_exists then
+                new_id := new_id + 1;
+            else
+                return new_id;
+            end if;
+        end loop;
     end;
 $$ language plpgsql;
 
@@ -179,22 +190,12 @@ $$ language plpgsql;
 -- cannot drop this since default value of column depends on it
 -- so we always only replace it, unless all tables are dropped
 -- in which case we will recreate the default value anyways
-create or replace function generate_new_posix_uid(start_id int default 1000)
+create or replace function generate_new_posix_uid()
     returns int as $$
     declare new_uid int;
     begin
-        loop
-            -- Generate a new POSIX UID using start_id
-            select generate_new_posix_id('audit_log_objects_users', 'user_posix_uid', start_id) into new_uid;
-
-            -- Verify the new_uid has not been used anywhere and return
-            if not exists (select 1 from users where user_posix_uid = new_uid) then
-                return new_uid;
-            end if;
-
-            -- The value in new_uid is used elsewhere, increment start_id
-            start_id := new_uid + 1;
-        end loop;
+        select generate_new_posix_id('audit_log_objects_users', 'user_posix_uid', 'users') into new_uid;
+        return new_uid;
     end;
 $$ language plpgsql;
 
@@ -309,22 +310,12 @@ create trigger user_group_trigger after insert or delete or update on users
 -- cannot drop this since default value of column depends on it
 -- so we always only replace it, unless all tables are dropped
 -- in which case we will recreate the default value anyways
-create or replace function generate_new_posix_gid(start_id int default 1000)
+create or replace function generate_new_posix_gid()
     returns int as $$
     declare new_gid int;
     begin
-        loop
-            -- Generate a new POSIX GID using start_id
-            select generate_new_posix_id('audit_log_objects_groups', 'group_posix_gid', start_id) into new_gid;
-
-            -- Verify the new_gid has not been used anywhere and return
-            if not exists (select 1 from groups where group_posix_gid = new_gid) then
-                return new_gid;
-            end if;
-
-            -- The value in new_gid is used elsewhere, increment start_id
-            start_id := new_gid + 1;
-        end loop;
+        select generate_new_posix_id('audit_log_objects_groups', 'group_posix_gid', 'groups') into new_gid;
+        return new_gid;
     end;
 $$ language plpgsql;
 
