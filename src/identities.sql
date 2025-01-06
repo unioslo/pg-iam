@@ -161,7 +161,7 @@ create or replace function generate_new_posix_id(
     returns int as $$
     declare current_max_id int;
     declare new_id int;
-    declare column_exists boolean;
+    declare posix_id_in_use boolean;
     begin
         execute format('select max(new_data::int) from %I where column_name = %s',
             quote_ident(table_name), quote_literal(colum_name))
@@ -176,8 +176,8 @@ create or replace function generate_new_posix_id(
         loop
             execute format('select 1 from %I where %I = %s',
                 quote_ident(objects_table), quote_ident(colum_name), quote_literal(new_id))
-                into column_exists;
-            if column_exists then
+                into posix_id_in_use;
+            if posix_id_in_use then
                 new_id := new_id + 1;
             else
                 return new_id;
