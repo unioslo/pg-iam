@@ -93,6 +93,7 @@ fresh_install() {
     exec_sql_file $PG_IAM_DIR/src/identities.sql
     exec_sql_file $PG_IAM_DIR/src/capabilities.sql
     exec_sql_file $PG_IAM_DIR/src/organisations.sql
+    exec_sql_file $PG_IAM_DIR/src/clients.sql
     exit 0
 }
 
@@ -123,6 +124,10 @@ setup() {
     show_count "institutions"
     show_count "projects"
     prompt "organisations" $PG_IAM_DIR/src/organisations.sql
+
+    show_count "clients"
+    show_count "client_ips"
+    prompt "clients" $PG_IAM_DIR/src/clients.sql
 }
 
 sqltest() {
