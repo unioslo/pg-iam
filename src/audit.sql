@@ -45,7 +45,10 @@ create table if not exists audit_log_objects_institutions
     partition of audit_log_objects for values in ('institutions');
 create table if not exists audit_log_objects_projects
     partition of audit_log_objects for values in ('projects');
-
+create table if not exists audit_log_objects_clients
+    partition of audit_log_objects for values in ('clients');
+create table if not exists audit_log_objects_client_ips
+    partition of audit_log_objects for values in ('client_ips');
 
 create table if not exists audit_log_relations(
     identity text default null,
