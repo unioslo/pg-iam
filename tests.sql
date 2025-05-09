@@ -1854,6 +1854,40 @@ create or replace function test_organisations()
 $$ language plpgsql;
 
 
+create or replace function test_clients()
+    returns boolean as $$
+    begin
+        insert into clients (
+            client_id, client_name
+        ) values (
+            'random-value-123', 'eka-pada-koundinyasana'
+        );
+
+        -- check most important default values
+        assert (select verified from clients) = 0, 'client verified by default';
+        assert (select acrs_allowed from clients) = '{level3}', 'wrong defaut acrs';
+        assert (select allow_expired_password from clients) = 'f', 'client can use expired password by default';
+
+        insert into client_ips (
+            address_range, comment, expiry_date
+        ) values (
+            '129.240.0.0/16', 'uio address range', '2030-01-01'
+        );
+
+        -- deleting a client removes it from the used_by list
+        update client_ips set used_by = array['random-value-123'];
+        delete from clients where client_id = 'random-value-123';
+        assert (select used_by from client_ips) = '{}', 'client ID not removed from client_ips upon deletion';
+
+        -- audit data
+        assert (select count(*) from audit_log_objects where table_name = 'clients') > 0, 'clients not being audited';
+        assert (select count(*) from audit_log_objects where table_name = 'client_ips') > 0, 'client_ips not being audited';
+
+        return true;
+    end;
+$$ language plpgsql;
+
+
 create or replace function test_cascading_deletes(keep_data boolean default 'false')
     returns boolean as $$
     begin
@@ -1874,6 +1908,8 @@ create or replace function test_cascading_deletes(keep_data boolean default 'fal
         delete from audit_log_relations;
         delete from capabilities_http_grants;
         delete from capabilities_http;
+        delete from clients;
+        delete from client_ips;
         return true;
     end;
 $$ language plpgsql;
@@ -1895,6 +1931,8 @@ create or replace function check_no_data(del_existing boolean default 'false')
         assert (select count(*) from capabilities_http_grants) = 0, 'capabilities_http_grants not empty';
         assert (select count(*) from institutions) = 0, 'institutions not empty';
         assert (select count(*) from projects) = 0, 'projects not empty';
+        assert (select count(*) from clients) = 0, 'clients not empty';
+        assert (select count(*) from client_ips) = 0, 'client_ips not empty';
         return true;
     end;
 $$ language plpgsql;
@@ -1912,6 +1950,7 @@ select test_funcs();
 select test_institutions();
 select test_projects();
 select test_organisations();
+select test_clients();
 select test_cascading_deletes(:keep_test);
 
 drop function if exists check_no_data(boolean);
@@ -1924,4 +1963,5 @@ drop function if exists test_funcs();
 drop function if exists test_institutions();
 drop function if exists test_projects();
 drop function if exists test_organisations();
+drop function if exists test_clients();
 drop function if exists test_cascading_deletes(boolean);
