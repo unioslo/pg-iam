@@ -30,6 +30,10 @@ Institutions -> Group (class:secondary type:institution)
 Projects     -> Group (class:primay type:project)
     - Groups (class:primary, secondary
               relation: affiliates)
+
+Clients
+
+Client IPs
 ```
 
 - `Persons`: root objects
@@ -79,7 +83,7 @@ Projects     -> Group (class:primay type:project)
     - capabilities are linked to grants on resources
     - access control is therefore managed through group membership
 - `Capability Instances`
-  - parameterised Capabilities, for use in generation of capability URLs
+    - parameterised Capabilities, for use in generation of capability URLs
 - `Capability Grants`
     - grant are grouped into sets
     - grant sets are defined by:
@@ -101,6 +105,10 @@ Projects     -> Group (class:primay type:project)
 - `Projects`
     - generates an automatically managed primary project group
     - can be have other groups as affiliates
+- `Clients`
+    - API clients, and their attributes
+- `Client IPs`
+    - IP access lists for managing API access, not necessarily tied to specific clients
 
 # Group membership graphs
 
