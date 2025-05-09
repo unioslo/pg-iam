@@ -14,6 +14,8 @@ A generic database backend for use in IAM APIs.
 - specify the scope of the capabilities
 - create organisational units and hierarchies with institutions, and projects
 - affiliate groups with institutions and projects
+- define API clients, for integrations such as OIDC
+- manage IP access lists
 - data integrity and consistency, immutable columns wherever possible
 - audit log on all inserts, updates, and deletes
 - SQL functions for simplified application development
