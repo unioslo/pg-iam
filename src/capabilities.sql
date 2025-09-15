@@ -225,6 +225,7 @@ create table if not exists capabilities_http_grants(
     capability_grant_max_num_usages int check (capability_grant_max_num_usages >= 0),
     capability_grant_group_existence_check boolean default 't',
     capability_grant_metadata jsonb,
+    capability_grant_static boolen default 'f',
     unique (capability_grant_namespace,
             capability_grant_http_method,
             capability_grant_rank)
