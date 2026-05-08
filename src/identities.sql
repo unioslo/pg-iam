@@ -194,6 +194,10 @@ create or replace function generate_new_posix_uid()
     returns int as $$
     declare new_uid int;
     begin
+        -- Serialize UID allocation globally across all transactions
+        -- Lock namespace 1000 (POSIX ID allocation), resource 1 (UID)
+        PERFORM pg_advisory_xact_lock(1000, 1);
+
         select generate_new_posix_id('audit_log_objects_users', 'user_posix_uid', 'users') into new_uid;
         return new_uid;
     end;
@@ -314,6 +318,10 @@ create or replace function generate_new_posix_gid()
     returns int as $$
     declare new_gid int;
     begin
+        -- Serialize GID allocation globally across all transactions
+        -- Lock namespace 1000 (POSIX ID allocation), resource 2 (GID)
+        PERFORM pg_advisory_xact_lock(1000, 2);
+
         select generate_new_posix_id('audit_log_objects_groups', 'group_posix_gid', 'groups') into new_gid;
         return new_gid;
     end;
