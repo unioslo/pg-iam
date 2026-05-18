@@ -203,15 +203,29 @@ $$ language plpgsql;
 drop function if exists posix_uid() cascade;
 create or replace function posix_uid()
     returns trigger as $$
+    declare
+        next_auto_uid int;
     begin
         -- Serialize UID allocation globally across all transactions
         -- Lock namespace 1000 (POSIX ID allocation), resource 1 (UID)
         -- Acquired BEFORE checking if manual vs auto to protect both paths
         PERFORM pg_advisory_xact_lock(1000, 1);
 
+        -- Get next auto-generated UID (used for both auto assignment and manual validation)
+        select generate_new_posix_uid() into next_auto_uid;
+
         if NEW.user_posix_uid is null then
-            -- Only auto-generate if nothing is provided
-            select generate_new_posix_uid() into NEW.user_posix_uid;
+            -- Auto assignment: use the generated value
+            NEW.user_posix_uid := next_auto_uid;
+        else
+            -- Manual assignment: validate it's not beyond the next auto-generated ID
+            -- If next_auto_uid = 1000, the audit log is empty and we allow any value >= 1000
+            -- If next_auto_uid > 1000, the audit log has data and we reject manual value > next_auto_uid
+            if NEW.user_posix_uid > next_auto_uid and next_auto_uid > 1000 then
+                raise exception 'Manual UID assignment cannot exceed the next auto-generated ID. Next auto-generated UID would be %. Requested UID % is too high. Use auto-generation (NULL) or specify a UID within the existing range.',
+                    next_auto_uid, NEW.user_posix_uid;
+            end if;
+            -- Check constraint already enforces > 999
         end if;
         return new;
     end;
@@ -362,6 +376,8 @@ create table if not exists groups(
 drop function if exists posix_gid() cascade;
 create or replace function posix_gid()
     returns trigger as $$
+    declare
+        next_auto_gid int;
     begin
         if NEW.group_type not in ('person', 'web', 'project', 'institution') then
             -- Serialize GID allocation globally across all transactions
@@ -369,11 +385,21 @@ create or replace function posix_gid()
             -- Acquired BEFORE checking if manual vs auto to protect both paths
             PERFORM pg_advisory_xact_lock(1000, 2);
 
+            -- Get next auto-generated GID (used for both auto assignment and manual validation)
+            select generate_new_posix_gid() into next_auto_gid;
+
             if NEW.group_posix_gid is null then
-                -- only auto select if nothing is provided
-                -- to enable the transition historical data
-                -- risk: possibility to generate holes
-                select generate_new_posix_gid() into NEW.group_posix_gid;
+                -- Auto assignment: use the generated value
+                NEW.group_posix_gid := next_auto_gid;
+            else
+                -- Manual assignment: validate it's not beyond the next auto-generated ID
+                -- If next_auto_gid = 1000, the audit log is empty and we allow any value >= 1000
+                -- If next_auto_gid > 1000, the audit log has data and we reject manual value > next_auto_gid
+                if NEW.group_posix_gid > next_auto_gid and next_auto_gid > 1000 then
+                    raise exception 'Manual GID assignment cannot exceed the next auto-generated ID. Next auto-generated GID would be %. Requested GID % is too high. Use auto-generation (NULL) or specify a GID within the existing range.',
+                        next_auto_gid, NEW.group_posix_gid;
+                end if;
+                -- Check constraint already enforces > 999
             end if;
         else
             NEW.group_posix_gid := null;
