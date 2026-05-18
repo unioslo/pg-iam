@@ -330,6 +330,219 @@ create or replace function test_posix_with_missing_audit_log()
     end;
 $$ language plpgsql;
 
+create or replace function test_posix_id_allocation()
+    returns boolean as $$
+    declare
+        test_person_id uuid;
+        uid1 int;
+        uid2 int;
+        uid_manual int;
+        uid_after_manual int;
+        uid_txn1 int;
+        uid_txn2 int;
+        uid_txn3 int;
+        gid1 int;
+        gid2 int;
+        gid_manual int;
+        gid_after_manual int;
+        gid_txn1 int;
+        gid_txn2 int;
+        gid_txn3 int;
+        gid_gap int;
+        max_uid int;
+        max_gid int;
+    begin
+        raise notice 'POSIX UID allocation tests...';
+
+        -- Create test person
+        insert into persons (full_name) values ('Ludwig Von Drake')
+            returning person_id into test_person_id;
+
+        -- Auto-generated UIDs are consecutive
+        insert into users (person_id, user_name)
+            values (test_person_id, 'p11-ludwig')
+            returning user_posix_uid into uid1;
+
+        insert into users (person_id, user_name)
+            values (test_person_id, 'p11-vdrake')
+            returning user_posix_uid into uid2;
+
+        assert uid2 = uid1 + 1, 'Auto-generated UIDs should be consecutive';
+        raise notice 'Test passed: auto-generated UIDs are consecutive: % -> %', uid1, uid2;
+
+        -- Manual UID assignment
+        select coalesce(max(user_posix_uid), 1000) + 5 from users into uid_manual;
+
+        insert into users (person_id, user_name, user_posix_uid)
+            values (test_person_id, 'p1337-ludwig', uid_manual);
+
+        raise notice 'Test passed: manual UID assignment successful: %', uid_manual;
+
+        -- Auto-generation after manual insert skips used IDs
+        insert into users (person_id, user_name)
+            values (test_person_id, 'p1337-ludwigvd')
+            returning user_posix_uid into uid_after_manual;
+
+        assert uid_after_manual = uid_manual + 1,
+            format('Auto-gen after manual should skip: expected %s, got %s',
+                   uid_manual + 1, uid_after_manual);
+        raise notice 'Test passed: auto-generated after manual UID skips correctly: %', uid_after_manual;
+
+        -- Uniqueness constraint prevents duplicates
+        begin
+            insert into users (person_id, user_name, user_posix_uid)
+                values (test_person_id, 'p11-theprofessor', uid1);
+            assert false, 'Should not allow duplicate UID';
+        exception
+            when unique_violation then
+                raise notice 'Test passed: unique constraint prevents duplicate UIDs';
+        end;
+
+        -- UID check constraint (must be > 999)
+        begin
+            insert into users (person_id, user_name, user_posix_uid)
+                values (test_person_id, 'p11-fethry', 64);
+            assert false, 'Should not allow UID < 1000';
+        exception
+            when check_violation then
+                raise notice 'Test passed: check constraint prevents UID < 1000';
+        end;
+
+        -- Multiple inserts in one transaction (reentrant locks)
+        insert into users (person_id, user_name)
+            values (test_person_id, 'p11-ludwig1')
+            returning user_posix_uid into uid_txn1;
+
+        insert into users (person_id, user_name)
+            values (test_person_id, 'p11-ludwig2')
+            returning user_posix_uid into uid_txn2;
+
+        insert into users (person_id, user_name)
+            values (test_person_id, 'p11-ludwig3')
+            returning user_posix_uid into uid_txn3;
+
+        assert uid_txn2 = uid_txn1 + 1 and uid_txn3 = uid_txn2 + 1,
+            'Multiple inserts in transaction should be consecutive';
+        raise notice 'Test passed: multiple UIDs in transaction are consecutive: %, %, %',
+            uid_txn1, uid_txn2, uid_txn3;
+
+        raise notice 'POSIX GID allocation tests...';
+
+        -- Auto-generated GIDs are consecutive
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-duckburg-group', 'secondary', 'generic')
+            returning group_posix_gid into gid1;
+
+        insert into groups (group_name, group_class, group_type)
+            values ('p1337-duckburg-group', 'secondary', 'generic')
+            returning group_posix_gid into gid2;
+
+        assert gid2 = gid1 + 1, 'Auto-generated GIDs should be consecutive';
+        raise notice 'Test passed: auto-generated GIDs are consecutive: % -> %', gid1, gid2;
+
+        -- Manual GID assignment
+        select coalesce(max(group_posix_gid), 1000) + 5 from groups into gid_manual;
+
+        insert into groups (group_name, group_class, group_type, group_posix_gid)
+            values ('p11-moneybin-group', 'secondary', 'generic', gid_manual);
+
+        raise notice 'Test passed: manual GID assignment successful: %', gid_manual;
+
+        -- Auto-generation after manual insert skips used IDs
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-gearloose-group', 'secondary', 'generic')
+            returning group_posix_gid into gid_after_manual;
+
+        assert gid_after_manual = gid_manual + 1,
+            format('Auto-generation after manual should skip: expected %s, got %s',
+                   gid_manual + 1, gid_after_manual);
+        raise notice 'Test passed: auto-gen after manual GID skips correctly: %', gid_after_manual;
+
+        -- Uniqueness constraint prevents duplicates
+        begin
+            insert into groups (group_name, group_class, group_type, group_posix_gid)
+                values ('p11-klondike-group', 'secondary', 'generic', gid1);
+            assert false, 'Should not allow duplicate GID';
+        exception
+            when unique_violation then
+                raise notice 'Test passed: unique constraint prevents duplicate GIDs';
+        end;
+
+        -- GID check constraint (must be > 999)
+        begin
+            insert into groups (group_name, group_class, group_type, group_posix_gid)
+                values ('p11-despell-group', 'secondary', 'generic', 500);
+            assert false, 'Should not allow GID < 1000';
+        exception
+            when check_violation then
+                raise notice 'Test passed: check constraint prevents GID < 1000';
+        end;
+
+        -- Certain group types should not get GIDs
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-duckperson-group', 'primary', 'person')
+            returning group_posix_gid into gid_manual;
+
+        assert gid_manual is null, 'person type groups should not get GIDs';
+        raise notice 'Test passed: person/web/project/institution groups do not get GIDs';
+
+        -- Multiple inserts in one transaction
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-huey-group', 'secondary', 'generic')
+            returning group_posix_gid into gid_txn1;
+
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-dewey-group', 'secondary', 'generic')
+            returning group_posix_gid into gid_txn2;
+
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-louie-group', 'secondary', 'generic')
+            returning group_posix_gid into gid_txn3;
+
+        assert gid_txn2 = gid_txn1 + 1 and gid_txn3 = gid_txn2 + 1,
+            'Multiple inserts in transaction should be consecutive';
+        raise notice 'Test passed: multiple GIDs in transaction are consecutive: %, %, %',
+            gid_txn1, gid_txn2, gid_txn3;
+
+        raise notice 'Testing gap handling...';
+
+        -- Gap handling - auto-generation doesn't backfill
+        -- Get current max to avoid conflicts with previous test data
+        select coalesce(max(group_posix_gid), 1000) from groups into max_gid;
+
+        insert into groups (group_name, group_class, group_type, group_posix_gid)
+            values ('p1337-glomgold-group', 'secondary', 'generic', max_gid + 100);
+
+        insert into groups (group_name, group_class, group_type, group_posix_gid)
+            values ('p1337-gladstone-group', 'secondary', 'generic', max_gid + 105);
+
+        insert into groups (group_name, group_class, group_type)
+            values ('p1337-gusgoose-group', 'secondary', 'generic')
+            returning group_posix_gid into gid_gap;
+
+        assert gid_gap = max_gid + 106, format('Should skip to %s, got %s', max_gid + 106, gid_gap);
+        raise notice 'Test passed: auto-generation skips gaps expectedly: %', gid_gap;
+
+        -- Manually fill a gap
+        insert into groups (group_name, group_class, group_type, group_posix_gid)
+            values ('p11-glomgold-group', 'secondary', 'generic', max_gid + 102);
+
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-gladstone-group', 'secondary', 'generic')
+            returning group_posix_gid into gid_gap;
+
+        assert gid_gap = max_gid + 107, format('Should continue from max, got %s', gid_gap);
+        raise notice 'Test passed: auto-generation continues from audit max: %', gid_gap;
+
+        -- Cleanup
+        delete from persons where full_name = 'Ludwig Von Drake';
+        delete from groups where (group_name like 'p11-%' or group_name like 'p1337-%')
+            and group_class = 'secondary';
+
+        return true;
+    end;
+$$ language plpgsql;
+
 create or replace function test_group_memeberships_moderators()
     returns boolean as $$
     declare pid uuid;
@@ -1941,6 +2154,7 @@ $$ language plpgsql;
 select check_no_data(:del_data);
 select test_persons_users_groups();
 select test_posix_with_missing_audit_log();
+select test_posix_id_allocation();
 select test_group_memeberships_moderators();
 select test_group_membership_constraints();
 select test_capabilities_http();
@@ -1955,6 +2169,8 @@ select test_cascading_deletes(:keep_test);
 
 drop function if exists check_no_data(boolean);
 drop function if exists test_persons_users_groups();
+drop function if exists test_posix_with_missing_audit_log();
+drop function if exists test_posix_id_allocation();
 drop function if exists test_group_memeberships_moderators();
 drop function if exists test_group_membership_constraints();
 drop function if exists test_capabilities_http();
