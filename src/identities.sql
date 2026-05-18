@@ -318,10 +318,6 @@ create or replace function generate_new_posix_gid()
     returns int as $$
     declare new_gid int;
     begin
-        -- Serialize GID allocation globally across all transactions
-        -- Lock namespace 1000 (POSIX ID allocation), resource 2 (GID)
-        PERFORM pg_advisory_xact_lock(1000, 2);
-
         select generate_new_posix_id('audit_log_objects_groups', 'group_posix_gid', 'groups') into new_gid;
         return new_gid;
     end;
@@ -352,6 +348,11 @@ create or replace function posix_gid()
     returns trigger as $$
     begin
         if NEW.group_type not in ('person', 'web', 'project', 'institution') then
+            -- Serialize GID allocation globally across all transactions
+            -- Lock namespace 1000 (POSIX ID allocation), resource 2 (GID)
+            -- Acquired BEFORE checking if manual vs auto to protect both paths
+            PERFORM pg_advisory_xact_lock(1000, 2);
+
             if NEW.group_posix_gid is null then
                 -- only auto select if nothing is provided
                 -- to enable the transition historical data
