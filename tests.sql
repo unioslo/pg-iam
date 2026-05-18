@@ -54,12 +54,17 @@ create or replace function test_persons_users_groups()
         exception when integrity_constraint_violation then
             raise notice '%', sqlerrm;
         end;
-        insert into users (person_id, user_name, user_expiry_date, user_group_posix_gid)
-            values (pid, 'p89-sconne', '2019-12-01', 9001);
-        assert (select group_posix_gid from groups where group_name = 'p89-sconne-group') = 9001,
-            'cannot explicitly set user gid';
-        assert (select user_group_posix_gid from users where user_group = 'p89-sconne-group') = 9001,
-            'user group gids are nor being synced to the users table';
+        -- test explicit user_group_posix_gid assignment
+        declare explicit_gid int;
+        begin
+            select generate_new_posix_gid() into explicit_gid;
+            insert into users (person_id, user_name, user_expiry_date, user_group_posix_gid)
+                values (pid, 'p89-sconne', '2019-12-01', explicit_gid);
+            assert (select group_posix_gid from groups where group_name = 'p89-sconne-group') = explicit_gid,
+                'cannot explicitly set user gid';
+            assert (select user_group_posix_gid from users where user_group = 'p89-sconne-group') = explicit_gid,
+                'user group gids are nor being synced to the users table';
+        end;
 
         -- person identifiers uniqueness
         begin
