@@ -354,12 +354,44 @@ create or replace function test_posix_id_allocation()
         gid_txn2 int;
         gid_txn3 int;
         gid_gap int;
-        max_uid int;
-        max_gid int;
+        next_uid int;
+        next_gid int;
+        arbitrary_uid int;
+        arbitrary_gid int;
+        first_person_id uuid;
     begin
         raise notice 'POSIX UID allocation tests...';
 
-        -- Create test person
+        -- Test arbitrary starting UID when audit log is empty
+        raise notice 'Testing arbitrary starting UID (empty audit log)...';
+        -- Clean up in correct order: users first (cascades to user groups), then persons (cascades to person groups)
+        delete from users;
+        delete from persons;
+        delete from audit_log_objects_users where column_name = 'user_posix_uid';
+        delete from audit_log_objects_groups where column_name = 'group_posix_gid';
+
+        insert into persons (full_name) values ('Scrooge McDuck')
+            returning person_id into first_person_id;
+
+        -- Insert first user with arbitrary UID (5000)
+        insert into users (person_id, user_name, user_posix_uid)
+            values (first_person_id, 'p11-scrooge-first', 5000)
+            returning user_posix_uid into arbitrary_uid;
+
+        assert arbitrary_uid = 5000, 'First user should accept arbitrary starting UID';
+        raise notice 'Test passed: arbitrary starting UID allowed: %', arbitrary_uid;
+
+        -- Auto-generation should continue from arbitrary start
+        insert into users (person_id, user_name)
+            values (first_person_id, 'p11-scrooge-second')
+            returning user_posix_uid into uid1;
+
+        assert uid1 = 5001, format('Auto-generation should continue from arbitrary start: expected 5001, got %s', uid1);
+        raise notice 'Test passed: auto-generation continues from arbitrary start: %', uid1;
+
+        -- Clean up and recreate test person for remaining tests
+        delete from users;
+        delete from persons;
         insert into persons (full_name) values ('Ludwig Von Drake')
             returning person_id into test_person_id;
 
@@ -375,23 +407,23 @@ create or replace function test_posix_id_allocation()
         assert uid2 = uid1 + 1, 'Auto-generated UIDs should be consecutive';
         raise notice 'Test passed: auto-generated UIDs are consecutive: % -> %', uid1, uid2;
 
-        -- Manual UID assignment
-        select coalesce(max(user_posix_uid), 1000) + 5 from users into uid_manual;
+        -- Manual UID assignment (exact next)
+        select generate_new_posix_uid() into uid_manual;
 
         insert into users (person_id, user_name, user_posix_uid)
             values (test_person_id, 'p1337-ludwig', uid_manual);
 
         raise notice 'Test passed: manual UID assignment successful: %', uid_manual;
 
-        -- Auto-generation after manual insert skips used IDs
+        -- Auto-generation after manual insert continues correctly
         insert into users (person_id, user_name)
             values (test_person_id, 'p1337-ludwigvd')
             returning user_posix_uid into uid_after_manual;
 
         assert uid_after_manual = uid_manual + 1,
-            format('Auto-gen after manual should skip: expected %s, got %s',
+            format('Auto-generation after manual should continue: expected %s, got %s',
                    uid_manual + 1, uid_after_manual);
-        raise notice 'Test passed: auto-generated after manual UID skips correctly: %', uid_after_manual;
+        raise notice 'Test passed: auto-generated after manual UID continues correctly: %', uid_after_manual;
 
         -- Uniqueness constraint prevents duplicates
         begin
@@ -413,6 +445,23 @@ create or replace function test_posix_id_allocation()
                 raise notice 'Test passed: check constraint prevents UID < 1000';
         end;
 
+        -- Manual assignment validation: reject UID beyond next auto-generation
+        select generate_new_posix_uid() into next_uid;
+        begin
+            insert into users (person_id, user_name, user_posix_uid)
+                values (test_person_id, 'p11-markbeaks', next_uid + 1);
+            assert false, 'Should reject manual UID beyond next auto-generation';
+        exception
+            when raise_exception then
+                raise notice 'Test passed: manual UID beyond next correctly rejected';
+        end;
+
+        -- Manual assignment validation: allow UID at exact next
+        select generate_new_posix_uid() into next_uid;
+        insert into users (person_id, user_name, user_posix_uid)
+            values (test_person_id, 'p11-goldie', next_uid);
+        raise notice 'Test passed: manual UID at exact next allowed';
+
         -- Multiple inserts in one transaction (reentrant locks)
         insert into users (person_id, user_name)
             values (test_person_id, 'p11-ludwig1')
@@ -431,7 +480,74 @@ create or replace function test_posix_id_allocation()
         raise notice 'Test passed: multiple UIDs in transaction are consecutive: %, %, %',
             uid_txn1, uid_txn2, uid_txn3;
 
+        -- Manual assignment validation: allow UID gap filling
+        -- Create several users, delete one in the middle to create a gap
+        declare
+            gap_uid int;
+            filled_uid int;
+            temp_uid1 int;
+            temp_uid2 int;
+            temp_uid3 int;
+        begin
+            insert into users (person_id, user_name)
+                values (test_person_id, 'p11-webby')
+                returning user_posix_uid into temp_uid1;
+
+            insert into users (person_id, user_name)
+                values (test_person_id, 'p11-lena')
+                returning user_posix_uid into temp_uid2;
+
+            insert into users (person_id, user_name)
+                values (test_person_id, 'p11-violet')
+                returning user_posix_uid into temp_uid3;
+
+            -- Delete the middle one to create a gap
+            gap_uid := temp_uid2;
+            delete from users where user_name = 'p11-lena';
+
+            -- Now fill the gap with a manual assignment
+            insert into users (person_id, user_name, user_posix_uid)
+                values (test_person_id, 'p11-bentina', gap_uid)
+                returning user_posix_uid into filled_uid;
+
+            assert filled_uid = gap_uid, 'Gap filling should allow manual UID in deleted range';
+            raise notice 'Test passed: manual UID gap filling allowed (filled UID %)', filled_uid;
+        end;
+
         raise notice 'POSIX GID allocation tests...';
+
+        -- Test arbitrary starting GID when audit log is empty
+        raise notice 'Testing arbitrary starting GID (empty audit log)...';
+        -- Clean up in correct order: users first (cascades to user groups), then persons (cascades to person groups)
+        delete from users;
+        delete from persons;
+        delete from audit_log_objects_users where column_name = 'user_posix_uid';
+        delete from audit_log_objects_groups where column_name = 'group_posix_gid';
+
+        insert into persons (full_name) values ('Flintheart Glomgold')
+            returning person_id into first_person_id;
+
+        -- Insert first group with arbitrary GID (6000)
+        insert into groups (group_name, group_class, group_type, group_posix_gid)
+            values ('p11-glomgold-first-group', 'secondary', 'generic', 6000)
+            returning group_posix_gid into arbitrary_gid;
+
+        assert arbitrary_gid = 6000, 'First group should accept arbitrary starting GID';
+        raise notice 'Test passed: arbitrary starting GID allowed: %', arbitrary_gid;
+
+        -- Auto-generation should continue from arbitrary start
+        insert into groups (group_name, group_class, group_type)
+            values ('p11-glomgold-second-group', 'secondary', 'generic')
+            returning group_posix_gid into gid1;
+
+        assert gid1 = 6001, format('Auto-generation should continue from arbitrary start: expected 6001, got %s', gid1);
+        raise notice 'Test passed: auto-generation continues from arbitrary start: %', gid1;
+
+        -- Clean up and recreate test person for remaining tests
+        delete from users;
+        delete from persons;
+        insert into persons (full_name) values ('Ludwig Von Drake')
+            returning person_id into test_person_id;
 
         -- Auto-generated GIDs are consecutive
         insert into groups (group_name, group_class, group_type)
@@ -445,23 +561,23 @@ create or replace function test_posix_id_allocation()
         assert gid2 = gid1 + 1, 'Auto-generated GIDs should be consecutive';
         raise notice 'Test passed: auto-generated GIDs are consecutive: % -> %', gid1, gid2;
 
-        -- Manual GID assignment
-        select coalesce(max(group_posix_gid), 1000) + 5 from groups into gid_manual;
+        -- Manual GID assignment (exact next)
+        select generate_new_posix_gid() into gid_manual;
 
         insert into groups (group_name, group_class, group_type, group_posix_gid)
             values ('p11-moneybin-group', 'secondary', 'generic', gid_manual);
 
         raise notice 'Test passed: manual GID assignment successful: %', gid_manual;
 
-        -- Auto-generation after manual insert skips used IDs
+        -- Auto-generation after manual insert continues correctly
         insert into groups (group_name, group_class, group_type)
             values ('p11-gearloose-group', 'secondary', 'generic')
             returning group_posix_gid into gid_after_manual;
 
         assert gid_after_manual = gid_manual + 1,
-            format('Auto-generation after manual should skip: expected %s, got %s',
+            format('Auto-generation after manual should continue: expected %s, got %s',
                    gid_manual + 1, gid_after_manual);
-        raise notice 'Test passed: auto-gen after manual GID skips correctly: %', gid_after_manual;
+        raise notice 'Test passed: auto-generation after manual GID continues correctly: %', gid_after_manual;
 
         -- Uniqueness constraint prevents duplicates
         begin
@@ -481,6 +597,57 @@ create or replace function test_posix_id_allocation()
         exception
             when check_violation then
                 raise notice 'Test passed: check constraint prevents GID < 1000';
+        end;
+
+        -- Manual assignment validation: reject GID beyond next auto-generation
+        select generate_new_posix_gid() into next_gid;
+        begin
+            insert into groups (group_name, group_class, group_type, group_posix_gid)
+                values ('p11-rockerduck-group', 'secondary', 'generic', next_gid + 1);
+            assert false, 'Should reject manual GID beyond next auto-generation';
+        exception
+            when raise_exception then
+                raise notice 'Test passed: manual GID beyond next correctly rejected';
+        end;
+
+        -- Manual assignment validation: allow GID at exact next
+        select generate_new_posix_gid() into next_gid;
+        insert into groups (group_name, group_class, group_type, group_posix_gid)
+            values ('p11-beakley-group', 'secondary', 'generic', next_gid);
+        raise notice 'Test passed: manual GID at exact next allowed';
+
+        -- Manual assignment validation: allow gap filling
+        -- Create several groups, delete one in the middle to create a gap
+        declare
+            gap_gid int;
+            filled_gid int;
+            temp_gid1 int;
+            temp_gid2 int;
+            temp_gid3 int;
+        begin
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-darkwing-group', 'secondary', 'generic')
+                returning group_posix_gid into temp_gid1;
+
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-negaduck-group', 'secondary', 'generic')
+                returning group_posix_gid into temp_gid2;
+
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-quackerjack-group', 'secondary', 'generic')
+                returning group_posix_gid into temp_gid3;
+
+            -- Delete the middle one to create a gap
+            gap_gid := temp_gid2;
+            delete from groups where group_name = 'p11-negaduck-group';
+
+            -- Now fill the gap with a manual assignment
+            insert into groups (group_name, group_class, group_type, group_posix_gid)
+                values ('p11-launchpad-group', 'secondary', 'generic', gap_gid)
+                returning group_posix_gid into filled_gid;
+
+            assert filled_gid = gap_gid, 'Gap filling should allow manual GID in deleted range';
+            raise notice 'Test passed: manual GID gap filling allowed (filled GID %)', filled_gid;
         end;
 
         -- Certain group types should not get GIDs
@@ -512,37 +679,68 @@ create or replace function test_posix_id_allocation()
         raise notice 'Testing gap handling...';
 
         -- Gap handling - auto-generation doesn't backfill
-        -- Get current max to avoid conflicts with previous test data
-        select coalesce(max(group_posix_gid), 1000) from groups into max_gid;
+        -- Create several groups to delete, creating gaps
+        declare
+            gid_temp1 int;
+            gid_temp2 int;
+            gid_temp3 int;
+            gid_temp4 int;
+            gid_temp5 int;
+            gid_after_gaps int;
+        begin
+            -- Create 5 groups consecutively
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-bushroot-group', 'secondary', 'generic')
+                returning group_posix_gid into gid_temp1;
 
-        insert into groups (group_name, group_class, group_type, group_posix_gid)
-            values ('p1337-glomgold-group', 'secondary', 'generic', max_gid + 100);
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-liquidator-group', 'secondary', 'generic')
+                returning group_posix_gid into gid_temp2;
 
-        insert into groups (group_name, group_class, group_type, group_posix_gid)
-            values ('p1337-gladstone-group', 'secondary', 'generic', max_gid + 105);
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-megavolt-group', 'secondary', 'generic')
+                returning group_posix_gid into gid_temp3;
 
-        insert into groups (group_name, group_class, group_type)
-            values ('p1337-gusgoose-group', 'secondary', 'generic')
-            returning group_posix_gid into gid_gap;
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-steelbeak-group', 'secondary', 'generic')
+                returning group_posix_gid into gid_temp4;
 
-        assert gid_gap = max_gid + 106, format('Should skip to %s, got %s', max_gid + 106, gid_gap);
-        raise notice 'Test passed: auto-generation skips gaps expectedly: %', gid_gap;
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-ammonia-group', 'secondary', 'generic')
+                returning group_posix_gid into gid_temp5;
 
-        -- Manually fill a gap
-        insert into groups (group_name, group_class, group_type, group_posix_gid)
-            values ('p11-glomgold-group', 'secondary', 'generic', max_gid + 102);
+            -- Delete some in the middle to create gaps
+            delete from groups where group_name in ('p11-liquidator-group', 'p11-steelbeak-group');
 
-        insert into groups (group_name, group_class, group_type)
-            values ('p11-gladstone-group', 'secondary', 'generic')
-            returning group_posix_gid into gid_gap;
+            -- Now auto-generation should skip the gaps and continue from max
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-glomgold-group', 'secondary', 'generic')
+                returning group_posix_gid into gid_after_gaps;
 
-        assert gid_gap = max_gid + 107, format('Should continue from max, got %s', gid_gap);
-        raise notice 'Test passed: auto-generation continues from audit max: %', gid_gap;
+            -- Should be gid_temp5 + 1 (not backfilling the gaps at gid_temp2 and gid_temp4)
+            assert gid_after_gaps = gid_temp5 + 1,
+                format('Auto-generation should not backfill: expected %s, got %s', gid_temp5 + 1, gid_after_gaps);
+            raise notice 'Test passed: auto-generation skips gaps, continues from max: %', gid_after_gaps;
+
+            -- Manually fill one of the gaps
+            insert into groups (group_name, group_class, group_type, group_posix_gid)
+                values ('p11-gladstone-group', 'secondary', 'generic', gid_temp2);
+            raise notice 'Test passed: manual assignment can fill gaps: %', gid_temp2;
+
+            -- Auto-generation still continues from max (not from filled gap)
+            insert into groups (group_name, group_class, group_type)
+                values ('p11-gusgoose-group', 'secondary', 'generic')
+                returning group_posix_gid into gid_gap;
+
+            assert gid_gap = gid_after_gaps + 1,
+                format('Auto-generation should continue from max after gap fill: expected %s, got %s',
+                       gid_after_gaps + 1, gid_gap);
+            raise notice 'Test passed: auto-generation continues from audit max: %', gid_gap;
+        end;
 
         -- Cleanup
-        delete from persons where full_name = 'Ludwig Von Drake';
-        delete from groups where (group_name like 'p11-%' or group_name like 'p1337-%')
-            and group_class = 'secondary';
+        delete from groups where group_name like 'p11-%' or group_name like 'p1337-%';
+        delete from persons where full_name in ('Ludwig Von Drake', 'Scrooge McDuck', 'Flintheart Glomgold');
 
         return true;
     end;
