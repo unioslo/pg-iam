@@ -194,12 +194,26 @@ create or replace function generate_new_posix_uid()
     returns int as $$
     declare new_uid int;
     begin
-        -- Serialize UID allocation globally across all transactions
-        -- Lock namespace 1000 (POSIX ID allocation), resource 1 (UID)
-        PERFORM pg_advisory_xact_lock(1000, 1);
-
         select generate_new_posix_id('audit_log_objects_users', 'user_posix_uid', 'users') into new_uid;
         return new_uid;
+    end;
+$$ language plpgsql;
+
+
+drop function if exists posix_uid() cascade;
+create or replace function posix_uid()
+    returns trigger as $$
+    begin
+        -- Serialize UID allocation globally across all transactions
+        -- Lock namespace 1000 (POSIX ID allocation), resource 1 (UID)
+        -- Acquired BEFORE checking if manual vs auto to protect both paths
+        PERFORM pg_advisory_xact_lock(1000, 1);
+
+        if NEW.user_posix_uid is null then
+            -- Only auto-generate if nothing is provided
+            select generate_new_posix_uid() into NEW.user_posix_uid;
+        end if;
+        return new;
     end;
 $$ language plpgsql;
 
@@ -212,11 +226,13 @@ create table if not exists users(
     user_expiry_date timestamptz,
     user_name text unique not null primary key,
     user_group text,
-    user_posix_uid int unique default generate_new_posix_uid(),
+    user_posix_uid int unique check (user_posix_uid > 999),
     user_group_posix_gid int check (user_group_posix_gid > 999),
     user_metadata jsonb
 );
 
+create trigger set_posix_uid before insert on users
+    for each row execute procedure posix_uid();
 
 create trigger users_audit after update or insert or delete on users
     for each row execute procedure update_audit_log_objects();
