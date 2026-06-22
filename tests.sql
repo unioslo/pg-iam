@@ -452,7 +452,7 @@ create or replace function test_posix_id_allocation()
                 values (test_person_id, 'p11-markbeaks', next_uid + 1);
             assert false, 'Should reject manual UID beyond next auto-generation';
         exception
-            when raise_exception then
+            when check_violation then
                 raise notice 'Test passed: manual UID beyond next correctly rejected';
         end;
 
@@ -606,7 +606,7 @@ create or replace function test_posix_id_allocation()
                 values ('p11-rockerduck-group', 'secondary', 'generic', next_gid + 1);
             assert false, 'Should reject manual GID beyond next auto-generation';
         exception
-            when raise_exception then
+            when check_violation then
                 raise notice 'Test passed: manual GID beyond next correctly rejected';
         end;
 

@@ -223,7 +223,8 @@ create or replace function posix_uid()
             -- If next_auto_uid > 1000, the audit log has data and we reject manual value > next_auto_uid
             if NEW.user_posix_uid > next_auto_uid and next_auto_uid > 1000 then
                 raise exception 'Manual UID assignment cannot exceed the next auto-generated ID. Next auto-generated UID would be %. Requested UID % is too high. Use auto-generation (NULL) or specify a UID within the existing range.',
-                    next_auto_uid, NEW.user_posix_uid;
+                    next_auto_uid, NEW.user_posix_uid
+                    using errcode = 'check_violation';
             end if;
             -- Check constraint already enforces > 999
         end if;
@@ -397,7 +398,8 @@ create or replace function posix_gid()
                 -- If next_auto_gid > 1000, the audit log has data and we reject manual value > next_auto_gid
                 if NEW.group_posix_gid > next_auto_gid and next_auto_gid > 1000 then
                     raise exception 'Manual GID assignment cannot exceed the next auto-generated ID. Next auto-generated GID would be %. Requested GID % is too high. Use auto-generation (NULL) or specify a GID within the existing range.',
-                        next_auto_gid, NEW.group_posix_gid;
+                        next_auto_gid, NEW.group_posix_gid
+                        using errcode = 'check_violation';
                 end if;
                 -- Check constraint already enforces > 999
             end if;
