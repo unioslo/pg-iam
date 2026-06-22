@@ -1,0 +1,54 @@
+name: Run tests
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-version:
+          - 14
+          - 15
+          - 16
+          - 17
+          - 18
+    services:
+      postgres:
+        image: docker.io/postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pg_iam
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SUPERUSER: postgres
+      DBOWNER: postgres
+      DBNAME: pg_iam
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGPASSWORD: postgres
+      DELETE_EXISTING_DATA: "false"
+      KEEP_TEST_DATA: "false"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install schema
+        run: ./install.sh --force --setup
+
+      - name: Run SQL tests
+        run: psql -U "$DBOWNER" -d "$DBNAME" -v ON_ERROR_STOP=1 -1 -f tests.sql
